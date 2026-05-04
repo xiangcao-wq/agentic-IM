@@ -45,11 +45,13 @@ describe('state schema helpers', () => {
     const state = createDemoState();
     const oldSnapshot = { ...state };
     delete (oldSnapshot as Partial<typeof state>).actionRequests;
+    delete (oldSnapshot as Partial<typeof state>).fileTextChunks;
     delete (oldSnapshot as Partial<typeof state>).aiAutoreplyPolicies;
     delete (oldSnapshot as Partial<typeof state>).aiReplyJobs;
 
     const upgraded = validateDemoStateShape(oldSnapshot);
     expect(upgraded.actionRequests).toEqual([]);
+    expect(upgraded.fileTextChunks).toEqual([]);
     expect(upgraded.aiReplyJobs).toEqual([]);
     expect(upgraded.aiAutoreplyPolicies).toContainEqual(
       expect.objectContaining({

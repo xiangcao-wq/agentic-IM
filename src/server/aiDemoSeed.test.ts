@@ -104,7 +104,7 @@ describe('AI demo seed runner', () => {
     expect(sentMessages.some((message) => message.agentLabel === '陈晨的 Agent 协调')).toBe(true);
   });
 
-  it('routes human users to DeepSeek Flash and personal Agents to DeepSeek Pro', async () => {
+  it('uses DeepSeek V4 Flash for humans and V4 Pro thinking mode for Agents by default', async () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     const fetcher = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -113,7 +113,7 @@ describe('AI demo seed runner', () => {
         choices: [
           {
             message: {
-              content: body.model === 'deepseek-v4-flash' ? 'Flash human turn' : 'Pro agent turn'
+              content: 'DeepSeek chat turn'
             }
           }
         ]
@@ -133,24 +133,22 @@ describe('AI demo seed runner', () => {
         instructions: 'human',
         input: 'message'
       })
-    ).resolves.toBe('Flash human turn');
+    ).resolves.toBe('DeepSeek chat turn');
     await expect(
       provider.generateText({
         actorRole: 'personal_agent',
         instructions: 'agent',
         input: 'message'
       })
-    ).resolves.toBe('Pro agent turn');
+    ).resolves.toBe('DeepSeek chat turn');
 
     expect(calls.map((call) => call.url)).toEqual([
       'https://api.deepseek.test/chat/completions',
       'https://api.deepseek.test/chat/completions'
     ]);
     expect(calls.map((call) => call.body.model)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
-    expect(calls.map((call) => call.body.thinking)).toEqual([
-      { type: 'disabled' },
-      { type: 'disabled' }
-    ]);
+    expect(calls.map((call) => call.body.thinking)).toEqual([undefined, { type: 'enabled' }]);
+    expect(calls.map((call) => call.body.reasoning_effort)).toEqual([undefined, 'high']);
   });
 
   it('allows overriding DeepSeek flash and pro model names independently', async () => {

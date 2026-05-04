@@ -6,6 +6,7 @@ export const STATE_COLLECTION_KEYS = [
   'rooms',
   'messages',
   'files',
+  'fileTextChunks',
   'tasks',
   'calendar',
   'actionLogs',
@@ -27,6 +28,7 @@ export function getStateCollections(state: DemoState): StateCollections {
     rooms: normalized.rooms,
     messages: normalized.messages,
     files: normalized.files,
+    fileTextChunks: normalized.fileTextChunks,
     tasks: normalized.tasks,
     calendar: normalized.calendar,
     actionLogs: normalized.actionLogs,
@@ -46,6 +48,9 @@ export function validateDemoStateShape(value: unknown): DemoState {
   const candidate = value as Record<string, unknown>;
   if (candidate.actionRequests === undefined) {
     candidate.actionRequests = [];
+  }
+  if (candidate.fileTextChunks === undefined) {
+    candidate.fileTextChunks = [];
   }
   if (candidate.memories === undefined) {
     candidate.memories = [];

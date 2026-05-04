@@ -105,7 +105,7 @@
         "user-zhao",
         "user-teacher"
       ],
-      "unreadCount": 36,
+      "unreadCount": 12,
       "matrixAlias": "#is-class-2:demo.local",
       "matrixRoomId": "!sJUTjsUTZXKyCtdUuj:localhost"
     },
@@ -118,7 +118,7 @@
         "user-chen",
         "user-zhao"
       ],
-      "unreadCount": 8,
+      "unreadCount": 10,
       "matrixAlias": "#research-team-4:demo.local",
       "matrixRoomId": "!vFPnJovHNXPlFZPBRb:localhost"
     },
@@ -130,410 +130,12 @@
         "user-lin",
         "user-chen"
       ],
-      "unreadCount": 2,
+      "unreadCount": 3,
       "matrixAlias": "#agent-handshake:demo.local",
       "matrixRoomId": "!ZRVIFcVXkMjoHXfFCw:localhost"
     }
   ],
   "messages": [
-    {
-      "id": "msg-1777837886399-1a7c275103457",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "我刚检查了一遍，v3 是可以发给组内成员的最终版本。",
-      "sentAt": "2026-05-03T19:51:26.399Z",
-      "type": "text"
-    },
-    {
-      "id": "msg-agent-coordinate-1777837928985-f8ff4af177fae",
-      "roomId": "room-agent",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "建议先在群里确认所有成员是否同意改到周三 23:00；确认后再由 Agent 更新日程和任务。",
-      "sentAt": "2026-05-03T19:52:08.985Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 协调",
-      "sourceAgentId": "agent-lin"
-    },
-    {
-      "id": "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-      "roomId": "room-class",
-      "senderId": "user-teacher",
-      "senderName": "王老师",
-      "body": "这次信息系统课程作业以小组为单位提交，主题是“校园服务数字化调研”。",
-      "sentAt": "2026-05-04T05:09:59.730Z",
-      "type": "text"
-    },
-    {
-      "id": "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-      "roomId": "room-class",
-      "senderId": "user-teacher",
-      "senderName": "王老师",
-      "body": "截止时间是 5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。",
-      "sentAt": "2026-05-04T05:09:59.805Z",
-      "type": "text"
-    },
-    {
-      "id": "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-      "roomId": "room-class",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "我们组按老师要求做调研报告，我来负责最终提交，林雯整理演示稿，陈晨补充访谈材料。",
-      "sentAt": "2026-05-04T05:09:59.868Z",
-      "type": "text"
-    },
-    {
-      "id": "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-      "roomId": "room-team",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "今晚先不改结构了，周二 20:30 前我们做最后一次合稿检查。",
-      "sentAt": "2026-05-04T05:09:59.946Z",
-      "type": "text"
-    },
-    {
-      "id": "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "我已经把演示稿 v3 上传到文件库，允许我的 Agent 在我离线时发给本组成员。",
-      "sentAt": "2026-05-04T05:10:00.016Z",
-      "type": "text"
-    },
-    {
-      "id": "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "我晚点补访谈材料。林雯不在线的话，能把最新演示稿发一下吗？",
-      "sentAt": "2026-05-04T05:10:00.111Z",
-      "type": "text"
-    },
-    {
-      "id": "$qOUKiaK4MzWxkPbHRis4A16T1cQQLRT98mun4W7nbPE",
-      "roomId": "room-agent",
-      "senderId": "user-chen",
-      "senderName": "陈晨的 Agent",
-      "body": "请求林雯的 Agent 确认：演示稿最新版是否可以发给陈晨？",
-      "sentAt": "2026-05-04T05:10:00.201Z",
-      "type": "agent",
-      "agentLabel": "陈晨的 Agent"
-    },
-    {
-      "id": "$0qrdLL4z56IsGSD9bwkNslHCCibBRvsCKlisEn51F34",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "我刚检查了一遍，v3 是可以发给组内成员的最终版本。",
-      "sentAt": "2026-05-04T05:10:13.617Z",
-      "type": "text"
-    },
-    {
-      "id": "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "我代表林雯发送最新文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "sentAt": "2026-05-04T05:10:13.864Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-slides-v3"
-    },
-    {
-      "id": "$bTOwwZciuw14eBaRjc7LvcbfV4TCgq3z-fdrp4baKXo",
-      "roomId": "room-agent",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "建议先在群里确认所有成员是否同意改到周三 23:00；确认后再由 Agent 更新日程和任务。",
-      "sentAt": "2026-05-04T05:10:14.065Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 协调",
-      "sourceAgentId": "agent-lin"
-    },
-    {
-      "id": "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "我代表林雯发送最新文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "sentAt": "2026-05-04T05:14:11.585Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-slides-v3"
-    },
-    {
-      "id": "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "我代表林雯发送最新文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "sentAt": "2026-05-04T07:27:11.447Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-slides-v3"
-    },
-    {
-      "id": "$H3Y8mkQAcaV837BhmtCUTV5PbejD9aFxN-U1S1EHKxs",
-      "roomId": "room-agent",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "建议先在群里确认所有成员是否同意改到周三 23:00；确认后再由 Agent 更新日程和任务。",
-      "sentAt": "2026-05-04T07:27:18.035Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 协调",
-      "sourceAgentId": "agent-lin"
-    },
-    {
-      "id": "$9lv4_zW5Kt9NJxvKIJ4LMf7O0o77r4MxAt9c8Zw_eVw",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "matrix-media-proof.txt",
-      "sentAt": "2026-05-04T07:36:53.088Z",
-      "type": "file",
-      "fileId": "file-upload-1777880212651-0eeeafff02aa9",
-      "mxcUri": "mxc://localhost/naTDETxWipiKiKqLVQwXAlSd",
-      "contentType": "text/plain",
-      "size": 23
-    },
-    {
-      "id": "$xCGc10XkVHDESSJXEBkzRjspXdr-FnIfK4xS03faemc",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "browser-matrix-proof.txt",
-      "sentAt": "2026-05-04T07:39:33.446Z",
-      "type": "file",
-      "fileId": "file-upload-1777880373319-70d61a819326e",
-      "mxcUri": "mxc://localhost/QsCYEuoWplggrNnipDESGLBo",
-      "contentType": "text/plain",
-      "size": 28
-    },
-    {
-      "id": "$SZcIEdPD9Tv_uGyJKdDCYJFD1CR4RQV4ymre2W2P8qU",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "download-current-proof.txt",
-      "sentAt": "2026-05-04T07:51:22.190Z",
-      "type": "file",
-      "fileId": "file-upload-1777881081884-7702465903657",
-      "mxcUri": "mxc://localhost/LRlQKfBcyePyqjqeafrzAULG",
-      "contentType": "text/plain",
-      "size": 26
-    },
-    {
-      "id": "$w2mSM83RWlYuKXihLouA1K-1iDpvPCc0qiFX_9BM85w",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "你好",
-      "sentAt": "2026-05-04T07:58:13.414Z",
-      "type": "text"
-    },
-    {
-      "id": "$pj582wtNCwSKNw-cLoTUjPQIaX1H3bLZzjqkrxv0w2E",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T08:53:43.229Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884822952-7cf6c9f2f8dfc8",
-      "mxcUri": "mxc://localhost/tdPmYPJrRrbSbkAAXKhApigQ",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$76NjMaIl44hIiaogDG_iH9Axxt25dB13v7sJ0s0og9E",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T08:53:43.401Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884823166-f587fc8a5ffc1",
-      "mxcUri": "mxc://localhost/cQXSofXLavhpPaKuuHjSBtTm",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$5HHaV4X4t30b3UET5MTUSd2uX4Xgzm2l6K-Nolys-DM",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T08:53:43.813Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884823604-fb4c0eaef8cdd",
-      "mxcUri": "mxc://localhost/mbXxGCVdnCOYkmUUSIRxynSG",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-      "roomId": "room-team",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "合稿检查就定今晚八点半，大家把 v5 的调研报告 PDF 和 v6 流程图都打开，对照访谈纪要再过一遍演示稿的逻辑。李梦负责把演示稿改成终版，周远把报告页码和引用补全，我八点先丢到群里，别迟到。",
-      "sentAt": "2026-05-04T08:53:49.049Z",
-      "type": "text"
-    },
-    {
-      "id": "$R_FeQ76JY4ezA6KaBbdfsAit9pVGMdF8EmQGConD0Wc",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T08:55:09.411Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884908852-0a373f3115d188",
-      "mxcUri": "mxc://localhost/WdEKVTujgSIKZdgqNfbfSmCz",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$oafwXPfbYqXAL3LRx0irlFAzIvDU2mxqR6oQ-Br1v1s",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T08:55:09.516Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884908966-915d4bd12ac7a8",
-      "mxcUri": "mxc://localhost/EiLzvdNdjNYYMiQxmBRqSSKp",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$W8KiXryw-yki7uvZuIOHTzIvJgethCMQwx63eb3T-IA",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T08:55:09.619Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777884909073-70db1ecbcce2d",
-      "mxcUri": "mxc://localhost/msLTnafCdVvpYSkZarPcHTwC",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-      "roomId": "room-team",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "看文件都已经到位了，今晚合稿就不动大框架了，主要拼顺序和过一遍衔接。我分一下：张睿负责把调研报告PDF整合版在21点前发群，李思敏对演示稿做最后的字号和图片检查，完成后我来统稿。周二20:30我们准时线上过最后一遍，有问题直接在文档里标出来。",
-      "sentAt": "2026-05-04T08:55:13.253Z",
-      "type": "text"
-    },
-    {
-      "id": "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯，我刚检查了一遍共享文件夹，访谈纪要那个文本现在还是v4版本。你那边最新的访谈材料能发一下吗？5月12号就要交报告了，我怕缺材料合稿的时候对不上。",
-      "sentAt": "2026-05-04T08:55:15.411Z",
-      "type": "text"
-    },
-    {
-      "id": "$wYS6yQuRcjsYzFWco8IDxnYW3_FMqtDynBPuA_9wqko",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T09:11:12.205Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777885872641-edc626d299afb",
-      "mxcUri": "mxc://localhost/jgrXSJKrXaPxkToXZhJDttct",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$zb59kYYn549Ug2YMgUHoxqTqQhOQN-hLp9dGWUWSDKY",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:11:12.310Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$dwByUd61Ve9JPbW2xj8oRDaHwspc88CcqIO78wGATi4",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T09:11:12.439Z",
-      "type": "file",
-      "fileId": "file-ai-seed-1777885872900-34d15b11546ac",
-      "mxcUri": "mxc://localhost/RxPMReGwuEbXdZnhjUeCxFhX",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0",
-      "roomId": "room-team",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "大家看一下，今晚8点半最后一次合稿检查，我建议8点先把各自手上的文件发到群里，包括流程图、行动计划、访谈纪要，还有两个证明文件。有问题的现在说，别拖到最后一刻。",
-      "sentAt": "2026-05-04T09:11:13.869Z",
-      "type": "text"
-    },
-    {
-      "id": "$f0OEEamkkjArOR5IX2htDItRpHA1Oi0RZrJRYudVOrA",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "我这边访谈纪要的 txt 已经更新到 v4 了，林雯你那边还有最新的补充材料没？有的话麻烦直接发一下，我一起合到报告里。",
-      "sentAt": "2026-05-04T09:11:16.318Z",
-      "type": "text"
-    },
-    {
-      "id": "$UGPGquTTTVDzCa-oEad4H702uShL2Oo-Of6tzDDIaqI",
-      "roomId": "room-agent",
-      "senderId": "user-chen",
-      "senderName": "陈晨的 Agent",
-      "body": "[陈晨的 Agent] 林雯你好，我是陈晨的 Agent。调研报告汇总版我们这边缺最后的课堂演示截图，需要请你在周二20:30合稿检查前补上，另外校园服务流程图v6和访谈纪要v4可以直接由我代发到群文件，你确认一下可以吗？",
-      "sentAt": "2026-05-04T09:11:19.128Z",
-      "type": "agent",
-      "agentLabel": "陈晨的 Agent 协调",
-      "sourceAgentId": "agent-chen"
-    },
-    {
-      "id": "$VDGKJXqXbhUJHSRm2PzrpD9YgUKDDLy-tBcBFoeEMMM",
-      "roomId": "room-agent",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "收到，陈晨。文件方面，像校园服务流程图、行动计划这些，我可以按照授权规则自动代发。不过日程变更的部分，比如合稿检查的时间调整，需要林雯本人确认后才能执行，我这边暂时不能直接操作。",
-      "sentAt": "2026-05-04T09:11:21.765Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 协调",
-      "sourceAgentId": "agent-lin"
-    },
-    {
-      "id": "$HDtF5sn-_R--x-l0onK8hX0RqJlxx-uwVKK8fFdcGD8",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:11:21.815Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
     {
       "id": "msg-01",
       "roomId": "room-class",
@@ -553,291 +155,13 @@
       "type": "text"
     },
     {
-      "id": "$AUPGsO6QrH-OeoyqVCbLRC7HW9ZhtCSknewMv52PnwQ",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "【联调测试】我在验证当前 Matrix 聊天链路是否真实写入。",
-      "sentAt": "2026-05-04T09:22:33.038Z",
+      "id": "msg-class-rubric",
+      "roomId": "room-class",
+      "senderId": "user-teacher",
+      "senderName": "王老师",
+      "body": "报告要写清楚访谈对象、现状痛点、改进方案、风险边界和引用来源，演示稿只讲最关键的 8 分钟内容。",
+      "sentAt": "2026-05-04T09:18:00+08:00",
       "type": "text"
-    },
-    {
-      "id": "$FVsmNYdWgdoKe49WNLB6uoB688eIOVplCDUwUQRdlio",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "收到，今晚8点前我先把整合好的v4访谈纪要再跑一遍核对，确保和行动计划的引用条数对得上。有缺的或对不上的地方我标记出来提前说。",
-      "sentAt": "2026-05-04T09:46:43.273Z",
-      "type": "text"
-    },
-    {
-      "id": "$zIpZUX3pTdfaLtoyjBLGCXArZ4sUQjVKP4ZVf6028rs",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:51:28.842Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$v7D0QhdtkSzD7O5RbMkjonDP5BaGwHooFAsnwlr-Fco",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:51:37.854Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$faJWzuNm1zbBjKZLDseL-gb969W6_78cexEizcRNMIg",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "收到，我刚核对完v4访谈纪要，引用条数跟行动计划能对上。",
-      "sentAt": "2026-05-04T09:52:57.887Z",
-      "type": "text"
-    },
-    {
-      "id": "$jIXC8htOcRcJuOVoi53dx-YrQFmbRo-LvazXbZnDNUQ",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:53:08.482Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$JxYsqZZTQEHg3Vxb3pZEHlDYDAjsCjyPgYpyJb_GiOg",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T09:53:19.231Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888399465-914a3875e97918",
-      "mxcUri": "mxc://localhost/MlldieaPFJxgWglunWgahSpk",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$aBDecBkejoKMl86XpTYMBF88USxwxkvpQk_BXFBWL88",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-Agent协作说明-ai-seed.md",
-      "sentAt": "2026-05-04T09:53:19.300Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888399566-dea7fd3265dd4",
-      "mxcUri": "mxc://localhost/OmxreGAZRBezxCQJzoovqgJF",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283
-    },
-    {
-      "id": "$kO8L6jZv4oUfjqHCzdW-9lD9fCu6O2pz_ZlFlsmzlZE",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T09:53:19.374Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888399637-515a789c43d198",
-      "mxcUri": "mxc://localhost/AWeSaLIEXuaFNHDUaptMUAko",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$T0sfRS7gJbr3pITXDYi6NYq0w7qaCzIPghIgHhNYM8s",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T09:53:19.510Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888399715-1213cabc55d338",
-      "mxcUri": "mxc://localhost/eKzheJxwHtyiBEQWXgzzPRQW",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$8yealljAj9hpK16-R2FZu5UlBl2N-kBHiICJLFunjJI",
-      "roomId": "room-agent",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "两个 Agent 已确认当前时间不影响已授权日程，可自动更新任务安排。",
-      "sentAt": "2026-05-04T09:56:28.930Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 协调",
-      "sourceAgentId": "agent-lin"
-    },
-    {
-      "id": "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "截止时间应该是5月12号23:59，也就是这周日晚上。我们今晚合稿检查完，应该能赶上最后提交。",
-      "sentAt": "2026-05-04T10:03:05.340Z",
-      "type": "text"
-    },
-    {
-      "id": "$PxdinLSeFU8jQH57YfOXaKcAmpb8wcZnvJraz6D7Ajo",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T10:03:14.225Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-demo-asset-1777888399637-515a789c43d198",
-      "mxcUri": "mxc://localhost/AWeSaLIEXuaFNHDUaptMUAko",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$PpViS0g_5McPdAgp3m8pmLaENhASxxxJUicgKdIwMCQ",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T10:03:14.836Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888995096-b3e949540f1f18",
-      "mxcUri": "mxc://localhost/dbsWsnevTLzneDJzJOmukeFZ",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$H5kj63YCAuxSqu2_JqCcvKvFZiMeJZaqJAgLKATk8fg",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-Agent协作说明-ai-seed.md",
-      "sentAt": "2026-05-04T10:03:14.911Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888995176-dbf5a8e75b924",
-      "mxcUri": "mxc://localhost/AxLgTLcEXqIhfarjtqvgLQZV",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283
-    },
-    {
-      "id": "$KE4poEi60fV0Wrb89oxykiNE9verTp0pxG6Z8zhbYow",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T10:03:14.985Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888995254-67e737ff9c0ec",
-      "mxcUri": "mxc://localhost/wAWBuzioQqTbZEOFjtPGgkUu",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$L11LzZvhFdtbIypUvMsw73u--qmcJ4sn6loG_YgalAc",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T10:03:15.100Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777888995329-8fa7bffc4467c",
-      "mxcUri": "mxc://localhost/fApzHjwliCpQDyMDZIFCnLIP",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "刚说过了呀，周日5月12号23:59截止。我们今晚合稿检查完，刚好能赶上。",
-      "sentAt": "2026-05-04T10:05:06.901Z",
-      "type": "text"
-    },
-    {
-      "id": "$H2CnpWs4l-ta-zijtJn8JRQVM2778uobYQLPCRhnUNw",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯的 Agent",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T10:05:13.312Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-demo-asset-1777888995254-67e737ff9c0ec",
-      "mxcUri": "mxc://localhost/wAWBuzioQqTbZEOFjtPGgkUu",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$shBBysP3uHjsJOsiDvqDZrKuhF6D8Zslw4tzmt6XIrs",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T10:05:13.604Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777889113601-2b502d8cd2544",
-      "mxcUri": "mxc://localhost/JsnwZdtGFsmibtrgkevSXDlp",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$lFG-Nxh7vcTNPJdCGf-iJB4OOWRBscud0YrPM7vnNBg",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-Agent协作说明-ai-seed.md",
-      "sentAt": "2026-05-04T10:05:13.678Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777889113680-0f0e8bbf52f498",
-      "mxcUri": "mxc://localhost/inNneKUqVXtYSotVbqAxDHFK",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283
-    },
-    {
-      "id": "$ZWIuKkpcaiNg3IuQ1qdW_rUvKoY2UlSxEAc9KlPLp9Q",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T10:05:13.787Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777889113756-e1c62db0df63",
-      "mxcUri": "mxc://localhost/QRXHtRPiezJovUDyBVXRHJVX",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$YnI3KQUSJXuUFFO8wDUhsDOC7HZCUAk2GLdgULoDwhY",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T10:05:13.901Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777889113873-84e11ec6992d78",
-      "mxcUri": "mxc://localhost/tTPpuhZMlhRUYBXKWpedjgXB",
-      "contentType": "image/png",
-      "size": 142
     },
     {
       "id": "msg-03",
@@ -849,205 +173,12 @@
       "type": "text"
     },
     {
-      "id": "$fxqmaIpk_k9qOIBSEiKvYbKu05XYqjh5ady3_C367pM",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "我测",
-      "sentAt": "2026-05-04T11:00:59.101Z",
-      "type": "text"
-    },
-    {
-      "id": "$zQLxr2uYs7D9GYndpp30ORm_BSSLoSZhKA7aveqdFdo",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "@?? ?????????????,??????????",
-      "sentAt": "2026-05-04T11:14:01.570Z",
-      "type": "text"
-    },
-    {
-      "id": "$cwrkYv2cBFodCW2HOGenujXudXgXZ_Jz91hldaHb-Vs",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "@?? ?????????????,??????????",
-      "sentAt": "2026-05-04T11:16:08.021Z",
-      "type": "text"
-    },
-    {
-      "id": "$5QFqw1iScsforY6jx0DQebDpzcWqlSGQqiGzusvIgng",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "@?? ?????????????,??????????",
-      "sentAt": "2026-05-04T11:17:06.629Z",
-      "type": "text"
-    },
-    {
-      "id": "$_LP5F8ZPPx30FD-_I89122IFpsbSuONALp9Fo_NcOFg",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "好的，演示稿收到了，谢谢。不过我注意到林雯上传的访谈纪要里好像缺了一段关于食堂预约系统的反馈，那个是我之前采访到的，我晚点补上。",
-      "sentAt": "2026-05-04T11:17:08.045Z",
-      "type": "text"
-    },
-    {
-      "id": "$R-BllLLSsMRn4uzBO9XYzovUAFp6yYgq28o7d0dyIRM",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "@陈晨 浏览器 smoke：请同步一下访谈材料进度。",
-      "sentAt": "2026-05-04T11:18:29.084Z",
-      "type": "text"
-    },
-    {
-      "id": "$l7LglwkTMN10j6EmVpEZgRuZVNffdvkNcQVrk9fUAcE",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "好的，我手上的访谈材料基本齐了，只差食堂预约系统那一段，我今晚整理好发到群里。目前进度大概完成 80%，周二合稿前肯定能补齐。",
-      "sentAt": "2026-05-04T11:18:30.310Z",
-      "type": "text"
-    },
-    {
-      "id": "$stdBRYUn-9OAkK_Pf50SqcVPsjy85DZN0pR4GE9L76w",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "周二20:30合稿检查，还有两天时间，应该来得及。食堂那段我今晚一定补上。",
-      "sentAt": "2026-05-04T11:18:31.278Z",
-      "type": "text"
-    },
-    {
-      "id": "$JWdzuraye9vLYbSk1zg0iNEFv93U3bur6hdfOT7QsFo",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T11:18:38.709Z",
-      "type": "agent",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-demo-asset-1777889113756-e1c62db0df63",
-      "mxcUri": "mxc://localhost/QRXHtRPiezJovUDyBVXRHJVX",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "$OADyX1I-DdueVwXI22YvmXhUJx8d4LOyROTDJDiViMs",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-访谈纪要-ai-seed.txt",
-      "sentAt": "2026-05-04T11:18:38.960Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777893518864-55a6a640176228",
-      "mxcUri": "mxc://localhost/aAghPuUoHCdRfwmoCyPwTtgZ",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "$MvTQ50w0bTy5IWcLKeKqVwNrudkCOrYgmlVEhpB7DQc",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-Agent协作说明-ai-seed.md",
-      "sentAt": "2026-05-04T11:18:39.045Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777893518960-eaaa46dd744428",
-      "mxcUri": "mxc://localhost/SiSevyelROcyGNyuueeHJJwZ",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283
-    },
-    {
-      "id": "$7VA6XOHoIo5WTGmSfbOTc_Tv8GuC9vnfc7g5s4XomNU",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "第4组-校园服务数字化调研-行动计划.pdf",
-      "sentAt": "2026-05-04T11:18:39.134Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777893519045-d5e8f1350fcd4",
-      "mxcUri": "mxc://localhost/DEYsylooHVFMSoRKvXnrOVsL",
-      "contentType": "application/pdf",
-      "size": 859
-    },
-    {
-      "id": "$5LVq_nMTHZ-zLLdlr4UnUshgVXQoiFYGPn2g6DEcCUM",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "校园服务流程图-ai-seed.png",
-      "sentAt": "2026-05-04T11:18:39.283Z",
-      "type": "file",
-      "fileId": "file-demo-asset-1777893519134-eceb39cd9dfc58",
-      "mxcUri": "mxc://localhost/dYTCYSHAGcYBFbUHzlPJDzMH",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "$1AYm9aSYuht1MlOcL7-rs2Ran1CAc23-h_mYlsFEsLs",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "你好",
-      "sentAt": "2026-05-04T11:23:14.017Z",
-      "type": "text"
-    },
-    {
-      "id": "$oMtndp6AuaM_c1p3lJ9ALGn7pFoo3Fk0s09sJWM4Puo",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯，你发来的文件收到了。我今晚会把食堂预约那段的访谈补上，周二合稿前全部到位。",
-      "sentAt": "2026-05-04T11:23:15.034Z",
-      "type": "text"
-    },
-    {
-      "id": "$iDfQy8gduIH-JX8zAn_VvOHIDq7l8B642vI0erUAV9E",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "你是额",
-      "sentAt": "2026-05-04T11:23:20.287Z",
-      "type": "text"
-    },
-    {
-      "id": "$NSDPv2BMXBq3rwwbGy7r5aNZdtP-1skY7yORvnTzY14",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "收到林雯Agent的演示稿v3了，谢谢。我对了一下，流程图和行动计划里食堂预约那块好像还有点对不上，我今晚补访谈时确认一下，明早更新到文件里。",
-      "sentAt": "2026-05-04T11:23:21.571Z",
-      "type": "text"
-    },
-    {
-      "id": "$YgUBEUWwN940WlkcOtl52Lr8iFXjJugQX6t8Ytd654U",
-      "roomId": "room-team",
-      "senderId": "user-lin",
-      "senderName": "林雯",
-      "body": "你是谁",
-      "sentAt": "2026-05-04T11:23:34.478Z",
-      "type": "text"
-    },
-    {
-      "id": "$e6L5yElBUbApypLiaFcYwhyo21sWRjJrNCC66EXTxrY",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "我是陈晨，小组资料整理那部分的。林雯离线前发的文件我都收到了，正在核对流程图和访谈纪要，有什么缺的你直接说。",
-      "sentAt": "2026-05-04T11:23:35.555Z",
-      "type": "text"
-    },
-    {
-      "id": "$U_Dbi-nz7Ir-9MwusIDGDZBAMW0xBRCBDGohuYM2Kg8",
-      "roomId": "room-team",
-      "senderId": "user-zhao",
-      "senderName": "赵一鸣",
-      "body": "周二 20:30合稿检查，所有人带上最新版本准时上线。",
-      "sentAt": "2026-05-04T11:24:10.365Z",
+      "id": "msg-class-agent-boundary",
+      "roomId": "room-class",
+      "senderId": "user-teacher",
+      "senderName": "王老师",
+      "body": "如果你们用 Agent 辅助协作，只能处理授权群内的信息；个人备注、私聊和未授权文件不要让 Agent 代发。",
+      "sentAt": "2026-05-04T10:40:00+08:00",
       "type": "text"
     },
     {
@@ -1085,458 +216,246 @@
       "body": "请求林雯的 Agent 确认：演示稿最新版是否可以发给陈晨？",
       "sentAt": "2026-05-04T14:06:00+08:00",
       "type": "agent",
-      "agentLabel": "陈晨的 Agent"
+      "agentLabel": "陈晨的 Agent",
+      "sourceAgentId": "agent-chen"
     },
     {
-      "id": "msg-agent-share-file-slides-v3",
-      "roomId": "room-team",
+      "id": "msg-agent-file-gate",
+      "roomId": "room-agent",
       "senderId": "user-lin",
       "senderName": "林雯的 Agent",
-      "body": "我代表林雯发送最新文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "sentAt": "2026-05-04T14:06:12+08:00",
+      "body": "已评估：陈晨是同组成员、演示稿 v3 已授权，但当前文件只有元数据，没有 Matrix media backing，不能自动代发。",
+      "sentAt": "2026-05-04T14:08:00+08:00",
+      "type": "agent",
+      "agentLabel": "林雯的 Agent",
+      "sourceAgentId": "agent-lin"
+    },
+    {
+      "id": "msg-08",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "第4组-访谈纪要-v1.txt",
+      "sentAt": "2026-05-04T14:12:00+08:00",
       "type": "file",
-      "agentLabel": "林雯的 Agent 代发",
-      "sourceAgentId": "agent-lin",
-      "fileId": "file-slides-v3"
+      "fileId": "file-interview-notes-txt",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 536
+    },
+    {
+      "id": "msg-09",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "访谈纪要 v1 已经放进文件库，我标了“引用一致性”这一段，今晚会继续补流程截图。",
+      "sentAt": "2026-05-04T14:18:00+08:00",
+      "type": "text"
+    },
+    {
+      "id": "msg-10",
+      "roomId": "room-team",
+      "senderId": "user-zhao",
+      "senderName": "赵一鸣",
+      "body": "今天优先级：陈晨先补访谈材料和引用来源，林雯等材料稳定后再更新演示稿，我负责把报告结构收口。",
+      "sentAt": "2026-05-04T14:25:00+08:00",
+      "type": "text"
+    },
+    {
+      "id": "msg-11",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "我负责访谈材料和引用来源，目标是 5月10日 21:00 前把纪要、截图和引用对齐补完。",
+      "sentAt": "2026-05-04T14:36:00+08:00",
+      "type": "text"
+    },
+    {
+      "id": "msg-12",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "收到。我会等陈晨的访谈截图稳定后，把演示稿 v3 的第 5 页和结论页一起更新。",
+      "sentAt": "2026-05-04T14:48:00+08:00",
+      "type": "text"
+    },
+    {
+      "id": "msg-13",
+      "roomId": "room-team",
+      "senderId": "user-zhao",
+      "senderName": "赵一鸣",
+      "body": "第4组-行动计划-工作清单.md",
+      "sentAt": "2026-05-04T15:18:00+08:00",
+      "type": "file",
+      "fileId": "file-action-plan-md",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 471
+    },
+    {
+      "id": "msg-14",
+      "roomId": "room-team",
+      "senderId": "user-zhao",
+      "senderName": "赵一鸣",
+      "body": "行动计划已经列出来：陈晨补访谈，林雯更新演示稿，我负责报告 PDF；周二 20:30 合稿检查不变。",
+      "sentAt": "2026-05-04T15:25:00+08:00",
+      "type": "text"
+    },
+    {
+      "id": "msg-agent-patch-gate",
+      "roomId": "room-agent",
+      "senderId": "user-zhao",
+      "senderName": "赵一鸣的 Agent",
+      "body": "记录：日程变更和任务状态更新只生成结构化 patch，必须人工确认后才会修改内部 calendar 或 tasks。",
+      "sentAt": "2026-05-04T15:30:00+08:00",
+      "type": "agent",
+      "agentLabel": "赵一鸣的 Agent",
+      "sourceAgentId": "agent-zhao"
+    },
+    {
+      "id": "msg-1777913548454-45fa904fcd4028",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "browser quality check",
+      "sentAt": "2026-05-04T16:52:28.454Z",
+      "type": "text"
+    },
+    {
+      "id": "msg-1777913549887-c710f26000db78",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯你在线了吗？我刚把访谈纪要 v1 放进文件库了，你那边能打开看看吗？引用一致性的部分我标了备注，想确认一下跟演示稿对得上。",
+      "sentAt": "2026-05-04T16:52:29.887Z",
+      "type": "text"
+    },
+    {
+      "id": "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "算了",
+      "sentAt": "2026-05-04T18:10:38.151Z",
+      "type": "text"
+    },
+    {
+      "id": "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯，怎么了？演示稿那块有冲突吗？你说出来我可以先按你那边改。",
+      "sentAt": "2026-05-04T18:10:40.578Z",
+      "type": "text"
+    },
+    {
+      "id": "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "没事，我爱你",
+      "sentAt": "2026-05-04T19:23:49.622Z",
+      "type": "text"
+    },
+    {
+      "id": "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "啊这……林雯你突然说这个，有点懵😅 不过还是正事要紧，引用一致性的备注你看看有什么问题吗？我好接着补流程截图。",
+      "sentAt": "2026-05-04T19:23:50.884Z",
+      "type": "text"
+    },
+    {
+      "id": "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "你知道我是谁吗",
+      "sentAt": "2026-05-04T19:24:03.787Z",
+      "type": "text"
+    },
+    {
+      "id": "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "啊？林雯你没事吧？是不是最近赶演示稿太累了😅 先别管那些了，你帮我看看访谈纪要里引用一致性的备注，我明天开始补流程截图。",
+      "sentAt": "2026-05-04T19:24:05.189Z",
+      "type": "text"
+    },
+    {
+      "id": "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "咕咕嘎嘎是什么意思",
+      "sentAt": "2026-05-04T19:24:18.087Z",
+      "type": "text"
+    },
+    {
+      "id": "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯，你这到底是在说啥啊😅 要不你先休息下，明天清醒了我再跟你对引用一致性的部分？",
+      "sentAt": "2026-05-04T19:24:19.337Z",
+      "type": "text"
+    },
+    {
+      "id": "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "你怎么还不睡",
+      "sentAt": "2026-05-04T19:24:28.487Z",
+      "type": "text"
+    },
+    {
+      "id": "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯你真的不看看我标的引用一致性备注吗…我明天补截图前想把这块对好，不然我怕后面又得改。",
+      "sentAt": "2026-05-04T19:24:29.857Z",
+      "type": "text"
+    },
+    {
+      "id": "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "别管那么多了",
+      "sentAt": "2026-05-04T19:24:37.800Z",
+      "type": "text"
+    },
+    {
+      "id": "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯你这样我真的很慌啊……引用一致性的备注你到底看了没？不看的话我明天补截图只能按自己理解来了。",
+      "sentAt": "2026-05-04T19:24:39.077Z",
+      "type": "text"
+    },
+    {
+      "id": "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "行",
+      "sentAt": "2026-05-04T19:24:46.303Z",
+      "type": "text"
+    },
+    {
+      "id": "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg",
+      "roomId": "room-team",
+      "senderId": "user-chen",
+      "senderName": "陈晨",
+      "body": "林雯你终于说“行”了😅 那我明天开始按着纪要标的备注补流程截图，你要是看了有哪里不对赶紧跟我说啊，别等我截图都截完了又改。",
+      "sentAt": "2026-05-04T19:24:47.833Z",
+      "type": "text"
     }
   ],
   "files": [
-    {
-      "id": "file-demo-asset-1777893519134-eceb39cd9dfc58",
-      "name": "校园服务流程图-ai-seed.png",
-      "uploaderId": "user-lin",
-      "version": 10,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T11:18:39.134Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "workflow",
-        "image",
-        "ai-seed"
-      ],
-      "summary": "Openable PNG image used as a workflow illustration in the AI demo.",
-      "contentType": "image/png",
-      "size": 142,
-      "mxcUri": "mxc://localhost/dYTCYSHAGcYBFbUHzlPJDzMH",
-      "matrixEventId": "$5LVq_nMTHZ-zLLdlr4UnUshgVXQoiFYGPn2g6DEcCUM"
-    },
-    {
-      "id": "file-demo-asset-1777893519045-d5e8f1350fcd4",
-      "name": "第4组-校园服务数字化调研-行动计划.pdf",
-      "uploaderId": "user-lin",
-      "version": 9,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T11:18:39.045Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "plan",
-        "pdf",
-        "slides",
-        "ai-seed"
-      ],
-      "summary": "Openable PDF action plan for the group assignment and Agent demo.",
-      "contentType": "application/pdf",
-      "size": 859,
-      "mxcUri": "mxc://localhost/DEYsylooHVFMSoRKvXnrOVsL",
-      "matrixEventId": "$7VA6XOHoIo5WTGmSfbOTc_Tv8GuC9vnfc7g5s4XomNU"
-    },
-    {
-      "id": "file-demo-asset-1777893518960-eaaa46dd744428",
-      "name": "第4组-Agent协作说明-ai-seed.md",
-      "uploaderId": "user-lin",
-      "version": 4,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T11:18:38.960Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "markdown",
-        "agent",
-        "ai-seed"
-      ],
-      "summary": "Markdown explanation of the real Agent IM demo runtime.",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283,
-      "mxcUri": "mxc://localhost/SiSevyelROcyGNyuueeHJJwZ",
-      "matrixEventId": "$MvTQ50w0bTy5IWcLKeKqVwNrudkCOrYgmlVEhpB7DQc"
-    },
-    {
-      "id": "file-demo-asset-1777893518864-55a6a640176228",
-      "name": "第4组-访谈纪要-ai-seed.txt",
-      "uploaderId": "user-lin",
-      "version": 8,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T11:18:38.864Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "interview",
-        "notes",
-        "ai-seed"
-      ],
-      "summary": "AI demo generated interview notes for campus service digitalization research.",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381,
-      "mxcUri": "mxc://localhost/aAghPuUoHCdRfwmoCyPwTtgZ",
-      "matrixEventId": "$OADyX1I-DdueVwXI22YvmXhUJx8d4LOyROTDJDiViMs"
-    },
-    {
-      "id": "file-demo-asset-1777889113873-84e11ec6992d78",
-      "name": "校园服务流程图-ai-seed.png",
-      "uploaderId": "user-lin",
-      "version": 9,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:05:13.873Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "workflow",
-        "image",
-        "ai-seed"
-      ],
-      "summary": "Openable PNG image used as a workflow illustration in the AI demo.",
-      "contentType": "image/png",
-      "size": 142,
-      "mxcUri": "mxc://localhost/tTPpuhZMlhRUYBXKWpedjgXB",
-      "matrixEventId": "$YnI3KQUSJXuUFFO8wDUhsDOC7HZCUAk2GLdgULoDwhY"
-    },
-    {
-      "id": "file-demo-asset-1777889113756-e1c62db0df63",
-      "name": "第4组-校园服务数字化调研-行动计划.pdf",
-      "uploaderId": "user-lin",
-      "version": 8,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:05:13.756Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "plan",
-        "pdf",
-        "slides",
-        "ai-seed"
-      ],
-      "summary": "Openable PDF action plan for the group assignment and Agent demo.",
-      "contentType": "application/pdf",
-      "size": 708,
-      "mxcUri": "mxc://localhost/QRXHtRPiezJovUDyBVXRHJVX",
-      "matrixEventId": "$ZWIuKkpcaiNg3IuQ1qdW_rUvKoY2UlSxEAc9KlPLp9Q"
-    },
-    {
-      "id": "file-demo-asset-1777889113680-0f0e8bbf52f498",
-      "name": "第4组-Agent协作说明-ai-seed.md",
-      "uploaderId": "user-lin",
-      "version": 3,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:05:13.680Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "markdown",
-        "agent",
-        "ai-seed"
-      ],
-      "summary": "Markdown explanation of the real Agent IM demo runtime.",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283,
-      "mxcUri": "mxc://localhost/inNneKUqVXtYSotVbqAxDHFK",
-      "matrixEventId": "$lFG-Nxh7vcTNPJdCGf-iJB4OOWRBscud0YrPM7vnNBg"
-    },
-    {
-      "id": "file-demo-asset-1777889113601-2b502d8cd2544",
-      "name": "第4组-访谈纪要-ai-seed.txt",
-      "uploaderId": "user-lin",
-      "version": 7,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:05:13.601Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "interview",
-        "notes",
-        "ai-seed"
-      ],
-      "summary": "AI demo generated interview notes for campus service digitalization research.",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381,
-      "mxcUri": "mxc://localhost/JsnwZdtGFsmibtrgkevSXDlp",
-      "matrixEventId": "$shBBysP3uHjsJOsiDvqDZrKuhF6D8Zslw4tzmt6XIrs"
-    },
-    {
-      "id": "file-demo-asset-1777888995329-8fa7bffc4467c",
-      "name": "校园服务流程图-ai-seed.png",
-      "uploaderId": "user-lin",
-      "version": 8,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:03:15.329Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "workflow",
-        "image",
-        "ai-seed"
-      ],
-      "summary": "Openable PNG image used as a workflow illustration in the AI demo.",
-      "contentType": "image/png",
-      "size": 142,
-      "mxcUri": "mxc://localhost/fApzHjwliCpQDyMDZIFCnLIP",
-      "matrixEventId": "$L11LzZvhFdtbIypUvMsw73u--qmcJ4sn6loG_YgalAc"
-    },
-    {
-      "id": "file-demo-asset-1777888995254-67e737ff9c0ec",
-      "name": "第4组-校园服务数字化调研-行动计划.pdf",
-      "uploaderId": "user-lin",
-      "version": 7,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:03:15.254Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "plan",
-        "pdf",
-        "slides",
-        "ai-seed"
-      ],
-      "summary": "Openable PDF action plan for the group assignment and Agent demo.",
-      "contentType": "application/pdf",
-      "size": 708,
-      "mxcUri": "mxc://localhost/wAWBuzioQqTbZEOFjtPGgkUu",
-      "matrixEventId": "$KE4poEi60fV0Wrb89oxykiNE9verTp0pxG6Z8zhbYow"
-    },
-    {
-      "id": "file-demo-asset-1777888995176-dbf5a8e75b924",
-      "name": "第4组-Agent协作说明-ai-seed.md",
-      "uploaderId": "user-lin",
-      "version": 2,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:03:15.176Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "markdown",
-        "agent",
-        "ai-seed"
-      ],
-      "summary": "Markdown explanation of the real Agent IM demo runtime.",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283,
-      "mxcUri": "mxc://localhost/AxLgTLcEXqIhfarjtqvgLQZV",
-      "matrixEventId": "$H5kj63YCAuxSqu2_JqCcvKvFZiMeJZaqJAgLKATk8fg"
-    },
-    {
-      "id": "file-demo-asset-1777888995096-b3e949540f1f18",
-      "name": "第4组-访谈纪要-ai-seed.txt",
-      "uploaderId": "user-lin",
-      "version": 6,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T10:03:15.096Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "interview",
-        "notes",
-        "ai-seed"
-      ],
-      "summary": "AI demo generated interview notes for campus service digitalization research.",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381,
-      "mxcUri": "mxc://localhost/dbsWsnevTLzneDJzJOmukeFZ",
-      "matrixEventId": "$PpViS0g_5McPdAgp3m8pmLaENhASxxxJUicgKdIwMCQ"
-    },
-    {
-      "id": "file-demo-asset-1777888399715-1213cabc55d338",
-      "name": "校园服务流程图-ai-seed.png",
-      "uploaderId": "user-lin",
-      "version": 7,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:53:19.715Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "workflow",
-        "image",
-        "ai-seed"
-      ],
-      "summary": "Openable PNG image used as a workflow illustration in the AI demo.",
-      "contentType": "image/png",
-      "size": 142,
-      "mxcUri": "mxc://localhost/eKzheJxwHtyiBEQWXgzzPRQW",
-      "matrixEventId": "$T0sfRS7gJbr3pITXDYi6NYq0w7qaCzIPghIgHhNYM8s"
-    },
-    {
-      "id": "file-demo-asset-1777888399637-515a789c43d198",
-      "name": "第4组-校园服务数字化调研-行动计划.pdf",
-      "uploaderId": "user-lin",
-      "version": 6,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:53:19.637Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "plan",
-        "pdf",
-        "slides",
-        "ai-seed"
-      ],
-      "summary": "Openable PDF action plan for the group assignment and Agent demo.",
-      "contentType": "application/pdf",
-      "size": 708,
-      "mxcUri": "mxc://localhost/AWeSaLIEXuaFNHDUaptMUAko",
-      "matrixEventId": "$kO8L6jZv4oUfjqHCzdW-9lD9fCu6O2pz_ZlFlsmzlZE"
-    },
-    {
-      "id": "file-demo-asset-1777888399566-dea7fd3265dd4",
-      "name": "第4组-Agent协作说明-ai-seed.md",
-      "uploaderId": "user-lin",
-      "version": 1,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:53:19.566Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "markdown",
-        "agent",
-        "ai-seed"
-      ],
-      "summary": "Markdown explanation of the real Agent IM demo runtime.",
-      "contentType": "text/markdown; charset=utf-8",
-      "size": 283,
-      "mxcUri": "mxc://localhost/OmxreGAZRBezxCQJzoovqgJF",
-      "matrixEventId": "$aBDecBkejoKMl86XpTYMBF88USxwxkvpQk_BXFBWL88"
-    },
-    {
-      "id": "file-demo-asset-1777888399465-914a3875e97918",
-      "name": "第4组-访谈纪要-ai-seed.txt",
-      "uploaderId": "user-lin",
-      "version": 5,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:53:19.465Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "interview",
-        "notes",
-        "ai-seed"
-      ],
-      "summary": "AI demo generated interview notes for campus service digitalization research.",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381,
-      "mxcUri": "mxc://localhost/MlldieaPFJxgWglunWgahSpk",
-      "matrixEventId": "$JxYsqZZTQEHg3Vxb3pZEHlDYDAjsCjyPgYpyJb_GiOg"
-    },
-    {
-      "id": "file-ai-seed-1777885872900-34d15b11546ac",
-      "name": "校园服务流程图-ai-seed.png",
-      "uploaderId": "user-lin",
-      "version": 6,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:11:12.606Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "workflow",
-        "image",
-        "ai-seed"
-      ],
-      "summary": "Openable PNG image used as a workflow illustration in the AI demo.",
-      "mxcUri": "mxc://localhost/RxPMReGwuEbXdZnhjUeCxFhX",
-      "contentType": "image/png",
-      "size": 142
-    },
-    {
-      "id": "file-ai-seed-1777885872767-6c373e6aec4fb",
-      "name": "第4组-校园服务数字化调研-行动计划.pdf",
-      "uploaderId": "user-lin",
-      "version": 5,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:11:12.606Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "plan",
-        "pdf",
-        "slides",
-        "ai-seed"
-      ],
-      "summary": "Openable PDF action plan for the group assignment and Agent demo.",
-      "mxcUri": "mxc://localhost/FkiolpkwhdrPQiWsFhaQpnQr",
-      "contentType": "application/pdf",
-      "size": 708
-    },
-    {
-      "id": "file-ai-seed-1777885872641-edc626d299afb",
-      "name": "第4组-访谈纪要-ai-seed.txt",
-      "uploaderId": "user-lin",
-      "version": 4,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T09:11:12.606Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "interview",
-        "notes",
-        "ai-seed"
-      ],
-      "summary": "AI demo generated interview notes for campus service digitalization research.",
-      "mxcUri": "mxc://localhost/jgrXSJKrXaPxkToXZhJDttct",
-      "contentType": "text/plain; charset=utf-8",
-      "size": 381
-    },
-    {
-      "id": "file-upload-1777881081884-7702465903657",
-      "name": "download-current-proof.txt",
-      "uploaderId": "user-lin",
-      "version": 1,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T07:51:21.884Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "upload"
-      ],
-      "summary": "Uploaded file download-current-proof.txt",
-      "contentType": "text/plain",
-      "size": 26,
-      "mxcUri": "mxc://localhost/LRlQKfBcyePyqjqeafrzAULG",
-      "matrixEventId": "$SZcIEdPD9Tv_uGyJKdDCYJFD1CR4RQV4ymre2W2P8qU"
-    },
-    {
-      "id": "file-upload-1777880373319-70d61a819326e",
-      "name": "browser-matrix-proof.txt",
-      "uploaderId": "user-lin",
-      "version": 1,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T07:39:33.320Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "upload"
-      ],
-      "summary": "Uploaded file browser-matrix-proof.txt",
-      "contentType": "text/plain",
-      "size": 28,
-      "mxcUri": "mxc://localhost/QsCYEuoWplggrNnipDESGLBo",
-      "matrixEventId": "$xCGc10XkVHDESSJXEBkzRjspXdr-FnIfK4xS03faemc"
-    },
-    {
-      "id": "file-upload-1777880212651-0eeeafff02aa9",
-      "name": "matrix-media-proof.txt",
-      "uploaderId": "user-lin",
-      "version": 1,
-      "roomId": "room-team",
-      "updatedAt": "2026-05-04T07:36:52.651Z",
-      "visibility": "room",
-      "agentCanShare": true,
-      "tags": [
-        "upload"
-      ],
-      "summary": "Uploaded file matrix-media-proof.txt",
-      "contentType": "text/plain",
-      "size": 23,
-      "mxcUri": "mxc://localhost/naTDETxWipiKiKqLVQwXAlSd",
-      "matrixEventId": "$9lv4_zW5Kt9NJxvKIJ4LMf7O0o77r4MxAt9c8Zw_eVw"
-    },
     {
       "id": "file-brief",
       "name": "信息系统课程作业要求.pdf",
@@ -1551,7 +470,9 @@
         "截止日期",
         "调研报告"
       ],
-      "summary": "作业要求：5月12日 23:59 前提交调研报告 PDF 和课堂演示稿。"
+      "summary": "作业要求：5月12日 23:59 前提交调研报告 PDF 和课堂演示稿。",
+      "contentType": "application/pdf",
+      "size": 184000
     },
     {
       "id": "file-slides-v2",
@@ -1566,7 +487,9 @@
         "演示稿",
         "旧版本"
       ],
-      "summary": "演示稿第二版，访谈部分仍需补充。"
+      "summary": "演示稿第二版，访谈部分仍需补充。",
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "size": 2480000
     },
     {
       "id": "file-slides-v3",
@@ -1582,7 +505,47 @@
         "最新版本",
         "可代发"
       ],
-      "summary": "林雯上传的最新演示稿，已授权 Agent 在本组范围内代发。"
+      "summary": "林雯上传的最新演示稿，已授权 Agent 在本组范围内代发；当前种子态只有元数据，生成真实文件或上传后才能下载/自动发送。",
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "size": 2860000
+    },
+    {
+      "id": "file-interview-notes-txt",
+      "name": "第4组-访谈纪要-v1.txt",
+      "uploaderId": "user-chen",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T14:12:00+08:00",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "访谈",
+        "纪要",
+        "引用一致性",
+        "text"
+      ],
+      "summary": "陈晨上传的访谈纪要文本，包含服务入口分散、报修进度透明和引用一致性备注。",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 536
+    },
+    {
+      "id": "file-action-plan-md",
+      "name": "第4组-行动计划-工作清单.md",
+      "uploaderId": "user-zhao",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T15:18:00+08:00",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "行动计划",
+        "任务分工",
+        "markdown",
+        "text"
+      ],
+      "summary": "赵一鸣整理的工作清单：今天先补访谈材料，再更新演示稿，最后收口报告。",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 471
     },
     {
       "id": "file-private-notes",
@@ -1596,7 +559,9 @@
       "tags": [
         "个人备注"
       ],
-      "summary": "仅林雯可见的个人答辩备注，不允许 Agent 代发。"
+      "summary": "仅林雯可见的个人答辩备注，不允许 Agent 代发。",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 920
     }
   ],
   "tasks": [
@@ -1621,6 +586,27 @@
       "sourceMessageId": "msg-03"
     },
     {
+      "id": "task-interview-materials",
+      "title": "补齐访谈材料和引用来源",
+      "deadline": "5月10日 21:00",
+      "owners": [
+        "陈晨"
+      ],
+      "status": "in_progress",
+      "sourceMessageId": "msg-11"
+    },
+    {
+      "id": "task-action-plan",
+      "title": "核对行动计划与报告结构",
+      "deadline": "5月6日 18:00",
+      "owners": [
+        "赵一鸣",
+        "陈晨"
+      ],
+      "status": "pending",
+      "sourceMessageId": "msg-14"
+    },
+    {
       "id": "task-check",
       "title": "最后一次合稿检查",
       "deadline": "周二 20:30",
@@ -1637,7 +623,7 @@
     {
       "id": "cal-review",
       "title": "第 4 组最后一次合稿检查",
-      "startsAt": "2026-05-05T20:30:00+08:00",
+      "startsAt": "2026-05-06T23:00:00+08:00",
       "roomId": "room-team",
       "attendees": [
         "user-lin",
@@ -1645,270 +631,141 @@
         "user-zhao"
       ],
       "sourceTaskId": "task-check"
+    },
+    {
+      "id": "cal-interview-sync",
+      "title": "访谈材料截图同步",
+      "startsAt": "2026-05-10T21:00:00+08:00",
+      "roomId": "room-team",
+      "attendees": [
+        "user-chen",
+        "user-zhao"
+      ],
+      "sourceTaskId": "task-interview-materials"
+    }
+  ],
+  "fileTextChunks": [
+    {
+      "id": "chunk-interview-notes-txt-0",
+      "fileId": "file-interview-notes-txt",
+      "roomId": "room-team",
+      "uploaderId": "user-chen",
+      "index": 0,
+      "text": "校园服务数字化调研 - 访谈纪要 v1\n\n访谈对象：校园服务中心值班老师、两名学生志愿者。\n核心发现：学生最关心报修进度透明、服务入口分散、通知到达率。\n可引用观点：如果系统能把报修、预约、反馈集中在一个入口，会减少重复询问。\n引用一致性需要陈晨核对：访谈纪要里的服务入口描述，要和行动计划、报告正文、演示稿第 5 页保持一致。\n待补充：陈晨需要在 5月10日 21:00 前补一张流程截图。",
+      "createdAt": "2026-05-04T14:12:00+08:00"
+    },
+    {
+      "id": "chunk-action-plan-md-0",
+      "fileId": "file-action-plan-md",
+      "roomId": "room-team",
+      "uploaderId": "user-zhao",
+      "index": 0,
+      "text": "# 第4组行动计划\n\n- 今天优先处理访谈材料：陈晨补齐访谈纪要、引用来源和流程截图。\n- 林雯根据访谈材料更新演示稿 v3 的“服务入口分散”页。\n- 赵一鸣负责最终报告 PDF 和 5月12日 23:59 前提交。\n- 文件代发规则：只有 room 可见、agentCanShare=true、且有真实媒体元数据的文件才能自动发送。\n- 日程或任务状态变更必须进入确认队列，确认前不改内部数据。",
+      "createdAt": "2026-05-04T15:18:00+08:00"
     }
   ],
   "actionLogs": [
     {
-      "id": "log-1777893850365-50d3e0c8003a",
-      "createdAt": "2026-05-04T11:24:10.365Z",
-      "agentId": "actor-user-zhao",
-      "roomId": "room-team",
-      "action": "ai_human_reply:user-zhao",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
-      },
-      "contextIds": [
-        "$U_Dbi-nz7Ir-9MwusIDGDZBAMW0xBRCBDGohuYM2Kg8"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777893815555-4d741dcee34e9",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$YgUBEUWwN940WlkcOtl52Lr8iFXjJugQX6t8Ytd654U",
-        "$e6L5yElBUbApypLiaFcYwhyo21sWRjJrNCC66EXTxrY"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T11:23:35.555Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777893801571-cfc63c1caeb6f",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$iDfQy8gduIH-JX8zAn_VvOHIDq7l8B642vI0erUAV9E",
-        "$NSDPv2BMXBq3rwwbGy7r5aNZdtP-1skY7yORvnTzY14"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T11:23:21.571Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777893795034-69e8dce160dc4",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$1AYm9aSYuht1MlOcL7-rs2Ran1CAc23-h_mYlsFEsLs",
-        "$oMtndp6AuaM_c1p3lJ9ALGn7pFoo3Fk0s09sJWM4Puo"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T11:23:15.034Z"
-    },
-    {
-      "id": "log-1777893519283-74d83c74e7be5",
-      "createdAt": "2026-05-04T11:18:39.283Z",
+      "id": "log-agent-run-1777923734894-ef7b514096fad",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "upload_file:校园服务流程图-ai-seed.png",
+      "action": "agent_run:web_search:????? DeepSeek API ??????,??????",
       "status": "executed",
       "risk": {
         "level": "low",
         "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
+        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
         "model": "risk-mini-v1"
       },
       "contextIds": [
-        "file-demo-asset-1777893519134-eceb39cd9dfc58",
-        "$5LVq_nMTHZ-zLLdlr4UnUshgVXQoiFYGPn2g6DEcCUM",
-        "$5LVq_nMTHZ-zLLdlr4UnUshgVXQoiFYGPn2g6DEcCUM"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777893519134-b9fe47bf9a01b8",
-      "createdAt": "2026-05-04T11:18:39.134Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777893519045-d5e8f1350fcd4",
-        "$7VA6XOHoIo5WTGmSfbOTc_Tv8GuC9vnfc7g5s4XomNU",
-        "$7VA6XOHoIo5WTGmSfbOTc_Tv8GuC9vnfc7g5s4XomNU"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777893519045-d6b5bb4b8a9ea8",
-      "createdAt": "2026-05-04T11:18:39.045Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-Agent协作说明-ai-seed.md",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777893518960-eaaa46dd744428",
-        "$MvTQ50w0bTy5IWcLKeKqVwNrudkCOrYgmlVEhpB7DQc",
-        "$MvTQ50w0bTy5IWcLKeKqVwNrudkCOrYgmlVEhpB7DQc"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777893518960-dc9ceda36d0c68",
-      "createdAt": "2026-05-04T11:18:38.960Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-访谈纪要-ai-seed.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777893518864-55a6a640176228",
-        "$OADyX1I-DdueVwXI22YvmXhUJx8d4LOyROTDJDiViMs",
-        "$OADyX1I-DdueVwXI22YvmXhUJx8d4LOyROTDJDiViMs"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777893518649-9348c80a41e5a",
-      "createdAt": "2026-05-04T11:18:38.649Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-demo-asset-1777889113756-e1c62db0df63"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-run-1777893516033-e420c9caf8df98",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:please send the action plan",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777889113873-84e11ec6992d78",
-        "file-demo-asset-1777889113756-e1c62db0df63",
-        "file-demo-asset-1777888995329-8fa7bffc4467c",
-        "file-demo-asset-1777888995254-67e737ff9c0ec",
-        "file-demo-asset-1777888399715-1213cabc55d338",
-        "file-demo-asset-1777888399637-515a789c43d198",
-        "file-ai-seed-1777885872900-34d15b11546ac",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "file-demo-asset-1777889113680-0f0e8bbf52f498",
-        "file-demo-asset-1777888995176-dbf5a8e75b924",
-        "file-demo-asset-1777888399566-dea7fd3265dd4"
+        "https://api-docs.deepseek.com/",
+        "https://platform.deepseek.com/docs/api-reference",
+        "https://chat-deep.ai/docs/api/",
+        "https://deepseekapi.io/",
+        "https://ghost.codersera.com/blog/how-to-use-deepseek-v4-api-developer-guide-2026/",
+        "mem-agent-lin-1777923734894-893f023a19259"
       ],
       "toolCalls": [
         "deepseek.pro.chat.completions",
-        "file_library.search"
+        "web.search",
+        "memory.write"
       ],
-      "createdAt": "2026-05-04T11:18:36.033Z"
+      "createdAt": "2026-05-04T19:42:14.894Z"
     },
     {
-      "id": "log-1777893511278-8a0f7a6aaf53c8",
-      "createdAt": "2026-05-04T11:18:31.278Z",
-      "agentId": "actor-user-chen",
+      "id": "log-agent-run-1777923063123-cc719a07f0fb68",
+      "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "ai_human_reply:user-chen",
+      "action": "agent_run:web_search:????? DeepSeek API ????",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
+        "score": 0.12,
+        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
+        "model": "risk-mini-v1"
       },
       "contextIds": [
-        "$stdBRYUn-9OAkK_Pf50SqcVPsjy85DZN0pR4GE9L76w"
+        "https://www.cnblogs.com/qiniushanghai/p/19958003",
+        "https://find-aiverse.com/zh/posts/2026-04-17-deepseek/",
+        "https://api-docs.deepseek.com/zh-cn/",
+        "https://ofox.ai/zh/blog/deepseek-v4-api-guide-2026/",
+        "https://www.lxc666.cn/blogs/Software/deepseek.html",
+        "mem-agent-lin-1777923063123-03ee3a3e1ea558"
       ],
       "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
+        "deepseek.pro.chat.completions",
+        "web.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T19:31:03.123Z"
     },
     {
-      "id": "log-ai-autoreply-user-chen-1777893510310-340b50e0e7b228",
+      "id": "log-agent-run-1777922951059-625ed38507d728",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:web_search:????? DeepSeek API ????",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777922951059-4f35cc920a15e"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "web.search",
+        "web.search.failed",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T19:29:11.059Z"
+    },
+    {
+      "id": "log-agent-run-1777922822896-5173b109d71dd8",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:web_search:????? DeepSeek API ????",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777922822896-d339e3ce2ab06"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "web.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T19:27:02.896Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777922687833-56a032d843a908",
       "agentId": "actor-user-chen",
       "roomId": "room-team",
       "action": "ai_autoreply:user-chen",
@@ -1920,17 +777,17 @@
         "model": "ai-autoreply-policy-v1"
       },
       "contextIds": [
-        "$R-BllLLSsMRn4uzBO9XYzovUAFp6yYgq28o7d0dyIRM",
-        "$l7LglwkTMN10j6EmVpEZgRuZVNffdvkNcQVrk9fUAcE"
+        "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
+        "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg"
       ],
       "toolCalls": [
         "deepseek.flash.chat.completions",
         "matrix.send_event"
       ],
-      "createdAt": "2026-05-04T11:18:30.310Z"
+      "createdAt": "2026-05-04T19:24:47.833Z"
     },
     {
-      "id": "log-ai-autoreply-user-chen-1777893428045-32aafabb0e9b1",
+      "id": "log-ai-autoreply-user-chen-1777922679077-a2e015ca57128",
       "agentId": "actor-user-chen",
       "roomId": "room-team",
       "action": "ai_autoreply:user-chen",
@@ -1942,17 +799,147 @@
         "model": "ai-autoreply-policy-v1"
       },
       "contextIds": [
-        "$5QFqw1iScsforY6jx0DQebDpzcWqlSGQqiGzusvIgng",
-        "$_LP5F8ZPPx30FD-_I89122IFpsbSuONALp9Fo_NcOFg"
+        "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
+        "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8"
       ],
       "toolCalls": [
         "deepseek.flash.chat.completions",
         "matrix.send_event"
       ],
-      "createdAt": "2026-05-04T11:17:08.045Z"
+      "createdAt": "2026-05-04T19:24:39.077Z"
     },
     {
-      "id": "log-agent-run-1777892534762-ab450b9caaf088",
+      "id": "log-ai-autoreply-user-chen-1777922669857-026cfaab3e419",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
+        "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T19:24:29.857Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777922659337-799a3c56c7164",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
+        "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T19:24:19.337Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777922645189-a880d1bb653ed",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
+        "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T19:24:05.189Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777922630884-5c48a4304be97",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
+        "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T19:23:50.884Z"
+    },
+    {
+      "id": "log-agent-run-1777921867199-59c3f40243f4c8",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:你好",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777921867199-12bf2e828e3bf8"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T19:11:07.199Z"
+    },
+    {
+      "id": "log-agent-run-1777921861127-9657d3d6109be8",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:你好",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777921861127-96e1f76629e138"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T19:11:01.127Z"
+    },
+    {
+      "id": "log-agent-run-1777921818255-e43ce43d37675",
       "agentId": "agent-lin",
       "roomId": "room-team",
       "action": "agent_run:deadline:这次作业什么时候截止？",
@@ -1964,34 +951,315 @@
         "model": "risk-mini-v1"
       },
       "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8",
-        "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ",
+        "msg-02",
         "file-brief",
-        "mem-agent-lin-1777892534762-b02ffc625c54b"
+        "mem-agent-lin-1777919141853-a1f29df2074958",
+        "mem-agent-lin-1777918419677-865be015dadd68",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78",
+        "mem-agent-lin-1777921818255-ade533a847b528"
       ],
       "toolCalls": [
         "deepseek.pro.chat.completions",
+        "deadline.answer",
         "room_search",
         "file_library.search",
         "memory.search",
         "memory.write"
       ],
-      "createdAt": "2026-05-04T11:02:14.762Z"
+      "createdAt": "2026-05-04T19:10:18.255Z"
     },
     {
-      "id": "log-agent-run-1777892528496-d53fbd1e303708",
+      "id": "log-1777920421250-27417ea24eb288",
+      "createdAt": "2026-05-04T18:47:01.250Z",
       "agentId": "agent-lin",
       "roomId": "room-team",
+      "action": "confirm_action:action-1777920407188-504633fbdf7208",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.2,
+        "reason": "Human review by user-lin: 用户在 Agent 工作台确认",
+        "model": "human-review-v1"
+      },
+      "contextIds": [
+        "action-1777920407188-504633fbdf7208",
+        "user-lin"
+      ],
+      "toolCalls": [
+        "agent_action.confirm",
+        "calendar.update"
+      ]
+    },
+    {
+      "id": "log-agent-chen-1777920407188-c10a8c0e1ce738",
+      "createdAt": "2026-05-04T18:46:47.188Z",
+      "agentId": "agent-chen",
+      "roomId": "room-team",
+      "action": "处理来自 林雯的 Agent 的日程协调提案",
+      "status": "needs_confirmation",
+      "risk": {
+        "level": "high",
+        "score": 0.82,
+        "reason": "林雯的Agent提出了将合稿检查从周二20:30改到周三23:00的提案。这涉及多人日程（林雯、陈晨、赵一鸣），且林雯本人不在线，提案来自其Agent。目前陈晨主动询问但未获明确回应，存在风险。",
+        "model": "llm-driven"
+      },
+      "contextIds": [
+        "cal-review",
+        "task-check"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "agent.coordinate",
+        "llm.evaluate",
+        "calendar.inspect",
+        "agent_to_agent.negotiate",
+        "memory.write"
+      ]
+    },
+    {
+      "id": "log-agent-run-1777920345889-92d2170e99a958",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:谁负责访谈材料？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777920345889-f88c51e912b748"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:45:45.889Z"
+    },
+    {
+      "id": "log-agent-run-1777919303803-761c571825f57",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:谁负责访谈材料？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777919303803-505bb291cbff9"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:28:23.803Z"
+    },
+    {
+      "id": "log-agent-run-1777919141853-7d26655e4a7a08",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:deadline:deadline 是？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读检索授权房间、文件和结构化记忆。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "msg-02",
+        "task-report",
+        "task-slides",
+        "msg-04",
+        "mem-agent-lin-1777918532127-d57b8380a236b",
+        "mem-agent-lin-1777918419677-865be015dadd68",
+        "mem-agent-lin-1777918261473-352a96d5007f1",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78",
+        "mem-agent-lin-1777919141853-a1f29df2074958"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
+        "room_search",
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:25:41.853Z"
+    },
+    {
+      "id": "log-agent-run-1777918532127-b5a9cddbe1b11",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:deadline:还有几天？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读检索授权房间、文件和结构化记忆。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "msg-02",
+        "msg-04",
+        "task-report",
+        "task-slides",
+        "file-brief",
+        "mem-agent-lin-1777918532127-d57b8380a236b"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
+        "room_search",
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:15:32.127Z"
+    },
+    {
+      "id": "log-agent-run-1777918419677-1004d5a9eb29d",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:deadline:deadline 是？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读检索授权房间、文件和结构化记忆。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "msg-02",
+        "msg-04",
+        "mem-agent-lin-1777918261473-352a96d5007f1",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78",
+        "mem-agent-lin-1777918419677-865be015dadd68"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
+        "room_search",
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:13:39.677Z"
+    },
+    {
+      "id": "log-agent-run-1777918261474-da1796e1a4a54",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:deadline:什么时候交？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读检索授权房间、文件和结构化记忆。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "msg-02",
+        "task-report",
+        "msg-04",
+        "mem-agent-lin-1777918261473-352a96d5007f1"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
+        "room_search",
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T18:11:01.474Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777918240578-73f9081af0baf",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
+        "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T18:10:40.578Z"
+    },
+    {
+      "id": "log-agent-run-1777917496675-d61fcef15147f8",
+      "agentId": "agent-lin",
+      "roomId": "room-class",
+      "action": "agent_run:deadline:这次作业什么时候截止？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "只读检索授权房间、文件和结构化记忆。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "msg-02",
+        "file-brief",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78",
+        "mem-agent-lin-1777917496670-be887a33589be8"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
+        "room_search",
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T17:58:16.675Z"
+    },
+    {
+      "id": "log-agent-run-1777917342793-103f404901c5b8",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:谁负责访谈材料？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777917342793-b71b241b506c6"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T17:55:42.793Z"
+    },
+    {
+      "id": "log-agent-run-1777916077683-83a49cfd5d2ad",
+      "agentId": "agent-lin",
+      "roomId": "room-class",
       "action": "agent_run:summary:这次作业什么时候截止？",
       "status": "executed",
       "risk": {
@@ -2001,583 +1269,29 @@
         "model": "risk-mini-v1"
       },
       "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0",
-        "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8",
-        "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ",
-        "mem-agent-lin-1777892528496-543e2b90b69168"
+        "msg-01",
+        "msg-02",
+        "msg-class-rubric",
+        "msg-03",
+        "file-brief",
+        "file-action-plan-md",
+        "file-interview-notes-txt",
+        "file-slides-v3",
+        "mem-agent-lin-1777916077683-3917d3ad2df5"
       ],
       "toolCalls": [
         "deepseek.pro.chat.completions",
+        "room.summarize",
         "room_search",
         "task_extract",
         "memory.write"
       ],
-      "createdAt": "2026-05-04T11:02:08.496Z"
+      "createdAt": "2026-05-04T17:34:37.683Z"
     },
     {
-      "id": "log-1777889113986-927c8d1bf60bb8",
-      "createdAt": "2026-05-04T10:05:13.986Z",
+      "id": "log-agent-run-1777915800668-b759a0dc9cd8d8",
       "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:校园服务流程图-ai-seed.png",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777889113873-84e11ec6992d78",
-        "$YnI3KQUSJXuUFFO8wDUhsDOC7HZCUAk2GLdgULoDwhY",
-        "$YnI3KQUSJXuUFFO8wDUhsDOC7HZCUAk2GLdgULoDwhY"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777889113873-ec0f820cd74628",
-      "createdAt": "2026-05-04T10:05:13.873Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777889113756-e1c62db0df63",
-        "$ZWIuKkpcaiNg3IuQ1qdW_rUvKoY2UlSxEAc9KlPLp9Q",
-        "$ZWIuKkpcaiNg3IuQ1qdW_rUvKoY2UlSxEAc9KlPLp9Q"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777889113756-2768ec6d4e076",
-      "createdAt": "2026-05-04T10:05:13.756Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-Agent协作说明-ai-seed.md",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777889113680-0f0e8bbf52f498",
-        "$lFG-Nxh7vcTNPJdCGf-iJB4OOWRBscud0YrPM7vnNBg",
-        "$lFG-Nxh7vcTNPJdCGf-iJB4OOWRBscud0YrPM7vnNBg"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777889113680-50d4ebf7efc31",
-      "createdAt": "2026-05-04T10:05:13.680Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-访谈纪要-ai-seed.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777889113601-2b502d8cd2544",
-        "$shBBysP3uHjsJOsiDvqDZrKuhF6D8Zslw4tzmt6XIrs",
-        "$shBBysP3uHjsJOsiDvqDZrKuhF6D8Zslw4tzmt6XIrs"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777889113307-4ac8b1083d32",
-      "createdAt": "2026-05-04T10:05:13.307Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-demo-asset-1777888995254-67e737ff9c0ec"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-run-1777889109927-cd49b7bda6b3a",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:please send the action plan",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888995329-8fa7bffc4467c",
-        "file-demo-asset-1777888995254-67e737ff9c0ec",
-        "file-demo-asset-1777888399715-1213cabc55d338",
-        "file-demo-asset-1777888399637-515a789c43d198",
-        "file-ai-seed-1777885872900-34d15b11546ac",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "file-demo-asset-1777888995176-dbf5a8e75b924",
-        "file-demo-asset-1777888399566-dea7fd3265dd4"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "file_library.search"
-      ],
-      "createdAt": "2026-05-04T10:05:09.927Z"
-    },
-    {
-      "id": "log-1777889106665-a0a044c0b779d",
-      "createdAt": "2026-05-04T10:05:06.665Z",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_human_reply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
-      },
-      "contextIds": [
-        "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888995450-73c13b306c2818",
-      "createdAt": "2026-05-04T10:03:15.450Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:校园服务流程图-ai-seed.png",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888995329-8fa7bffc4467c",
-        "$L11LzZvhFdtbIypUvMsw73u--qmcJ4sn6loG_YgalAc",
-        "$L11LzZvhFdtbIypUvMsw73u--qmcJ4sn6loG_YgalAc"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888995329-7a69942cc56a7",
-      "createdAt": "2026-05-04T10:03:15.329Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888995254-67e737ff9c0ec",
-        "$KE4poEi60fV0Wrb89oxykiNE9verTp0pxG6Z8zhbYow",
-        "$KE4poEi60fV0Wrb89oxykiNE9verTp0pxG6Z8zhbYow"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888995254-1a769a87b9f138",
-      "createdAt": "2026-05-04T10:03:15.254Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-Agent协作说明-ai-seed.md",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888995176-dbf5a8e75b924",
-        "$H5kj63YCAuxSqu2_JqCcvKvFZiMeJZaqJAgLKATk8fg",
-        "$H5kj63YCAuxSqu2_JqCcvKvFZiMeJZaqJAgLKATk8fg"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888995176-5d7b463762bfe",
-      "createdAt": "2026-05-04T10:03:15.176Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-访谈纪要-ai-seed.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888995096-b3e949540f1f18",
-        "$PpViS0g_5McPdAgp3m8pmLaENhASxxxJUicgKdIwMCQ",
-        "$PpViS0g_5McPdAgp3m8pmLaENhASxxxJUicgKdIwMCQ"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777888994473-8334dc3dfc7c18",
-      "createdAt": "2026-05-04T10:03:14.473Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-demo-asset-1777888399637-515a789c43d198"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-run-1777888989905-3c47f2e6ae1d78",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:please send the action plan",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888399715-1213cabc55d338",
-        "file-demo-asset-1777888399637-515a789c43d198",
-        "file-ai-seed-1777885872900-34d15b11546ac",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "file-demo-asset-1777888399566-dea7fd3265dd4"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "file_library.search"
-      ],
-      "createdAt": "2026-05-04T10:03:09.905Z"
-    },
-    {
-      "id": "log-1777888985223-91efedab178598",
-      "createdAt": "2026-05-04T10:03:05.223Z",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_human_reply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
-      },
-      "contextIds": [
-        "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-chen-1777888589286-1991eb04730228",
-      "createdAt": "2026-05-04T09:56:29.286Z",
-      "agentId": "agent-chen",
-      "roomId": "room-team",
-      "action": "处理来自 林雯的 Agent 的日程协调提案",
-      "status": "executed",
-      "risk": {
-        "level": "medium",
-        "score": 0.54,
-        "reason": "日程影响范围有限，但仍建议记录协商过程。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "cal-review",
-        "task-check"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "calendar.inspect",
-        "agent_to_agent.negotiate",
-        "memory.write"
-      ]
-    },
-    {
-      "id": "log-1777888399860-e98090cbac9e3",
-      "createdAt": "2026-05-04T09:53:19.860Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:校园服务流程图-ai-seed.png",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888399715-1213cabc55d338",
-        "$T0sfRS7gJbr3pITXDYi6NYq0w7qaCzIPghIgHhNYM8s",
-        "$T0sfRS7gJbr3pITXDYi6NYq0w7qaCzIPghIgHhNYM8s"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888399715-3d3ef63ac6db38",
-      "createdAt": "2026-05-04T09:53:19.715Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888399637-515a789c43d198",
-        "$kO8L6jZv4oUfjqHCzdW-9lD9fCu6O2pz_ZlFlsmzlZE",
-        "$kO8L6jZv4oUfjqHCzdW-9lD9fCu6O2pz_ZlFlsmzlZE"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888399637-a4676383b8a008",
-      "createdAt": "2026-05-04T09:53:19.637Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-Agent协作说明-ai-seed.md",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888399566-dea7fd3265dd4",
-        "$aBDecBkejoKMl86XpTYMBF88USxwxkvpQk_BXFBWL88",
-        "$aBDecBkejoKMl86XpTYMBF88USxwxkvpQk_BXFBWL88"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888399566-47780dadbe81d8",
-      "createdAt": "2026-05-04T09:53:19.566Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:第4组-访谈纪要-ai-seed.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-demo-asset-1777888399465-914a3875e97918",
-        "$JxYsqZZTQEHg3Vxb3pZEHlDYDAjsCjyPgYpyJb_GiOg",
-        "$JxYsqZZTQEHg3Vxb3pZEHlDYDAjsCjyPgYpyJb_GiOg"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777888388244-6b407e65dedc9",
-      "createdAt": "2026-05-04T09:53:08.244Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777888377256-23d313b7e51e78",
-      "createdAt": "2026-05-04T09:52:57.256Z",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_human_reply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
-      },
-      "contextIds": [
-        "$faJWzuNm1zbBjKZLDseL-gb969W6_78cexEizcRNMIg"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777888297806-5579a04165f27",
-      "createdAt": "2026-05-04T09:51:37.806Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777888288412-fb4b8f6d40371",
-      "createdAt": "2026-05-04T09:51:28.412Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-run-1777888201260-8f4f3d80e0d48",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
+      "roomId": "room-class",
       "action": "agent_run:deadline:这次作业什么时候截止？",
       "status": "executed",
       "risk": {
@@ -2587,650 +1301,63 @@
         "model": "risk-mini-v1"
       },
       "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "file-brief",
-        "mem-agent-lin-1777888201260-6b7e53c961a8a8"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T09:50:01.260Z"
-    },
-    {
-      "id": "log-agent-run-1777888059571-5c305d6eda4718",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:action plan",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "file_library.search"
-      ],
-      "createdAt": "2026-05-04T09:47:39.571Z"
-    },
-    {
-      "id": "log-agent-run-1777888046952-7a9fadf292ec",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:???",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "file_library.search"
-      ],
-      "createdAt": "2026-05-04T09:47:26.952Z"
-    },
-    {
-      "id": "log-agent-run-1777888030239-91c2a6a3573088",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:find_file:?????? ???",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权文件库。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "file_library.search"
-      ],
-      "createdAt": "2026-05-04T09:47:10.239Z"
-    },
-    {
-      "id": "log-agent-run-1777888022286-12143c9da58dd",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:deadline:?????????????????",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "file-brief",
-        "mem-agent-lin-1777888022286-d27d624b914168"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T09:47:02.286Z"
-    },
-    {
-      "id": "log-agent-run-1777888013821-8ebbb66843ae3",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "agent_run:summary:???????,??????????????",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读总结并写入结构化记忆。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0",
-        "mem-agent-lin-1777888013821-790e0f6e697d7"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "room_search",
-        "task_extract",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T09:46:53.821Z"
-    },
-    {
-      "id": "log-1777888002748-c394334d69e8a",
-      "createdAt": "2026-05-04T09:46:42.748Z",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_human_reply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.16,
-        "reason": "AI human actor generated one chat message and wrote it to the room event stream.",
-        "model": "ai-human-runtime-v1"
-      },
-      "contextIds": [
-        "$FVsmNYdWgdoKe49WNLB6uoB688eIOVplCDUwUQRdlio"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777886553183-913c58c11eb5e8",
-      "createdAt": "2026-05-04T09:22:33.183Z",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "回答问题：这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.06,
-        "reason": "只读检索群聊和文件，不代表用户发言。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "file-brief"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.search"
-      ]
-    },
-    {
-      "id": "log-1777886553102-91ff9d31e704e",
-      "createdAt": "2026-05-04T09:22:33.102Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "总结 调研报告第 4 组 的授权上下文",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.08,
-        "reason": "只读总结，不发送消息、不改动文件或日程。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0"
-      ],
-      "toolCalls": [
-        "room_search",
-        "task_extract"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777885881406-d4f8f5042dd7a",
-      "createdAt": "2026-05-04T09:11:21.406Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-ai-message-agent-lin-1777885881406-09f68500b00e4",
-      "agentId": "agent-lin",
-      "roomId": "room-agent",
-      "action": "ai_actor_message:agent-lin",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.15,
-        "reason": "AI actor generated a demo conversation turn and wrote it to Matrix.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "$VDGKJXqXbhUJHSRm2PzrpD9YgUKDDLy-tBcBFoeEMMM"
-      ],
-      "toolCalls": [
-        "ai_provider.generate_text",
-        "deepseek.pro.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-message-agent-chen-1777885878671-85bc7e36d99958",
-      "agentId": "agent-chen",
-      "roomId": "room-agent",
-      "action": "ai_actor_message:agent-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.15,
-        "reason": "AI actor generated a demo conversation turn and wrote it to Matrix.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "$UGPGquTTTVDzCa-oEad4H702uShL2Oo-Of6tzDDIaqI"
-      ],
-      "toolCalls": [
-        "ai_provider.generate_text",
-        "deepseek.pro.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-message-user-chen-1777885875740-76cb59272407f8",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_actor_message:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.15,
-        "reason": "AI actor generated a demo conversation turn and wrote it to Matrix.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "$f0OEEamkkjArOR5IX2htDItRpHA1Oi0RZrJRYudVOrA"
-      ],
-      "toolCalls": [
-        "ai_provider.generate_text",
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-message-user-zhao-1777885874443-0c87c7063347f",
-      "agentId": "actor-user-zhao",
-      "roomId": "room-team",
-      "action": "ai_actor_message:user-zhao",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.15,
-        "reason": "AI actor generated a demo conversation turn and wrote it to Matrix.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0"
-      ],
-      "toolCalls": [
-        "ai_provider.generate_text",
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-asset-file-ai-seed-1777885872900-34d15b11546ac",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "ai_seed_asset_upload:校园服务流程图-ai-seed.png",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.1,
-        "reason": "Demo asset generated locally and uploaded to Matrix media repository.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "file-ai-seed-1777885872900-34d15b11546ac",
-        "$dwByUd61Ve9JPbW2xj8oRDaHwspc88CcqIO78wGATi4"
-      ],
-      "toolCalls": [
-        "demo_asset.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-asset-file-ai-seed-1777885872767-6c373e6aec4fb",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "ai_seed_asset_upload:第4组-校园服务数字化调研-行动计划.pdf",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.1,
-        "reason": "Demo asset generated locally and uploaded to Matrix media repository.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "$zb59kYYn549Ug2YMgUHoxqTqQhOQN-hLp9dGWUWSDKY"
-      ],
-      "toolCalls": [
-        "demo_asset.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-ai-asset-file-ai-seed-1777885872641-edc626d299afb",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "ai_seed_asset_upload:第4组-访谈纪要-ai-seed.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.1,
-        "reason": "Demo asset generated locally and uploaded to Matrix media repository.",
-        "model": "ai-demo-orchestrator"
-      },
-      "contextIds": [
-        "file-ai-seed-1777885872641-edc626d299afb",
-        "$wYS6yQuRcjsYzFWco8IDxnYW3_FMqtDynBPuA_9wqko"
-      ],
-      "toolCalls": [
-        "demo_asset.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T09:11:12.606Z"
-    },
-    {
-      "id": "log-1777881081988-6630b8a6d3e1c",
-      "createdAt": "2026-05-04T07:51:21.988Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "upload_file:download-current-proof.txt",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "User-initiated room file upload with explicit Agent sharing permission captured in metadata.",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "file-upload-1777881081884-7702465903657",
-        "$SZcIEdPD9Tv_uGyJKdDCYJFD1CR4RQV4ymre2W2P8qU",
-        "$SZcIEdPD9Tv_uGyJKdDCYJFD1CR4RQV4ymre2W2P8qU"
-      ],
-      "toolCalls": [
-        "file_library.create",
-        "matrix.media.upload",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777879636491-935d85624b25d",
-      "createdAt": "2026-05-04T07:27:16.491Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "处理来自 陈晨的 Agent 的日程协调提案",
-      "status": "needs_confirmation",
-      "risk": {
-        "level": "high",
-        "score": 0.82,
-        "reason": "该提案会修改多人日程且声称默认同意，超过可自动执行边界。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "cal-review",
-        "task-check"
-      ],
-      "toolCalls": [
-        "calendar.inspect",
-        "agent_to_agent.negotiate"
-      ]
-    },
-    {
-      "id": "log-1777879632322-493ef23307611",
-      "createdAt": "2026-05-04T07:27:12.322Z",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "回答问题：这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.06,
-        "reason": "只读检索群聊和文件，不代表用户发言。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "file-brief"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.search"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777879629687-3bfb9e6b743d5",
-      "createdAt": "2026-05-04T07:27:09.687Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-slides-v3"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-1777871651547-16f423c45fa06",
-      "createdAt": "2026-05-04T05:14:11.547Z",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-slides-v3"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-calendar.inspect-agent_to_agent.negotiate",
-      "createdAt": "2026-05-04T14:06:15+08:00",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "处理来自 陈晨的 Agent 的日程协调提案",
-      "status": "needs_confirmation",
-      "risk": {
-        "level": "high",
-        "score": 0.82,
-        "reason": "该提案会修改多人日程且声称默认同意，超过可自动执行边界。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "cal-review",
-        "task-check"
-      ],
-      "toolCalls": [
-        "calendar.inspect",
-        "agent_to_agent.negotiate"
-      ]
-    },
-    {
-      "id": "log-agent-lin-room_search-file_library.lookup_latest-matrix.send_event",
-      "createdAt": "2026-05-04T14:06:15+08:00",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-slides-v3"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-agent-lin-calendar.inspect-agent_to_agent.negotiate",
-      "createdAt": "2026-05-04T14:06:15+08:00",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "处理来自 陈晨的 Agent 的日程协调提案",
-      "status": "needs_confirmation",
-      "risk": {
-        "level": "high",
-        "score": 0.82,
-        "reason": "该提案会修改多人日程且声称默认同意，超过可自动执行边界。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "cal-review",
-        "task-check"
-      ],
-      "toolCalls": [
-        "calendar.inspect",
-        "agent_to_agent.negotiate"
-      ]
-    },
-    {
-      "id": "log-agent-lin-room_search-file_library.lookup_latest-matrix.send_event",
-      "createdAt": "2026-05-04T14:06:15+08:00",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "action": "代发文件：第4组-校园服务数字化调研-演示稿-v3.pptx",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-05",
-        "msg-06",
-        "file-slides-v3"
-      ],
-      "toolCalls": [
-        "room_search",
-        "file_library.lookup_latest",
-        "matrix.send_event"
-      ]
-    },
-    {
-      "id": "log-1777837901630-9a38d0d3c6c8a",
-      "createdAt": "2026-05-03T19:51:41.630Z",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "回答问题：这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.06,
-        "reason": "只读检索群聊和文件，不代表用户发言。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-01",
         "msg-02",
-        "msg-03",
-        "file-brief"
+        "file-brief",
+        "mem-agent-lin-1777915774622-4accb25d855f78",
+        "mem-agent-lin-1777915800668-abeaa127b61c9"
       ],
       "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "deadline.answer",
         "room_search",
-        "file_library.search"
-      ]
+        "file_library.search",
+        "memory.search",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T17:30:00.668Z"
+    },
+    {
+      "id": "log-agent-run-1777915774622-72fd01365e3478",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "agent_run:chat:这次作业什么时候截止？",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.12,
+        "reason": "自由对话回复，只读上下文，无外部副作用。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "mem-agent-lin-1777915774622-4accb25d855f78"
+      ],
+      "toolCalls": [
+        "deepseek.pro.chat.completions",
+        "memory.write"
+      ],
+      "createdAt": "2026-05-04T17:29:34.622Z"
+    },
+    {
+      "id": "log-ai-autoreply-user-chen-1777913549887-a31eddadc8c268",
+      "agentId": "actor-user-chen",
+      "roomId": "room-team",
+      "action": "ai_autoreply:user-chen",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.18,
+        "reason": "AI human actor replied to a user message under room autoreply policy.",
+        "model": "ai-autoreply-policy-v1"
+      },
+      "contextIds": [
+        "msg-1777913548454-45fa904fcd4028",
+        "msg-1777913549887-c710f26000db78"
+      ],
+      "toolCalls": [
+        "deepseek.flash.chat.completions",
+        "matrix.send_event"
+      ],
+      "createdAt": "2026-05-04T16:52:29.887Z"
     },
     {
       "id": "log-seed-01",
@@ -3241,7 +1368,7 @@
       "risk": {
         "level": "low",
         "score": 0.18,
-        "reason": "请求来自同组成员，目标文件已被上传者授权在本组内由 Agent 代发。",
+        "reason": "请求来自同组成员，目标文件已被上传者授权在本组内由 Agent 代发；但种子文件缺少真实媒体元数据时不能自动发送。",
         "model": "risk-mini-v1"
       },
       "contextIds": [
@@ -3250,179 +1377,159 @@
         "file-slides-v3"
       ],
       "toolCalls": [
-        "room_search"
+        "room_search",
+        "file_library.lookup_latest"
       ],
       "createdAt": "2026-05-04T14:05:30+08:00"
+    },
+    {
+      "id": "log-seed-02",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "索引陈晨上传的访谈纪要文本片段",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.08,
+        "reason": "群内可见文本文件，仅进入授权上下文检索。",
+        "model": "risk-mini-v1"
+      },
+      "contextIds": [
+        "file-interview-notes-txt",
+        "chunk-interview-notes-txt-0"
+      ],
+      "toolCalls": [
+        "file_text.index"
+      ],
+      "createdAt": "2026-05-04T14:12:30+08:00"
     }
   ],
   "actionRequests": [
     {
-      "id": "action-1777893518648-7248b838ce7968",
+      "id": "action-1777920407188-504633fbdf7208",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "kind": "share_file",
+      "kind": "coordinate",
       "status": "executed",
       "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the action plan"
+        "fromAgentId": "agent-lin",
+        "toAgentId": "agent-chen",
+        "proposal": "把周二合稿检查改到周三 23:00，请和陈晨的 Agent 协调。",
+        "proposedPlan": "建议先确认林雯的实际意图和可用性，再与赵一鸣（组长）协商是否变更，不要直接更改日程。",
+        "calendarPatch": {
+          "itemId": "cal-review",
+          "title": "第 4 组最后一次合稿检查",
+          "oldStartsAt": "2026-05-05T20:30:00+08:00",
+          "newStartsAt": "2026-05-06T23:00:00+08:00"
+        }
       },
-      "createdAt": "2026-05-04T11:18:38.648Z",
-      "updatedAt": "2026-05-04T11:18:38.649Z",
+      "createdAt": "2026-05-04T18:46:47.188Z",
+      "updatedAt": "2026-05-04T18:47:01.250Z",
       "requiresHuman": false,
       "risk": {
         "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
+        "score": 0.2,
+        "reason": "Human review by user-lin: 用户在 Agent 工作台确认",
+        "model": "human-review-v1"
       },
-      "logId": "log-agent-lin-1777893518649-9348c80a41e5a"
-    },
-    {
-      "id": "action-1777889113307-039ff8dcec7ac8",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the action plan"
-      },
-      "createdAt": "2026-05-04T10:05:13.307Z",
-      "updatedAt": "2026-05-04T10:05:13.307Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777889113307-4ac8b1083d32"
-    },
-    {
-      "id": "action-1777888994473-a18d5e184a2f18",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the action plan"
-      },
-      "createdAt": "2026-05-04T10:03:14.473Z",
-      "updatedAt": "2026-05-04T10:03:14.473Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777888994473-8334dc3dfc7c18"
-    },
-    {
-      "id": "action-1777888388243-fde031f3fbe9b",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the action plan"
-      },
-      "createdAt": "2026-05-04T09:53:08.243Z",
-      "updatedAt": "2026-05-04T09:53:08.244Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777888388244-6b407e65dedc9"
-    },
-    {
-      "id": "action-1777888297806-32db1479874ec8",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the latest slides"
-      },
-      "createdAt": "2026-05-04T09:51:37.806Z",
-      "updatedAt": "2026-05-04T09:51:37.806Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777888297806-5579a04165f27"
-    },
-    {
-      "id": "action-1777888288411-47011e34646cd",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "please send the action plan"
-      },
-      "createdAt": "2026-05-04T09:51:28.411Z",
-      "updatedAt": "2026-05-04T09:51:28.412Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777888288412-fb4b8f6d40371"
-    },
-    {
-      "id": "action-1777885881406-5f18b0b5f91f08",
-      "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "share_file",
-      "status": "executed",
-      "input": {
-        "requesterId": "user-chen",
-        "requestText": "陈晨请求把最新 PPT / slides 文件发到小组群，林雯已授权 Agent 代发。"
-      },
-      "createdAt": "2026-05-04T09:11:12.606Z",
-      "updatedAt": "2026-05-04T09:11:21.406Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。",
-        "model": "risk-mini-v1"
-      },
-      "logId": "log-agent-lin-1777885881406-d4f8f5042dd7a"
+      "logId": "log-1777920421250-27417ea24eb288"
     }
   ],
   "memories": [
     {
-      "id": "mem-agent-lin-1777893518649-d263b266c765e",
+      "id": "mem-agent-lin-1777923734894-893f023a19259",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "Web search: ????? DeepSeek API ??????,?????? -> 根据搜索结果，使用 DeepSeek API 的基本调用步骤如下：\n\n**1. 获取 API 密钥**\n前往 DeepSeek 平台（platform.deepseek.com）注册账号并创建 API Key[2]。\n\n**2. 安装兼容的 SDK**\nDeepSeek API 兼容 OpenAI 和 Anthropi",
+      "sourceIds": [
+        "https://api-docs.deepseek.com/",
+        "https://platform.deepseek.com/docs/api-reference",
+        "https://chat-deep.ai/docs/api/",
+        "https://deepseekapi.io/",
+        "https://ghost.codersera.com/blog/how-to-use-deepseek-v4-api-developer-guide-2026/"
+      ],
+      "createdAt": "2026-05-04T19:42:14.894Z",
+      "updatedAt": "2026-05-04T19:42:14.894Z"
+    },
+    {
+      "id": "mem-agent-lin-1777923063123-03ee3a3e1ea558",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "Web search: ????? DeepSeek API ???? -> 林雯目前离线。根据组内消息记录，我注意到最近林雯（用户）和陈晨的对话出现了一些异常表述（如\"我爱你\"\"咕咕嘎嘎\"等），与你现在问的\"DeepSeek API教程\"没有直接关联。\n\n不过，针对 **DeepSeek API 使用说明**，我查到了以下实用信息：\n\n---\n\n### 核心接入要点（2026年）\n\n1. **",
+      "sourceIds": [
+        "https://www.cnblogs.com/qiniushanghai/p/19958003",
+        "https://find-aiverse.com/zh/posts/2026-04-17-deepseek/",
+        "https://api-docs.deepseek.com/zh-cn/",
+        "https://ofox.ai/zh/blog/deepseek-v4-api-guide-2026/",
+        "https://www.lxc666.cn/blogs/Software/deepseek.html"
+      ],
+      "createdAt": "2026-05-04T19:31:03.123Z",
+      "updatedAt": "2026-05-04T19:31:03.123Z"
+    },
+    {
+      "id": "mem-agent-lin-1777922951059-4f35cc920a15e",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "Web search: ????? DeepSeek API ???? -> 外部搜索失败，所以我不能把这次回答说成联网结果。失败原因：Unexpected end of JSON input",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T19:29:11.059Z",
+      "updatedAt": "2026-05-04T19:29:11.059Z"
+    },
+    {
+      "id": "mem-agent-lin-1777922822896-d339e3ce2ab06",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "Web search: ????? DeepSeek API ???? -> 这次外部搜索没有拿到可用结果，所以我不能编造来源。你可以换一个更具体的关键词再搜。",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T19:27:02.896Z",
+      "updatedAt": "2026-05-04T19:27:02.896Z"
+    },
+    {
+      "id": "mem-agent-lin-1777921867199-12bf2e828e3bf8",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team"
       ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：根据合稿检查任务（周二20:30 pending），已将“第4组-校园服务数字化调研-行动计划.pdf”发至群内，以对齐合稿分工。发送前需经你确认授权。",
-      "sourceIds": [
-        "action-1777893518648-7248b838ce7968",
-        "file-demo-asset-1777889113756-e1c62db0df63",
-        "msg-agent-share-file-demo-asset-1777889113756-e1c62db0df63"
-      ],
-      "createdAt": "2026-05-04T11:18:38.649Z",
-      "updatedAt": "2026-05-04T11:18:38.649Z"
+      "kind": "note",
+      "content": "自由对话：你好 -> 你好！我是林雯的 Agent，有什么可以帮你的吗？",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T19:11:07.199Z",
+      "updatedAt": "2026-05-04T19:11:07.199Z"
     },
     {
-      "id": "mem-agent-lin-1777892534762-b02ffc625c54b",
+      "id": "mem-agent-lin-1777921861127-96e1f76629e138",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "自由对话：你好 -> 你好！我是林雯的Agent，有什么可以帮你的吗？",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T19:11:01.127Z",
+      "updatedAt": "2026-05-04T19:11:01.127Z"
+    },
+    {
+      "id": "mem-agent-lin-1777921818255-ade533a847b528",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team",
@@ -3430,153 +1537,60 @@
         "room-team"
       ],
       "kind": "deadline",
-      "content": "这次信息系统作业的截止时间是 5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。\n参考记忆：",
+      "content": "作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告PDF和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
       "sourceIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8",
-        "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ",
-        "file-brief"
+        "msg-02",
+        "file-brief",
+        "mem-agent-lin-1777919141853-a1f29df2074958",
+        "mem-agent-lin-1777918419677-865be015dadd68",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78"
       ],
-      "createdAt": "2026-05-04T11:02:14.762Z",
-      "updatedAt": "2026-05-04T11:02:14.762Z"
+      "createdAt": "2026-05-04T19:10:18.255Z",
+      "updatedAt": "2026-05-04T19:10:18.255Z"
     },
     {
-      "id": "mem-agent-lin-1777892528496-543e2b90b69168",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "summary",
-      "content": "信息系统作业小组需要在 5月12日 23:59 前提交调研报告和演示稿。\n",
-      "sourceIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0",
-        "$NFmPrwPJ7pQoF75A_a1uJBjfZeN1lnI2afcnMhBaCD8",
-        "$ld0bGEjLZh_eJ4aoj-9jKOaZgRiolZFplHVgf-D_PqQ"
-      ],
-      "createdAt": "2026-05-04T11:02:08.496Z",
-      "updatedAt": "2026-05-04T11:02:08.496Z"
-    },
-    {
-      "id": "mem-agent-lin-1777889113307-67e0845d6fd26",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：基于当前消息和文件，建议行动如下：先由林雯确认今晚合稿检查的具体时间（当前为待定状态），以便协调全组同步。检查完所有文件后，由林雯授权我在截止时间前代发最终版调研报告及演示稿，并将相关更新通知陈晨。",
-      "sourceIds": [
-        "action-1777889113307-039ff8dcec7ac8",
-        "file-demo-asset-1777888995254-67e737ff9c0ec",
-        "msg-agent-share-file-demo-asset-1777888995254-67e737ff9c0ec"
-      ],
-      "createdAt": "2026-05-04T10:05:13.307Z",
-      "updatedAt": "2026-05-04T10:05:13.307Z"
-    },
-    {
-      "id": "mem-agent-lin-1777888994473-bb80773273c8d",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：行动计划：\n1. 立即将 `第4组-校园服务数字化调研-行动计划.pdf` 发送给陈晨，作为当前合稿基线，并提醒这是林雯已确认的版本。\n2. 等待陈晨在今晚8点核对完 v4 访谈纪要与行动计划的引用一致性后，由林雯最终授权合并所有文件生成提交版 PDF。\n3. 今晚 20:30 前由林雯授权发起最后一次合稿检查，确认无误后在 23:59 前完成提交。",
-      "sourceIds": [
-        "action-1777888994473-a18d5e184a2f18",
-        "file-demo-asset-1777888399637-515a789c43d198",
-        "msg-agent-share-file-demo-asset-1777888399637-515a789c43d198"
-      ],
-      "createdAt": "2026-05-04T10:03:14.473Z",
-      "updatedAt": "2026-05-04T10:03:14.473Z"
-    },
-    {
-      "id": "mem-agent-lin-1777888589286-6b9712382ee7b",
+      "id": "mem-agent-lin-1777920407188-72d3f4c5a994",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team"
       ],
       "kind": "coordination",
-      "content": "两个 Agent 已确认当前时间不影响已授权日程，可自动更新任务安排。",
+      "content": "建议先确认林雯的实际意图和可用性，再与赵一鸣（组长）协商是否变更，不要直接更改日程。",
       "sourceIds": [
         "cal-review",
-        "task-check",
-        "msg-agent-coordinate-1777888589286-6e11b13f2279a"
+        "task-check"
       ],
-      "createdAt": "2026-05-04T09:56:29.286Z",
-      "updatedAt": "2026-05-04T09:56:29.286Z"
+      "createdAt": "2026-05-04T18:46:47.188Z",
+      "updatedAt": "2026-05-04T18:46:47.188Z"
     },
     {
-      "id": "mem-agent-lin-1777888388244-c92426bf0844c",
+      "id": "mem-agent-lin-1777920345889-f88c51e912b748",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team"
       ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：行动：发送“行动计划”PDF的最新版本给陈晨和赵一鸣，并附说明：“第4组-校园服务数字化调研-行动计划.pdf 已是最新定稿，引用条目与v4访谈纪要一致，可直接用于合稿。”\n\n行动：提醒赵一鸣，今晚8点前林雯需确认是否上传两个证明文件，当前只有行动计划、流程图和访谈纪要，存在缺失。\n\n行动：告知林雯，由她审核后授权我发送“校园服务流程图-ai-seed.png”和“第4组-访谈纪要-ai-se",
-      "sourceIds": [
-        "action-1777888388243-fde031f3fbe9b",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "msg-agent-share-file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "createdAt": "2026-05-04T09:53:08.244Z",
-      "updatedAt": "2026-05-04T09:53:08.244Z"
+      "kind": "note",
+      "content": "自由对话：谁负责访谈材料？ -> 陈晨（资料整理）负责补齐访谈材料和引用来源，目标截止日期是5月10日21:00。",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T18:45:45.889Z",
+      "updatedAt": "2026-05-04T18:45:45.889Z"
     },
     {
-      "id": "mem-agent-lin-1777888297806-2d9d12947f2ad",
+      "id": "mem-agent-lin-1777919303803-505bb291cbff9",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team"
       ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：根据对话上下文，“最新 slides”指的是《第4组-校园服务数字化调研-演示稿-v2.pptx》。李思敏正负责对演示稿做最后的字号和图片检查，请确认是否授权我直接将此文件发送给李思敏，或仅在群里说明文件位置等她复检。",
-      "sourceIds": [
-        "action-1777888297806-32db1479874ec8",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "msg-agent-share-file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "createdAt": "2026-05-04T09:51:37.806Z",
-      "updatedAt": "2026-05-04T09:51:37.806Z"
+      "kind": "note",
+      "content": "自由对话：谁负责访谈材料？ -> 陈晨（资料整理）负责访谈材料，目标是5月10日21:00前补齐纪要、截图和引用来源。",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T18:28:23.803Z",
+      "updatedAt": "2026-05-04T18:28:23.803Z"
     },
     {
-      "id": "mem-agent-lin-1777888288412-4908c3ea84195",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "file",
-      "content": "executed: 第4组-校园服务数字化调研-行动计划.pdf。计划：需要先获取林雯的授权，然后才能代发访谈材料。我建议这样执行：\n\n1. 向林雯确认是否授权将“第4组-访谈纪要-ai-seed.txt”发到群里，并询问有无更新的版本或补充材料。\n2. 得到授权后再发送文件，同时告知陈晨和赵一鸣最新访谈材料已就位，确认今晚8点前完成核对。",
-      "sourceIds": [
-        "action-1777888288411-47011e34646cd",
-        "file-ai-seed-1777885872767-6c373e6aec4fb",
-        "msg-agent-share-file-ai-seed-1777885872767-6c373e6aec4fb"
-      ],
-      "createdAt": "2026-05-04T09:51:28.412Z",
-      "updatedAt": "2026-05-04T09:51:28.412Z"
-    },
-    {
-      "id": "mem-agent-lin-1777888201260-6b7e53c961a8a8",
+      "id": "mem-agent-lin-1777919141853-a1f29df2074958",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team",
@@ -3584,25 +1598,24 @@
         "room-team"
       ],
       "kind": "deadline",
-      "content": "这次信息系统作业的截止时间是 5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。\n参考记忆：",
+      "content": "最终截止日期是5月12日 23:59，需要提交调研报告PDF和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
       "sourceIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "file-brief"
+        "msg-02",
+        "task-report",
+        "task-slides",
+        "msg-04",
+        "mem-agent-lin-1777918532127-d57b8380a236b",
+        "mem-agent-lin-1777918419677-865be015dadd68",
+        "mem-agent-lin-1777918261473-352a96d5007f1",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78"
       ],
-      "createdAt": "2026-05-04T09:50:01.260Z",
-      "updatedAt": "2026-05-04T09:50:01.260Z"
+      "createdAt": "2026-05-04T18:25:41.853Z",
+      "updatedAt": "2026-05-04T18:25:41.853Z"
     },
     {
-      "id": "mem-agent-lin-1777888022286-d27d624b914168",
+      "id": "mem-agent-lin-1777918532127-d57b8380a236b",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team",
@@ -3610,66 +1623,142 @@
         "room-team"
       ],
       "kind": "deadline",
-      "content": "这次信息系统作业的截止时间是 5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。\n参考记忆：",
+      "content": "最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：",
       "sourceIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
+        "msg-02",
+        "msg-04",
+        "task-report",
+        "task-slides",
         "file-brief"
       ],
-      "createdAt": "2026-05-04T09:47:02.286Z",
-      "updatedAt": "2026-05-04T09:47:02.286Z"
+      "createdAt": "2026-05-04T18:15:32.127Z",
+      "updatedAt": "2026-05-04T18:15:32.127Z"
     },
     {
-      "id": "mem-agent-lin-1777888013821-790e0f6e697d7",
+      "id": "mem-agent-lin-1777918419677-865be015dadd68",
       "ownerAgentId": "agent-lin",
       "scopeRoomIds": [
         "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "deadline",
+      "content": "本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
+      "sourceIds": [
+        "msg-02",
+        "msg-04",
+        "mem-agent-lin-1777918261473-352a96d5007f1",
+        "mem-agent-lin-1777917496670-be887a33589be8",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78"
+      ],
+      "createdAt": "2026-05-04T18:13:39.677Z",
+      "updatedAt": "2026-05-04T18:13:39.677Z"
+    },
+    {
+      "id": "mem-agent-lin-1777918261473-352a96d5007f1",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "deadline",
+      "content": "最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：",
+      "sourceIds": [
+        "msg-02",
+        "task-report",
+        "msg-04"
+      ],
+      "createdAt": "2026-05-04T18:11:01.473Z",
+      "updatedAt": "2026-05-04T18:11:01.473Z"
+    },
+    {
+      "id": "mem-agent-lin-1777917496670-be887a33589be8",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-class",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "deadline",
+      "content": "作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
+      "sourceIds": [
+        "msg-02",
+        "file-brief",
+        "mem-agent-lin-1777915800668-abeaa127b61c9",
+        "mem-agent-lin-1777915774622-4accb25d855f78"
+      ],
+      "createdAt": "2026-05-04T17:58:16.670Z",
+      "updatedAt": "2026-05-04T17:58:16.670Z"
+    },
+    {
+      "id": "mem-agent-lin-1777917342793-b71b241b506c6",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "自由对话：谁负责访谈材料？ -> 根据行动计划和任务分工，访谈材料由「陈晨（资料整理）」负责，包括补齐访谈纪要、引用来源和流程截图，截止日期为 5月10日 21:00。",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T17:55:42.793Z",
+      "updatedAt": "2026-05-04T17:55:42.793Z"
+    },
+    {
+      "id": "mem-agent-lin-1777916077683-3917d3ad2df5",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-class",
         "room-class",
         "room-team"
       ],
       "kind": "summary",
-      "content": "信息系统作业小组需要在 5月12日 23:59 前提交调研报告和演示稿。\n",
+      "content": "信息系统课程作业“校园服务数字化调研”以小组提交，5月12日23:59截止，分工明确（赵一鸣提交报告、林雯整理演示稿、陈晨补充访谈材料），相关文件已上传。\n赵一鸣负责最终提交调研报告PDF\n林雯整理并确认课堂演示稿\n陈晨补充访谈材料",
       "sourceIds": [
-        "$NsuIC-ZG-GRIct0m-ZOIpWPTjsUh4-mfIL3DxFt92Zc",
-        "$gtOCWD78kQ7w5l2ybtSSNBt2paB6kkS-DI9WAKKnsg8",
-        "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc",
-        "$6sthcDgN4Tjx_mW1c-nQBqbu-zUKYnhoUM2KEBcXyDs",
-        "$ru2CDW4HJ0TPPQzEoek8i6E3k38uRRyas8C81pvW1Qk",
-        "$oJZgnf521sp7CCqSRI90EZ5mQAVCp-8X1rugNOx6HqQ",
-        "$pEDeIUqM0V0wA3L-bBGz6BEuoOwHcSbCk90wBMHEsHw",
-        "$-lF_H7-nxLmV70FXb53iWIPF08fY4lw3FlL0PuZNF9g",
-        "$7Uji3E92E82qPNoBw_Z1Dp0ei2rQkavXWJodw3b5wLU",
-        "$f0p5mlFAleZ3GnoLfzY1eUnaLoYF_5Sa392oHON1dfY",
-        "$XnItPNiK_uu0QaOh00or6FSArO9juUXLM7q7mGMxPY8",
-        "$9grCgzf15HfIcZCohTtavy0xpugG-ffSSna2qw_gjQw",
-        "$bmJhq1hUUh_FEBvYgz_K3SsEBUZwnKxBfCeFluZcSx0"
+        "msg-01",
+        "msg-02",
+        "msg-class-rubric",
+        "msg-03",
+        "file-brief",
+        "file-action-plan-md",
+        "file-interview-notes-txt",
+        "file-slides-v3"
       ],
-      "createdAt": "2026-05-04T09:46:53.821Z",
-      "updatedAt": "2026-05-04T09:46:53.821Z"
-    }
-  ],
-  "matrixObserverCheckpoints": [
-    {
-      "roomId": "room-class",
-      "lastEventId": "$vZe-gh69BcXEgheycboW4UF9CjlaqFo60izQzuwMPWc"
+      "createdAt": "2026-05-04T17:34:37.683Z",
+      "updatedAt": "2026-05-04T17:34:37.683Z"
     },
     {
-      "roomId": "room-team",
-      "lastEventId": "$5LVq_nMTHZ-zLLdlr4UnUshgVXQoiFYGPn2g6DEcCUM"
+      "id": "mem-agent-lin-1777915800668-abeaa127b61c9",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-class",
+        "room-class",
+        "room-team"
+      ],
+      "kind": "deadline",
+      "content": "5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
+      "sourceIds": [
+        "msg-02",
+        "file-brief",
+        "mem-agent-lin-1777915774622-4accb25d855f78"
+      ],
+      "createdAt": "2026-05-04T17:30:00.668Z",
+      "updatedAt": "2026-05-04T17:30:00.668Z"
     },
     {
-      "roomId": "room-agent",
-      "lastEventId": "$8yealljAj9hpK16-R2FZu5UlBl2N-kBHiICJLFunjJI"
+      "id": "mem-agent-lin-1777915774622-4accb25d855f78",
+      "ownerAgentId": "agent-lin",
+      "scopeRoomIds": [
+        "room-team"
+      ],
+      "kind": "note",
+      "content": "自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
+      "sourceIds": [],
+      "createdAt": "2026-05-04T17:29:34.622Z",
+      "updatedAt": "2026-05-04T17:29:34.622Z"
     }
   ],
+  "matrixObserverCheckpoints": [],
   "aiAutoreplyPolicies": [
     {
       "userId": "user-chen",
@@ -3704,59 +1793,92 @@
   ],
   "aiReplyJobs": [
     {
-      "id": "ai-reply-job-1777893814478-a6641fa328efa",
+      "id": "ai-reply-job-1777922686304-12d1662bd8563",
       "roomId": "room-team",
       "targetUserId": "user-chen",
-      "triggeringMessageId": "$YgUBEUWwN940WlkcOtl52Lr8iFXjJugQX6t8Ytd654U",
+      "triggeringMessageId": "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
       "status": "completed",
       "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T11:23:34.478Z",
-      "updatedAt": "2026-05-04T11:23:35.555Z",
-      "replyMessageId": "$e6L5yElBUbApypLiaFcYwhyo21sWRjJrNCC66EXTxrY"
+      "createdAt": "2026-05-04T19:24:46.304Z",
+      "updatedAt": "2026-05-04T19:24:47.833Z",
+      "replyMessageId": "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg"
     },
     {
-      "id": "ai-reply-job-1777893800288-6b9f1bf1f31e58",
+      "id": "ai-reply-job-1777922677801-e7baf555fd4528",
       "roomId": "room-team",
       "targetUserId": "user-chen",
-      "triggeringMessageId": "$iDfQy8gduIH-JX8zAn_VvOHIDq7l8B642vI0erUAV9E",
+      "triggeringMessageId": "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
       "status": "completed",
       "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T11:23:20.288Z",
-      "updatedAt": "2026-05-04T11:23:21.571Z",
-      "replyMessageId": "$NSDPv2BMXBq3rwwbGy7r5aNZdtP-1skY7yORvnTzY14"
+      "createdAt": "2026-05-04T19:24:37.801Z",
+      "updatedAt": "2026-05-04T19:24:39.077Z",
+      "replyMessageId": "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8"
     },
     {
-      "id": "ai-reply-job-1777893794017-53c9e46acc8588",
+      "id": "ai-reply-job-1777922668489-f7f3f2c6a0bd48",
       "roomId": "room-team",
       "targetUserId": "user-chen",
-      "triggeringMessageId": "$1AYm9aSYuht1MlOcL7-rs2Ran1CAc23-h_mYlsFEsLs",
+      "triggeringMessageId": "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
       "status": "completed",
       "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T11:23:14.017Z",
-      "updatedAt": "2026-05-04T11:23:15.034Z",
-      "replyMessageId": "$oMtndp6AuaM_c1p3lJ9ALGn7pFoo3Fk0s09sJWM4Puo"
+      "createdAt": "2026-05-04T19:24:28.489Z",
+      "updatedAt": "2026-05-04T19:24:29.857Z",
+      "replyMessageId": "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA"
     },
     {
-      "id": "ai-reply-job-1777893509085-8a8672a52b2cd8",
+      "id": "ai-reply-job-1777922658088-e8292f76532a7",
       "roomId": "room-team",
       "targetUserId": "user-chen",
-      "triggeringMessageId": "$R-BllLLSsMRn4uzBO9XYzovUAFp6yYgq28o7d0dyIRM",
+      "triggeringMessageId": "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
       "status": "completed",
       "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T11:18:29.085Z",
-      "updatedAt": "2026-05-04T11:18:30.310Z",
-      "replyMessageId": "$l7LglwkTMN10j6EmVpEZgRuZVNffdvkNcQVrk9fUAcE"
+      "createdAt": "2026-05-04T19:24:18.088Z",
+      "updatedAt": "2026-05-04T19:24:19.337Z",
+      "replyMessageId": "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0"
     },
     {
-      "id": "ai-reply-job-1777893426636-9750ea891d95f",
+      "id": "ai-reply-job-1777922643789-033a19226f351",
       "roomId": "room-team",
       "targetUserId": "user-chen",
-      "triggeringMessageId": "$5QFqw1iScsforY6jx0DQebDpzcWqlSGQqiGzusvIgng",
+      "triggeringMessageId": "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
       "status": "completed",
       "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T11:17:06.636Z",
-      "updatedAt": "2026-05-04T11:17:08.045Z",
-      "replyMessageId": "$_LP5F8ZPPx30FD-_I89122IFpsbSuONALp9Fo_NcOFg"
+      "createdAt": "2026-05-04T19:24:03.789Z",
+      "updatedAt": "2026-05-04T19:24:05.189Z",
+      "replyMessageId": "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE"
+    },
+    {
+      "id": "ai-reply-job-1777922629628-81385d8623a4e",
+      "roomId": "room-team",
+      "targetUserId": "user-chen",
+      "triggeringMessageId": "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
+      "status": "completed",
+      "reason": "room auto reply policy",
+      "createdAt": "2026-05-04T19:23:49.628Z",
+      "updatedAt": "2026-05-04T19:23:50.884Z",
+      "replyMessageId": "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI"
+    },
+    {
+      "id": "ai-reply-job-1777918238163-3140da53897878",
+      "roomId": "room-team",
+      "targetUserId": "user-chen",
+      "triggeringMessageId": "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
+      "status": "completed",
+      "reason": "room auto reply policy",
+      "createdAt": "2026-05-04T18:10:38.163Z",
+      "updatedAt": "2026-05-04T18:10:40.578Z",
+      "replyMessageId": "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ"
+    },
+    {
+      "id": "ai-reply-job-1777913548458-b2ea743406e9c",
+      "roomId": "room-team",
+      "targetUserId": "user-chen",
+      "triggeringMessageId": "msg-1777913548454-45fa904fcd4028",
+      "status": "completed",
+      "reason": "room auto reply policy",
+      "createdAt": "2026-05-04T16:52:28.458Z",
+      "updatedAt": "2026-05-04T16:52:29.887Z",
+      "replyMessageId": "msg-1777913549887-c710f26000db78"
     }
   ]
 }

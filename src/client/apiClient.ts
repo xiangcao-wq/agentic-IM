@@ -3,6 +3,7 @@ import type {
   AgentActionRequest,
   AgentRunRequest,
   AgentRunResult,
+  AiRuntimeStatus,
   CoordinationResult,
   DeadlineAnswer,
   DemoState,
@@ -174,6 +175,13 @@ export function syncMatrixOnce(
   return requestJson(fetcher, endpoint(baseUrl, '/api/matrix/sync-once'), post({}));
 }
 
+export function checkAiStatus(
+  baseUrl: string,
+  fetcher: Fetcher = fetch
+): Promise<{ aiStatus: AiRuntimeStatus }> {
+  return requestJson(fetcher, endpoint(baseUrl, '/api/ai/status/check'), post({}));
+}
+
 export function listAgentActions(
   baseUrl: string,
   fetcher: Fetcher = fetch
@@ -229,9 +237,21 @@ async function requestJson<T>(fetcher: Fetcher, url: string, init?: RequestInit)
     ...init
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
   return response.json() as Promise<T>;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    if (typeof body.error === 'string' && body.error.trim()) {
+      return body.error;
+    }
+  } catch {
+    // Fall through to the generic status message.
+  }
+  return `Request failed: ${response.status}`;
 }
 
 function endpoint(baseUrl: string, path: string): string {

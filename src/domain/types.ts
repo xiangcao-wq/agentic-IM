@@ -14,6 +14,9 @@ export type AiActorRole = 'human_user' | 'personal_agent';
 export type AiAutoreplyTriggerMode = 'all_messages' | 'mentions_only';
 export type AiReplyJobStatus = 'pending' | 'completed' | 'skipped' | 'failed';
 export type MemoryKind = 'summary' | 'deadline' | 'file' | 'coordination' | 'note';
+export type AgentPlanMode = 'answer' | 'execute' | 'request_confirmation';
+export type AiRuntimeProvider = 'deepseek' | 'fallback';
+export type AiRuntimeHealth = 'missing' | 'unknown' | 'connected' | 'failed';
 export type AgentRunIntent =
   | 'summary'
   | 'deadline'
@@ -21,7 +24,17 @@ export type AgentRunIntent =
   | 'share_file'
   | 'coordinate'
   | 'task_update_suggest'
+  | 'web_search'
   | 'chat';
+export type AgentToolName =
+  | 'chat.answer'
+  | 'room.summarize'
+  | 'deadline.answer'
+  | 'file.search'
+  | 'file.share'
+  | 'web.search'
+  | 'agent.coordinate'
+  | 'task.suggest_update';
 
 export interface User {
   id: string;
@@ -85,6 +98,16 @@ export interface FileItem {
   matrixEventId?: string;
 }
 
+export interface FileTextChunk {
+  id: string;
+  fileId: string;
+  roomId: string;
+  uploaderId: string;
+  index: number;
+  text: string;
+  createdAt: string;
+}
+
 export interface TaskItem {
   id: string;
   title: string;
@@ -110,6 +133,22 @@ export interface RiskAssessment {
   model: string;
 }
 
+export interface AgentToolCall {
+  tool: AgentToolName;
+  args: Record<string, unknown>;
+}
+
+export interface AgentPlan {
+  mode: AgentPlanMode;
+  intent: AgentRunIntent;
+  userVisiblePlan: string;
+  answer?: string;
+  toolCalls: AgentToolCall[];
+  risk: RiskAssessment;
+  citations: string[];
+  needsConfirmationReason?: string;
+}
+
 export interface AgentActionLog {
   id: string;
   agentId: string;
@@ -119,6 +158,22 @@ export interface AgentActionLog {
   risk: RiskAssessment;
   contextIds: string[];
   toolCalls: string[];
+  createdAt: string;
+}
+
+export type AgentProgressPhase = 'started' | 'planning' | 'executing' | 'completed' | 'failed';
+
+export interface AgentProgressEvent {
+  id: string;
+  runId: string;
+  sequence: number;
+  agentId: string;
+  roomId: string;
+  phase: AgentProgressPhase;
+  label: string;
+  detail?: string;
+  toolCalls: string[];
+  riskLevel?: RiskLevel;
   createdAt: string;
 }
 
@@ -181,12 +236,41 @@ export interface MatrixObserverCheckpoint {
   lastEventId: string;
 }
 
+export interface AiRuntimeStatus {
+  configured: boolean;
+  provider: AiRuntimeProvider;
+  health: AiRuntimeHealth;
+  agentModel?: string;
+  humanModel?: string;
+  baseUrlHost?: string;
+  cache?: {
+    requestCount: number;
+    promptCacheHitTokens: number;
+    promptCacheMissTokens: number;
+    promptCacheHitRate: number;
+    lastUpdatedAt?: string;
+    routes?: Array<{
+      role: AiActorRole;
+      provider: string;
+      requestCount: number;
+      promptCacheHitTokens: number;
+      promptCacheMissTokens: number;
+      promptCacheHitRate: number;
+      lastUpdatedAt?: string;
+    }>;
+  };
+  lastCheckedAt?: string;
+  lastError?: string;
+  lastLatencyMs?: number;
+}
+
 export interface DemoState {
   users: User[];
   agents: PersonalAgent[];
   rooms: Room[];
   messages: Message[];
   files: FileItem[];
+  fileTextChunks: FileTextChunk[];
   tasks: TaskItem[];
   calendar: CalendarItem[];
   actionLogs: AgentActionLog[];
@@ -195,6 +279,7 @@ export interface DemoState {
   matrixObserverCheckpoints: MatrixObserverCheckpoint[];
   aiAutoreplyPolicies: AiAutoreplyPolicy[];
   aiReplyJobs: AiReplyJob[];
+  aiStatus?: AiRuntimeStatus;
 }
 
 export interface RoomSummary {
@@ -229,7 +314,7 @@ export interface CoordinationResult {
 export interface AgentRunRequest {
   agentId: string;
   roomId: string;
-  intent: AgentRunIntent;
+  intent?: AgentRunIntent;
   userText: string;
   targetUserId?: string;
 }
@@ -238,11 +323,26 @@ export interface ChatResult {
   reply: string;
 }
 
+export interface WebSearchResultItem {
+  title: string;
+  url: string;
+  snippet: string;
+  source?: string;
+}
+
+export interface WebSearchAnswer {
+  answer: string;
+  results: WebSearchResultItem[];
+  citations: string[];
+  unavailableReason?: string;
+}
+
 export interface AgentRunResult {
   intent: AgentRunIntent;
   requiresHuman: boolean;
+  plan?: string;
   reasoning?: string;
-  result?: RoomSummary | DeadlineAnswer | FileShareAction | CoordinationResult | ChatResult;
+  result?: RoomSummary | DeadlineAnswer | FileShareAction | CoordinationResult | ChatResult | WebSearchAnswer;
   files?: FileItem[];
   message?: Message;
   memory?: MemoryItem;

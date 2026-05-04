@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import type { AiProvider } from './aiProvider';
 import { OpenAiChatCompletionsProvider, RoleRoutedAiProvider } from './aiProvider';
 import { runAiDemoScenario, type DemoMatrixGateway } from './aiDemoScenario';
+import { loadLocalEnvFile } from './env';
 import { MatrixStore } from './matrixClient';
 import { JsonStateStore, type StateStore } from './stateStore';
 
@@ -12,6 +13,10 @@ interface AiDemoSeedEnv {
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_HUMAN_MODEL?: string;
   DEEPSEEK_AGENT_MODEL?: string;
+  DEEPSEEK_HUMAN_THINKING?: string;
+  DEEPSEEK_AGENT_THINKING?: string;
+  DEEPSEEK_HUMAN_REASONING_EFFORT?: string;
+  DEEPSEEK_AGENT_REASONING_EFFORT?: string;
   AGENT_IM_DB_PATH?: string;
   MATRIX_BOOTSTRAP_PATH?: string;
 }
@@ -101,23 +106,37 @@ export function createAiDemoSeedProvider(env: AiDemoSeedEnv, fetcher: typeof fet
       providerName: 'DeepSeek Flash',
       apiKey,
       baseUrl,
-      model: env.DEEPSEEK_HUMAN_MODEL ?? 'deepseek-v4-flash',
+      model: env.DEEPSEEK_HUMAN_MODEL?.trim() || 'deepseek-v4-flash',
       fetcher,
-      extraBody: {
-        thinking: { type: 'disabled' }
-      }
+      extraBody: deepSeekExtraBody(env.DEEPSEEK_HUMAN_THINKING, env.DEEPSEEK_HUMAN_REASONING_EFFORT)
     }),
     agentProvider: new OpenAiChatCompletionsProvider({
       providerName: 'DeepSeek Pro',
       apiKey,
       baseUrl,
-      model: env.DEEPSEEK_AGENT_MODEL ?? 'deepseek-v4-pro',
+      model: env.DEEPSEEK_AGENT_MODEL?.trim() || 'deepseek-v4-pro',
       fetcher,
-      extraBody: {
-        thinking: { type: 'disabled' }
-      }
+      extraBody: deepSeekExtraBody(
+        env.DEEPSEEK_AGENT_THINKING?.trim() || 'enabled',
+        env.DEEPSEEK_AGENT_REASONING_EFFORT?.trim() || 'high'
+      )
     })
   });
+}
+
+function deepSeekExtraBody(thinking: string | undefined, reasoningEffort?: string): Record<string, unknown> | undefined {
+  const body: Record<string, unknown> = {};
+  if (thinking === 'enabled' || thinking === 'disabled') {
+    body.thinking = { type: thinking };
+  }
+  if (thinking === 'enabled' && isReasoningEffort(reasoningEffort)) {
+    body.reasoning_effort = reasoningEffort;
+  }
+  return Object.keys(body).length > 0 ? body : undefined;
+}
+
+function isReasoningEffort(value: string | undefined): value is 'low' | 'medium' | 'high' {
+  return value === 'low' || value === 'medium' || value === 'high';
 }
 
 function assertProviderKeys(env: AiDemoSeedEnv): void {
@@ -127,6 +146,7 @@ function assertProviderKeys(env: AiDemoSeedEnv): void {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await loadLocalEnvFile(join(process.cwd(), '.env.local'));
   runAiDemoSeedFromEnv()
     .then((summary) => {
       console.log(

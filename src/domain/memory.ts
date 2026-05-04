@@ -1,4 +1,5 @@
-import type { DemoState, MemoryItem, MemoryKind, PersonalAgent, Message, User } from './types';
+import type { DemoState, FileTextChunk, MemoryItem, MemoryKind, PersonalAgent, Message, User } from './types';
+import { compareTimestamps, sortMessagesChronologically } from './messages';
 
 interface WriteMemoryInput {
   agentId: string;
@@ -48,6 +49,7 @@ export function buildShortTermContext(state: DemoState, roomId: string, agentId?
   const visibleRoomIds = new Set([roomId, ...roomIds]);
   const messages = state.messages
     .filter((message) => visibleRoomIds.has(message.roomId))
+    .sort((a, b) => compareTimestamps(a.sentAt, b.sentAt) || a.id.localeCompare(b.id))
     .slice(-30)
     .map((message) => `${message.senderName}: ${message.body}`)
     .join('\n');
@@ -68,12 +70,107 @@ interface StructuredContextOptions {
   focus?: ContextFocus;
 }
 
+export interface AgentContextBundleInput {
+  roomId: string;
+  agentId: string;
+  userText?: string;
+  focus?: ContextFocus;
+}
+
+export interface AgentContextMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  sentAt: string;
+  body: string;
+  type: Message['type'];
+}
+
+export interface AgentContextFile {
+  id: string;
+  name: string;
+  roomId: string;
+  uploaderId: string;
+  uploaderName: string;
+  version: number;
+  updatedAt: string;
+  visibility: string;
+  agentCanShare: boolean;
+  downloadable: boolean;
+  tags: string[];
+  summary: string;
+  contentType?: string;
+  size?: number;
+}
+
+export interface AgentContextFileTextChunk {
+  id: string;
+  fileId: string;
+  fileName: string;
+  roomId: string;
+  index: number;
+  text: string;
+}
+
+export interface AgentContextBundle {
+  room: {
+    id: string;
+    name: string;
+    type: string;
+  };
+  agent: {
+    id: string;
+    ownerId: string;
+    displayName: string;
+    allowedRoomIds: string[];
+    allowedToolIds: string[];
+  };
+  recentMessages: AgentContextMessage[];
+  relevantMessages: AgentContextMessage[];
+  tasks: Array<{
+    id: string;
+    title: string;
+    deadline: string;
+    owners: string[];
+    status: string;
+    sourceMessageId: string;
+  }>;
+  files: AgentContextFile[];
+  fileTextChunks: AgentContextFileTextChunk[];
+  members: Array<{
+    id: string;
+    name: string;
+    role: string;
+    status: string;
+    agentId: string;
+  }>;
+  memories: MemoryItem[];
+  actionLogs: Array<{
+    id: string;
+    action: string;
+    status: string;
+    riskLevel: string;
+    createdAt: string;
+  }>;
+  text: string;
+}
+
 export function buildStructuredContext(
   state: DemoState,
   roomId: string,
   agentId?: string,
   options?: StructuredContextOptions
 ): string {
+  if (agentId) {
+    return buildAgentContextBundle(state, {
+      roomId,
+      agentId,
+      focus: options?.focus ?? 'chat'
+    }).text;
+  }
+
   const focus: ContextFocus = options?.focus ?? 'chat';
   const sections: string[] = [];
 
@@ -95,6 +192,303 @@ export function buildStructuredContext(
   }
 
   return sections.filter(Boolean).join('\n\n');
+}
+
+export function buildAgentContextBundle(state: DemoState, input: AgentContextBundleInput): AgentContextBundle {
+  const focus = input.focus ?? 'chat';
+  const agent = getAgent(state, input.agentId);
+  const room = state.rooms.find((candidate) => candidate.id === input.roomId);
+  if (!room) {
+    throw new Error(`unknown room: ${input.roomId}`);
+  }
+  if (!agent.allowedRoomIds.includes(input.roomId)) {
+    throw new Error(`${agent.displayName} cannot read ${input.roomId}`);
+  }
+
+  const visibleRoomIds = new Set([input.roomId, ...agent.allowedRoomIds]);
+  const roomMessages = sortMessagesChronologically(state.messages.filter((message) => message.roomId === input.roomId));
+  const recentLimit = focus === 'summary' ? roomMessages.length : 30;
+  const recentMessages = roomMessages.slice(-recentLimit).map((message) => toContextMessage(state, message));
+  const relevantMessages = selectRelevantMessages(state, visibleRoomIds, input.userText ?? '', focus)
+    .filter((message) => !recentMessages.some((recent) => recent.id === message.id))
+    .map((message) => toContextMessage(state, message));
+
+  const roomMessageIds = new Set(roomMessages.map((message) => message.id));
+  const tasks = state.tasks
+    .filter((task) => roomMessageIds.has(task.sourceMessageId) || focus === 'deadline' || focus === 'chat' || focus === 'coordinate')
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      deadline: task.deadline,
+      owners: task.owners,
+      status: task.status,
+      sourceMessageId: task.sourceMessageId
+    }));
+
+  const files = state.files
+    .filter((file) => visibleRoomIds.has(file.roomId))
+    .filter((file) => file.visibility === 'room' || file.uploaderId === agent.ownerId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, focus === 'file_share' ? 30 : 12)
+    .map((file) => toContextFile(state, file));
+  const fileTextChunks = selectRelevantFileTextChunks(state, agent, input.roomId, input.userText ?? '', focus);
+
+  const members = room.memberIds
+    .map((userId) => state.users.find((user) => user.id === userId))
+    .filter(Boolean)
+    .map((user) => ({
+      id: user!.id,
+      name: user!.name,
+      role: user!.role,
+      status: user!.status,
+      agentId: user!.agentId
+    }));
+
+  const memories = (state.memories ?? [])
+    .filter((memory) => memory.ownerAgentId === agent.id)
+    .filter((memory) => memory.scopeRoomIds.some((roomId) => visibleRoomIds.has(roomId)))
+    .filter((memory) => !looksCorruptedMemory(memory.content))
+    .filter((memory) => memory.kind !== 'note' || memory.sourceIds.length > 0)
+    .slice(0, 10);
+
+  const actionLogs = (state.actionLogs ?? [])
+    .filter((log) => log.agentId === agent.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 8)
+    .map((log) => ({
+      id: log.id,
+      action: log.action,
+      status: log.status,
+      riskLevel: log.risk.level,
+      createdAt: log.createdAt
+    }));
+
+  const partial: Omit<AgentContextBundle, 'text'> = {
+    room: {
+      id: room.id,
+      name: room.name,
+      type: room.type
+    },
+    agent: {
+      id: agent.id,
+      ownerId: agent.ownerId,
+      displayName: agent.displayName,
+      allowedRoomIds: agent.allowedRoomIds,
+      allowedToolIds: agent.allowedToolIds
+    },
+    recentMessages,
+    relevantMessages,
+    tasks,
+    files,
+    fileTextChunks,
+    members,
+    memories,
+    actionLogs
+  };
+
+  return {
+    ...partial,
+    text: renderAgentContextBundle(partial)
+  };
+}
+
+function selectRelevantMessages(
+  state: DemoState,
+  visibleRoomIds: Set<string>,
+  userText: string,
+  focus: ContextFocus
+): Message[] {
+  const terms = buildContextTerms(userText, focus);
+  if (terms.length === 0) {
+    return [];
+  }
+
+  return sortMessagesChronologically(
+    state.messages.filter((message) => {
+      if (!visibleRoomIds.has(message.roomId)) {
+        return false;
+      }
+      const haystack = `${message.senderName} ${message.body}`.toLowerCase();
+      return terms.some((term) => haystack.includes(term));
+    })
+  ).slice(-20);
+}
+
+function buildContextTerms(userText: string, focus: ContextFocus): string[] {
+  const lowered = userText.toLowerCase();
+  const terms = tokenize(lowered).filter((term) => term.length >= 2);
+  if (/访谈|interview/i.test(userText)) terms.push('访谈', 'interview');
+  if (/截止|deadline|ddl|due/i.test(userText) || focus === 'deadline') terms.push('截止', 'deadline', 'ddl', 'due');
+  if (/文件|演示稿|slides|ppt|file/i.test(userText) || focus === 'file_share') {
+    terms.push('文件', '演示稿', 'slides', 'ppt', 'file');
+  }
+  if (/协调|改到|日程|会议|coordinate|reschedule/i.test(userText) || focus === 'coordinate') {
+    terms.push('协调', '改到', '日程', '会议', 'coordinate', 'reschedule');
+  }
+  const cjkPairs = (userText.match(/[\u4e00-\u9fff]{2,}/g) ?? []).flatMap((segment) => {
+    const pairs: string[] = [];
+    for (let index = 0; index < segment.length - 1; index += 1) {
+      pairs.push(segment.slice(index, index + 2));
+    }
+    return pairs;
+  });
+  return [...new Set([...terms, ...cjkPairs].map((term) => term.toLowerCase()))];
+}
+
+function toContextMessage(state: DemoState, message: Message): AgentContextMessage {
+  const user = state.users.find((candidate) => candidate.id === message.senderId);
+  return {
+    id: message.id,
+    roomId: message.roomId,
+    senderId: message.senderId,
+    senderName: message.senderName,
+    senderRole: message.agentLabel || message.sourceAgentId ? 'agent' : user?.role ?? 'unknown',
+    sentAt: message.sentAt,
+    body: message.body,
+    type: message.type
+  };
+}
+
+function toContextFile(state: DemoState, file: DemoState['files'][number]): AgentContextFile {
+  const uploader = state.users.find((user) => user.id === file.uploaderId);
+  return {
+    id: file.id,
+    name: file.name,
+    roomId: file.roomId,
+    uploaderId: file.uploaderId,
+    uploaderName: uploader?.name ?? file.uploaderId,
+    version: file.version,
+    updatedAt: file.updatedAt,
+    visibility: file.visibility,
+    agentCanShare: file.agentCanShare,
+    downloadable: Boolean(file.mxcUri),
+    tags: file.tags,
+    summary: file.summary,
+    contentType: file.contentType,
+    size: file.size
+  };
+}
+
+function selectRelevantFileTextChunks(
+  state: DemoState,
+  agent: PersonalAgent,
+  roomId: string,
+  userText: string,
+  focus: ContextFocus
+): AgentContextFileTextChunk[] {
+  const terms = buildContextTerms(userText, focus);
+  const filesById = new Map(state.files.map((file) => [file.id, file]));
+  const limit = focus === 'file_share' ? 8 : 4;
+  return (state.fileTextChunks ?? [])
+    .flatMap((chunk) => {
+      const file = filesById.get(chunk.fileId);
+      if (!file || !agentCanReadFileText(agent, roomId, file)) {
+        return [];
+      }
+      const score = scoreChunkText(chunk, terms);
+      if (terms.length > 0 && score === 0) {
+        return [];
+      }
+      return [{
+        chunk,
+        file,
+        score: score || 1
+      }];
+    })
+    .sort((left, right) => right.score - left.score || left.chunk.index - right.chunk.index)
+    .slice(0, limit)
+    .map(({ chunk, file }) => ({
+      id: chunk.id,
+      fileId: chunk.fileId,
+      fileName: file.name,
+      roomId: chunk.roomId,
+      index: chunk.index,
+      text: chunk.text
+    }));
+}
+
+function agentCanReadFileText(agent: PersonalAgent, roomId: string, file: DemoState['files'][number]): boolean {
+  if (file.roomId !== roomId || !agent.allowedRoomIds.includes(file.roomId)) {
+    return false;
+  }
+  return file.visibility === 'room' || file.uploaderId === agent.ownerId;
+}
+
+function scoreChunkText(chunk: FileTextChunk, terms: string[]): number {
+  if (terms.length === 0) {
+    return 0;
+  }
+  const haystack = chunk.text.toLowerCase();
+  return terms.reduce((score, term) => (haystack.includes(term) ? score + Math.max(1, term.length) : score), 0);
+}
+
+function renderAgentContextBundle(bundle: Omit<AgentContextBundle, 'text'>): string {
+  const sections = [
+    '# Authorized Agent Context',
+    'Boundary: Do not assume hidden room, private chat, or missing file contents are visible.',
+    `Room: ${bundle.room.name} (${bundle.room.id}, ${bundle.room.type})`,
+    `Agent: ${bundle.agent.displayName} (${bundle.agent.id}); allowedRooms=${bundle.agent.allowedRoomIds.join(', ')}`,
+    '',
+    '## Recent messages',
+    ...bundle.recentMessages.map((message) =>
+      `- [${message.sentAt}] ${message.senderName} (${message.senderRole}) ${message.id}: ${message.body}`
+    ),
+    '',
+    '## Relevant older messages',
+    ...(bundle.relevantMessages.length > 0
+      ? bundle.relevantMessages.map((message) =>
+          `- [${message.sentAt}] ${message.senderName} (${message.senderRole}) ${message.id}: ${message.body}`
+        )
+      : ['- none']),
+    '',
+    '## Tasks',
+    ...(bundle.tasks.length > 0
+      ? bundle.tasks.map((task) =>
+          `- ${task.id}: ${task.title}; deadline=${task.deadline}; owners=${task.owners.join(', ')}; status=${task.status}`
+        )
+      : ['- none']),
+    '',
+    '## Files',
+    ...(bundle.files.length > 0
+      ? bundle.files.map((file) =>
+          `- ${file.id}: ${file.name}; visibility=${file.visibility}; agentCanShare=${file.agentCanShare}; downloadable=${file.downloadable}; uploader=${file.uploaderName}; updatedAt=${file.updatedAt}; tags=${file.tags.join(', ')}; summary=${file.summary}`
+        )
+      : ['- none']),
+    '',
+    '## File text excerpts',
+    ...(bundle.fileTextChunks.length > 0
+      ? bundle.fileTextChunks.map((chunk) =>
+          `- ${chunk.id}: file=${chunk.fileName} (${chunk.fileId}); index=${chunk.index}; text=${chunk.text}`
+        )
+      : ['- none']),
+    '',
+    '## Members',
+    ...bundle.members.map((member) =>
+      `- ${member.id}: ${member.name}; role=${member.role}; status=${member.status}; agent=${member.agentId}`
+    ),
+    '',
+    '## Agent memory',
+    'Note: memories are lower-confidence prior notes. Use them only when supported by messages, tasks, files, or file excerpts.',
+    ...(bundle.memories.length > 0
+      ? bundle.memories.map((memory) => `- ${memory.id}: [${memory.kind}] ${memory.content}`)
+      : ['- none']),
+    '',
+    '## Recent agent logs',
+    ...(bundle.actionLogs.length > 0
+      ? bundle.actionLogs.map((log) => `- ${log.id}: ${log.action}; status=${log.status}; risk=${log.riskLevel}`)
+      : ['- none'])
+  ];
+
+  return sections.join('\n');
+}
+
+function looksCorruptedMemory(content: string): boolean {
+  const questionMarks = content.match(/\?{4,}/g);
+  if (!questionMarks) {
+    return false;
+  }
+  const totalQuestionMarks = questionMarks.reduce((sum, item) => sum + item.length, 0);
+  return totalQuestionMarks / Math.max(content.length, 1) > 0.08;
 }
 
 export function buildAgentSystemPrompt(state: DemoState, agentId: string): string {
@@ -123,7 +517,7 @@ export function buildAgentSystemPrompt(state: DemoState, agentId: string): strin
 /* ─── Section builders ─── */
 
 function buildConversationSection(state: DemoState, roomId: string, focus: ContextFocus): string {
-  let msgs = state.messages.filter((m) => m.roomId === roomId);
+  let msgs = sortMessagesChronologically(state.messages.filter((m) => m.roomId === roomId));
 
   if (focus === 'deadline') {
     // 侧重提及截止日期的消息
@@ -134,7 +528,7 @@ function buildConversationSection(state: DemoState, roomId: string, focus: Conte
     const recentMsgs = msgs.slice(-15);
     const merged = new Map<string, Message>();
     for (const m of [...deadlineMsgs, ...recentMsgs]) merged.set(m.id, m);
-    msgs = [...merged.values()].sort((a, b) => a.sentAt.localeCompare(b.sentAt));
+    msgs = sortMessagesChronologically([...merged.values()]);
   } else if (focus !== 'summary') {
     // summary 取全量，其他取最近 30 条
     msgs = msgs.slice(-30);

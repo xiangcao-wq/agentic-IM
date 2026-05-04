@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   askDeadline,
+  checkAiStatus,
   confirmAgentAction,
   generateDemoAssets,
   fetchState,
@@ -86,6 +87,14 @@ describe('api client', () => {
     );
   });
 
+  it('surfaces backend error messages to the UI', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ error: 'AI provider is not configured' }, { status: 503 }));
+
+    await expect(humanReply('/api-root', { roomId: 'room-team', userId: 'user-chen' }, fetchMock)).rejects.toThrow(
+      'AI provider is not configured'
+    );
+  });
+
   it('uses confirmation queue endpoints', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -132,6 +141,7 @@ describe('api client', () => {
     await listMemories('/api-root', 'agent-lin', fetchMock);
     await generateDemoAssets('/api-root', { roomId: 'room-team', senderId: 'user-lin' }, fetchMock);
     await syncMatrixOnce('/api-root', fetchMock);
+    await checkAiStatus('/api-root', fetchMock);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -152,6 +162,11 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       '/api-root/api/matrix/sync-once',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      '/api-root/api/ai/status/check',
       expect.objectContaining({ method: 'POST' })
     );
   });

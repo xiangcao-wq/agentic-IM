@@ -1,5 +1,8 @@
 import { join } from 'node:path';
 import { createAppServer } from './appServer';
+import { loadLocalEnvFile } from './env';
+
+await loadLocalEnvFile(join(process.cwd(), '.env.local'));
 
 const port = Number(process.env.AGENT_IM_API_PORT ?? 8791);
 const dbPath = process.env.AGENT_IM_DB_PATH ?? join(process.cwd(), 'data', 'agent-im-db.json');

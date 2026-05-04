@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
-import type { AiProvider } from './aiProvider';
+import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
@@ -170,6 +170,43 @@ describe('real local agent IM server', () => {
     )).toBe(true);
   });
 
+  it('records skipped auto reply jobs instead of fabricating replies when AI is not configured', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const before = await requestJson(`${app.url}/api/state`);
+    const beforeChenMessages = before.messages.filter((message: { senderId: string }) => message.senderId === 'user-chen').length;
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: '每天出去玩吗'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(sentMessage.autoReplies).toEqual([]);
+    expect(sentMessage.autoReplyJobs).toHaveLength(1);
+    expect(sentMessage.autoReplyJobs[0]).toMatchObject({
+      roomId: 'room-team',
+      targetUserId: 'user-chen',
+      status: 'skipped'
+    });
+    expect(sentMessage.autoReplyJobs[0].reason).toContain('AI provider is not configured');
+    expect(after.messages).toHaveLength(before.messages.length + 1);
+    expect(after.messages.filter((message: { senderId: string }) => message.senderId === 'user-chen')).toHaveLength(
+      beforeChenMessages
+    );
+    expect(after.aiReplyJobs[0]).toMatchObject({
+      triggeringMessageId: sentMessage.id,
+      status: 'skipped'
+    });
+  });
+
   it('uploads a file through the API and persists Matrix media metadata when Matrix mode is disabled', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -210,6 +247,160 @@ describe('real local agent IM server', () => {
           log.toolCalls.includes('file_library.create')
       )
     ).toBe(true);
+  });
+
+  it('indexes uploaded text files but skips binary document uploads', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const textFile = await fetch(`${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'x-file-name': encodeURIComponent('interview-notes.txt')
+      },
+      body: '引用一致性需要陈晨核对，行动计划和访谈纪要要对齐。'
+    }).then((response) => response.json());
+    const pdfFile = await fetch(`${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/pdf',
+        'x-file-name': encodeURIComponent('report.pdf')
+      },
+      body: '%PDF-1.4 fake bytes'
+    }).then((response) => response.json());
+
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.fileTextChunks.some((chunk: { fileId: string; text: string }) =>
+      chunk.fileId === textFile.id && chunk.text.includes('引用一致性')
+    )).toBe(true);
+    expect(state.fileTextChunks.some((chunk: { fileId: string }) => chunk.fileId === pdfFile.id)).toBe(false);
+  });
+
+  it('returns global AI status in /api/state', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null
+    });
+    servers.push(app);
+
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.aiStatus).toMatchObject({
+      configured: false,
+      provider: 'fallback',
+      health: 'missing'
+    });
+  });
+
+  it('checks configured AI provider health and stores the latest status for /api/state', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const aiProvider = createRecordingAiProvider(['ok', 'ok']);
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider
+    });
+    servers.push(app);
+
+    const before = await requestJson(`${app.url}/api/state`);
+    const checked = await requestJson(`${app.url}/api/ai/status/check`, { method: 'POST' });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(before.aiStatus).toMatchObject({
+      configured: true,
+      provider: 'deepseek',
+      health: 'unknown'
+    });
+    expect(checked.aiStatus).toMatchObject({
+      configured: true,
+      provider: 'deepseek',
+      health: 'connected'
+    });
+    expect(checked.aiStatus.lastCheckedAt).toBeTruthy();
+    expect(checked.aiStatus.lastLatencyMs).toEqual(expect.any(Number));
+    expect(JSON.stringify(checked)).not.toContain('sk-');
+    expect(after.aiStatus).toMatchObject({
+      configured: true,
+      provider: 'deepseek',
+      health: 'connected'
+    });
+    expect(aiProvider.calls.map((call) => call.actorRole)).toEqual(['human_user', 'personal_agent']);
+  });
+
+  it('includes DeepSeek cache usage in AI runtime status without exposing secrets', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const aiProvider = createUsageAiProvider({
+      requestCount: 3,
+      promptTokens: 1000,
+      completionTokens: 120,
+      totalTokens: 1120,
+      promptCacheHitTokens: 750,
+      promptCacheMissTokens: 250,
+      promptCacheHitRate: 0.75,
+      lastUpdatedAt: '2026-05-04T08:00:00.000Z'
+    });
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider
+    });
+    servers.push(app);
+
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.aiStatus.health).toBe('connected');
+    expect(state.aiStatus.cache).toMatchObject({
+      requestCount: 3,
+      promptCacheHitTokens: 750,
+      promptCacheMissTokens: 250,
+      promptCacheHitRate: 0.75
+    });
+    expect(JSON.stringify(state)).not.toContain('deepseek-key');
+  });
+
+  it('reports failed AI health checks without silently marking the provider connected', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createFailingAiProvider('DeepSeek 401 invalid key')
+    });
+    servers.push(app);
+
+    const checked = await requestJson(`${app.url}/api/ai/status/check`, { method: 'POST' });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(checked.aiStatus).toMatchObject({
+      configured: true,
+      provider: 'deepseek',
+      health: 'failed',
+      lastError: 'DeepSeek 401 invalid key'
+    });
+    expect(state.aiStatus).toMatchObject({
+      configured: true,
+      provider: 'deepseek',
+      health: 'failed',
+      lastError: 'DeepSeek 401 invalid key'
+    });
   });
 
   it('requires the configured API token for state-changing requests while keeping reads available', async () => {
@@ -276,6 +467,34 @@ describe('real local agent IM server', () => {
     expect(await denied.json()).toMatchObject({ error: 'origin not allowed' });
     expect(allowed.status).toBe(200);
     expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5175');
+  });
+
+  it('allows writes from the Vite fallback dev port by default', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const allowed = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://127.0.0.1:5176'
+      },
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: 'write from vite fallback dev port'
+      })
+    });
+
+    expect(allowed.status).toBe(201);
+    expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5176');
   });
 
   it('rejects unsupported and oversized uploads before persisting state', async () => {
@@ -391,6 +610,150 @@ describe('real local agent IM server', () => {
     expect(response.headers.get('content-disposition')).toContain('team-notes.txt');
     expect(await response.text()).toBe('real matrix media bytes');
   });
+
+  it('streams Agent run progress events while an Agent request is executing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const progress = await collectSseEvents<{ phase: string; roomId: string; label: string }>(
+      `${app.url}/api/events`,
+      'agent-progress',
+      async () => {
+        await requestJson(`${app.url}/api/agent/run`, {
+          method: 'POST',
+          body: JSON.stringify({
+            agentId: 'agent-lin',
+            roomId: 'room-team',
+            userText: '谁负责访谈材料？'
+          })
+        });
+      },
+      8
+    );
+
+    expect(progress.at(0)?.phase).toBe('started');
+    expect(progress.at(-1)?.phase).toBe('completed');
+    expect(progress.every((event) => event.roomId === 'room-team')).toBe(true);
+    expect(progress.map((event) => event.label)).toEqual(
+      expect.arrayContaining([
+        '收到 Agent 请求',
+        '校验 Agent 权限',
+        '构建授权上下文',
+        '规划 Agent 动作',
+        '执行工具：chat.answer',
+        '写入 Agent 记忆',
+        '写入运行日志'
+      ])
+    );
+  });
+
+  it('streams concrete read/write steps for deadline tool runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const progress = await collectSseEvents<{ phase: string; label: string; detail?: string; toolCalls: string[] }>(
+      `${app.url}/api/events`,
+      'agent-progress',
+      async () => {
+        await requestJson(`${app.url}/api/agent/run`, {
+          method: 'POST',
+          body: JSON.stringify({
+            agentId: 'agent-lin',
+            roomId: 'room-team',
+            userText: 'deadline 是？'
+          })
+        });
+      },
+      9
+    );
+
+    expect(progress.map((event) => event.label)).toEqual(
+      expect.arrayContaining([
+        '执行工具：deadline.answer',
+        '检索截止信息',
+        '写入 Agent 记忆',
+        '写入运行日志'
+      ])
+    );
+    expect(progress.find((event) => event.label === '检索截止信息')?.toolCalls).toContain('deadline.answer');
+    expect(progress.at(-1)?.phase).toBe('completed');
+  });
+
+  it('streams progress events while confirming a queued coordination action', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          actionRequests: [
+            {
+              id: 'action-calendar-confirm',
+              agentId: 'agent-lin',
+              roomId: 'room-team',
+              kind: 'coordinate',
+              status: 'needs_confirmation',
+              input: {
+                proposal: 'Move the final review to Wednesday 23:00.',
+                calendarPatch: {
+                  itemId: 'cal-review',
+                  oldStartsAt: '2026-05-05T20:30:00+08:00',
+                  newStartsAt: '2026-05-06T23:00:00+08:00',
+                  title: 'Final draft review'
+                }
+              },
+              risk: {
+                level: 'high',
+                score: 0.9,
+                reason: 'Needs human approval before changing calendar data.',
+                model: 'test'
+              },
+              createdAt: '2026-05-04T08:00:00.000Z',
+              updatedAt: '2026-05-04T08:00:00.000Z',
+              requiresHuman: true
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const progress = await collectSseEvents<{ phase: string; label: string; toolCalls: string[] }>(
+      `${app.url}/api/events`,
+      'agent-progress',
+      async () => {
+        await requestJson(`${app.url}/api/agent/actions/action-calendar-confirm/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({
+            reviewerId: 'user-lin',
+            reason: 'Approved in UI'
+          })
+        });
+      },
+      5
+    );
+
+    expect(progress.map((event) => event.label)).toEqual(
+      expect.arrayContaining(['收到确认请求', '应用日程变更', '写入审计日志', '完成确认动作'])
+    );
+    expect(progress.find((event) => event.label === '应用日程变更')?.toolCalls).toContain('calendar.update');
+    expect(progress.at(-1)?.phase).toBe('completed');
+  });
 });
 
 async function requestJson(url: string, init?: RequestInit) {
@@ -400,6 +763,71 @@ async function requestJson(url: string, init?: RequestInit) {
   });
   expect(response.ok).toBe(true);
   return response.json();
+}
+
+async function collectSseEvents<T>(
+  url: string,
+  eventName: string,
+  action: () => Promise<void>,
+  expectedCount: number
+): Promise<T[]> {
+  const controller = new AbortController();
+  const response = await fetch(url, { signal: controller.signal });
+  expect(response.ok).toBe(true);
+  expect(response.body).toBeTruthy();
+
+  const events: T[] = [];
+  const reader = response.body!.getReader();
+  const readLoop = readSseStream(reader, eventName, events);
+
+  await action();
+  const deadline = Date.now() + 1500;
+  while (events.length < expectedCount && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  controller.abort();
+  await readLoop.catch(() => undefined);
+  return events;
+}
+
+async function readSseStream<T>(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  eventName: string,
+  events: T[]
+): Promise<void> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const read = await reader.read();
+    if (read.done) {
+      return;
+    }
+    buffer += decoder.decode(read.value, { stream: true });
+    let splitIndex = buffer.indexOf('\n\n');
+    while (splitIndex >= 0) {
+      const rawEvent = buffer.slice(0, splitIndex);
+      buffer = buffer.slice(splitIndex + 2);
+      const parsed = parseSseEvent(rawEvent);
+      if (parsed.event === eventName && parsed.data) {
+        events.push(JSON.parse(parsed.data) as T);
+      }
+      splitIndex = buffer.indexOf('\n\n');
+    }
+  }
+}
+
+function parseSseEvent(rawEvent: string): { event?: string; data?: string } {
+  const parsed: { event?: string; data?: string } = {};
+  for (const line of rawEvent.split('\n')) {
+    if (line.startsWith('event: ')) {
+      parsed.event = line.slice('event: '.length);
+    }
+    if (line.startsWith('data: ')) {
+      parsed.data = line.slice('data: '.length);
+    }
+  }
+  return parsed;
 }
 
 async function createMatrixStub(handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>) {
@@ -463,6 +891,39 @@ function createFakeAiProvider(text: string): AiProvider {
   return {
     async generateText() {
       return text;
+    }
+  };
+}
+
+function createRecordingAiProvider(texts: string[]): AiProvider & { calls: Array<Record<string, unknown>> } {
+  const calls: Array<Record<string, unknown>> = [];
+  let index = 0;
+  return {
+    calls,
+    async generateText(prompt) {
+      calls.push(prompt as unknown as Record<string, unknown>);
+      const text = texts[index] ?? texts[texts.length - 1] ?? 'ok';
+      index += 1;
+      return text;
+    }
+  };
+}
+
+function createUsageAiProvider(snapshot: AiUsageSnapshot): AiProvider & { getUsageSnapshot(): AiUsageSnapshot } {
+  return {
+    async generateText() {
+      return 'ok';
+    },
+    getUsageSnapshot() {
+      return snapshot;
+    }
+  };
+}
+
+function createFailingAiProvider(message: string): AiProvider {
+  return {
+    async generateText() {
+      throw new Error(message);
     }
   };
 }

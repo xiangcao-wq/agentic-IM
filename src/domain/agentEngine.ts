@@ -61,9 +61,10 @@ export async function summarizeRoom(
 
     const context = buildStructuredContext(state, roomId, agentId, { focus: 'summary' });
     const userPrompt = [
-      '请根据以下上下文信息总结该群聊的关键内容：',
+      context,
       '',
-      context
+      '## Current Request',
+      'Summarize this room from the authorized context above.'
     ].join('\n');
 
     const raw = await aiProvider.generateText({
@@ -71,6 +72,7 @@ export async function summarizeRoom(
       actorId: agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      responseFormat: 'json_object',
       maxOutputTokens: 400
     });
 
@@ -150,11 +152,10 @@ export async function answerDeadlineQuestion(
 
     const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'deadline' });
     const userPrompt = [
-      `用户提问：${input.question}`,
+      context,
       '',
-      '以下是相关上下文信息：',
-      '',
-      context
+      '## Current User Question',
+      input.question
     ].join('\n');
 
     const raw = await aiProvider.generateText({
@@ -162,6 +163,7 @@ export async function answerDeadlineQuestion(
       actorId: input.agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      responseFormat: 'json_object',
       maxOutputTokens: 300
     });
 
@@ -194,9 +196,15 @@ function answerDeadlineQuestionFallback(state: DemoState, input: DeadlineQuestio
       includesAny(file.summary, ['截止', '提交', '调研报告'])
   );
   const deadline = extractDeadline([...relevantMessages.map((message) => message.body), ...relevantFiles.map((file) => file.summary)]);
+  const baseAnswer = `这次信息系统作业的截止时间是 ${deadline}，需要提交调研报告 PDF 和 8 分钟课堂演示稿。`;
+  const remainingDays = estimateRemainingDays(deadline);
+  const answer =
+    remainingDays !== null && asksRemainingTime(input.question)
+      ? `${baseAnswer} 距离截止还有大约 ${remainingDays} 天。`
+      : baseAnswer;
 
   return {
-    answer: `这次信息系统作业的截止时间是 ${deadline}，需要提交调研报告 PDF 和 8 分钟课堂演示稿。`,
+    answer,
     citations: unique([...relevantMessages.map((message) => message.id), ...relevantFiles.map((file) => file.id)])
   };
 }
@@ -233,12 +241,11 @@ export async function createFileShareAction(
 
     const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'file_share' });
     const userPrompt = [
-      `请求者：${input.requesterId}`,
-      `请求内容：${input.requestText}`,
+      context,
       '',
-      '以下是相关上下文信息：',
-      '',
-      context
+      '## Current File Request',
+      `Requester: ${input.requesterId}`,
+      `Request text: ${input.requestText}`
     ].join('\n');
 
     const raw = await aiProvider.generateText({
@@ -246,6 +253,7 @@ export async function createFileShareAction(
       actorId: input.agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      responseFormat: 'json_object',
       maxOutputTokens: 300
     });
 
@@ -270,7 +278,19 @@ export async function createFileShareAction(
       model: 'llm-driven'
     };
 
-    const status = file && (risk.level === 'low' || options.forceExecute) ? 'executed' : 'needs_confirmation';
+    const canExecuteShare =
+      Boolean(file?.mxcUri) &&
+      Boolean(file?.agentCanShare) &&
+      (risk.level === 'low' || options.forceExecute);
+    const status = file && canExecuteShare ? 'executed' : 'needs_confirmation';
+    const gatedRisk: RiskAssessment = file && !file.mxcUri
+      ? {
+          ...risk,
+          level: risk.level === 'high' ? 'high' : 'medium',
+          score: Math.max(risk.score, 0.55),
+          reason: `${risk.reason} 文件只有元数据，没有 Matrix media backing，不能自动代发。`
+        }
+      : risk;
     const message =
       status === 'executed' && file && owner
         ? createAgentFileMessage({ agent, file, ownerName: owner.name, roomId: input.roomId })
@@ -283,12 +303,12 @@ export async function createFileShareAction(
           ? `代发文件：${file?.name ?? '未找到文件'}`
           : '文件代发需要人工确认',
       status,
-      risk,
+      risk: gatedRisk,
       contextIds: unique(['msg-05', 'msg-06', file?.id].filter(Boolean) as string[]),
       toolCalls: ['llm.evaluate', 'room_search', 'file_library.lookup_latest', ...(message ? ['matrix.send_event'] : [])]
     });
 
-    return { status, requiresHuman: status !== 'executed', risk, file, message, log };
+    return { status, requiresHuman: status !== 'executed', risk: gatedRisk, file, message, log };
   } catch {
     return createFileShareActionFallback(state, input, options);
   }
@@ -369,11 +389,11 @@ export async function coordinateAgents(
 
     const context = buildStructuredContext(state, input.roomId, input.toAgentId, { focus: 'coordinate' });
     const userPrompt = [
-      `来自 ${input.fromAgentId} 的协调提案：${input.proposal}`,
+      context,
       '',
-      '以下是相关上下文信息：',
-      '',
-      context
+      '## Current Coordination Proposal',
+      `From agent: ${input.fromAgentId}`,
+      `Proposal: ${input.proposal}`
     ].join('\n');
 
     const raw = await aiProvider.generateText({
@@ -381,6 +401,7 @@ export async function coordinateAgents(
       actorId: input.toAgentId,
       instructions: systemPrompt,
       input: userPrompt,
+      responseFormat: 'json_object',
       maxOutputTokens: 300
     });
 
@@ -403,7 +424,7 @@ export async function coordinateAgents(
       model: 'llm-driven'
     };
 
-    const status = risk.level === 'high' ? 'needs_confirmation' : 'executed';
+    const status = risk.level === 'low' ? 'executed' : 'needs_confirmation';
     const proposedPlan = parsed.suggestion;
     const log = createActionLog({
       agentId: toAgent.id,
@@ -427,7 +448,7 @@ function coordinateAgentsFallback(state: DemoState, input: CoordinationInput): C
   ensureRoomAccess(fromAgent, input.roomId);
   ensureRoomAccess(toAgent, input.roomId);
   const risk = assessCoordinationRisk(input.proposal);
-  const status = risk.level === 'high' ? 'needs_confirmation' : 'executed';
+  const status = risk.level === 'low' ? 'executed' : 'needs_confirmation';
   const proposedPlan =
     status === 'needs_confirmation'
       ? '建议先在群里确认所有成员是否同意改到周三 23:00；确认后再由 Agent 更新日程和任务。'
@@ -484,9 +505,6 @@ function findNewestShareableFile(state: DemoState, ownerId: string, roomId: stri
       file.roomId === roomId &&
       file.visibility === 'room' &&
       file.agentCanShare &&
-      Boolean(file.mxcUri) &&
-      Boolean(file.contentType) &&
-      Boolean(file.size) &&
       (!wantsSlides ||
         includesAny(`${file.name} ${file.summary} ${file.contentType ?? ''}`.toLowerCase(), [
           '演示稿',
@@ -526,6 +544,15 @@ function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined
       level: 'high',
       score: 0.91,
       reason: '目标文件未授权 Agent 代发或不属于群可见范围。',
+      model: lowRiskModel
+    };
+  }
+
+  if (!file.mxcUri || !file.contentType || !file.size) {
+    return {
+      level: 'medium',
+      score: 0.58,
+      reason: '已匹配到授权文件，但缺少可下载媒体元数据，发送前需要用户确认或重新上传真实文件。',
       model: lowRiskModel
     };
   }
@@ -627,6 +654,30 @@ function extractDeadline(texts: string[]): string {
   const joined = texts.join('\n');
   const match = joined.match(/5月12日\s*23:59/);
   return match?.[0] ?? '5月12日 23:59';
+}
+
+function asksRemainingTime(question: string): boolean {
+  const lowered = question.toLowerCase();
+  return includesAny(question, ['还有几天', '还剩几天', '还有多久', '还剩多久', '几天截止']) ||
+    lowered.includes('days left') ||
+    lowered.includes('how many days');
+}
+
+function estimateRemainingDays(deadline: string, now = new Date()): number | null {
+  const match = deadline.match(/(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})/);
+  if (!match) {
+    return null;
+  }
+  const [, month, day, hour, minute] = match;
+  const deadlineDate = new Date(
+    now.getFullYear(),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute)
+  );
+  const diff = deadlineDate.getTime() - now.getTime();
+  return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
 }
 
 function includesAny(text: string, needles: string[]): boolean {

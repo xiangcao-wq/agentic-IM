@@ -84,7 +84,9 @@ npm run ai:seed
 npm run dev:full
 ```
 
-`npm run ai:seed` routes real model calls by actor type through `src/server/aiProvider.ts`; it has no mock fallback. Human-like AI users use DeepSeek Flash, while personal Agents use DeepSeek Pro. If the DeepSeek key is missing or either route fails the preflight request, the command exits before reading the state file or touching Matrix. The seed flow creates real openable demo assets, uploads them to the Matrix media repository, asks AI actors to generate human and Agent conversation turns, runs the Agent file-share tool, and persists files, action requests, and audit logs back to `data/agent-im-db.json`.
+`npm run ai:seed` routes real model calls by actor type through `src/server/aiProvider.ts`; it has no mock fallback. Human-like AI users default to DeepSeek V4 Flash, while personal Agents default to DeepSeek V4 Pro with Thinking enabled and `reasoning_effort=high`. If the DeepSeek key is missing or either route fails the preflight request, the command exits before reading the state file or touching Matrix. The running app also exposes an LLM health check through `/api/ai/status/check`.
+
+DeepSeek prompt-cache telemetry is read from `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` and exposed in `/api/state.aiStatus.cache`. Agent prompts keep stable authorized context before the current user request so DeepSeek's automatic prefix cache can reuse more input tokens.
 
 Model routing:
 
@@ -92,6 +94,9 @@ Model routing:
 - Personal Agents: `DEEPSEEK_AGENT_MODEL`, defaults to `deepseek-v4-pro`.
 - DeepSeek API base: `DEEPSEEK_BASE_URL`, defaults to `https://api.deepseek.com`.
 - Both routes use `DEEPSEEK_API_KEY`.
+- Optional thinking controls: `DEEPSEEK_HUMAN_THINKING` and `DEEPSEEK_AGENT_THINKING` accept `enabled` or `disabled`; Agents default to `enabled`.
+- Optional reasoning controls: `DEEPSEEK_HUMAN_REASONING_EFFORT` and `DEEPSEEK_AGENT_REASONING_EFFORT` accept `low`, `medium`, or `high`; Agents default to `high` when Thinking is enabled.
+- Web search: DeepSeek plans the request and can call the app-provided `web.search` tool for public web results. This keeps API behavior explicit while still allowing DeepSeek to use external search instead of being limited to internal room context.
 
 Optional variables:
 

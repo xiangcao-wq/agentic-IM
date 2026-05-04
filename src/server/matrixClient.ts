@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
+import { sortMessagesChronologically } from '../domain/messages';
 import type { DemoState, Message } from '../domain/types';
 
 export interface MatrixBootstrap {
@@ -178,9 +179,9 @@ export class MatrixStore {
     const newMessages = messagesByRoom.flat().filter((message) => !existingMessageIds.has(message.id));
     const checkpoints = rooms
       .map((room) => {
-        const latest = [...state.messages, ...newMessages]
+        const latest = sortMessagesChronologically([...state.messages, ...newMessages])
           .filter((message) => message.roomId === room.id && message.id.startsWith('$'))
-          .sort((a, b) => b.sentAt.localeCompare(a.sentAt))[0];
+          .at(-1);
         return latest ? { roomId: room.id, lastEventId: latest.id } : undefined;
       })
       .filter(Boolean) as DemoState['matrixObserverCheckpoints'];
@@ -190,7 +191,7 @@ export class MatrixStore {
         ...state,
         users,
         rooms,
-        messages: [...state.messages, ...newMessages].sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
+        messages: sortMessagesChronologically([...state.messages, ...newMessages]),
         matrixObserverCheckpoints: checkpoints
       },
       messagesAdded: newMessages.length

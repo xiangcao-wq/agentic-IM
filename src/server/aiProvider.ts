@@ -5,11 +5,44 @@ export interface AiTextPrompt {
   actorId?: string;
   instructions: string;
   input: string;
+  messages?: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }>;
   maxOutputTokens?: number;
+  responseFormat?: 'text' | 'json_object';
+  thinking?: { type: 'enabled' | 'disabled' };
 }
 
 export interface AiProvider {
   generateText(prompt: AiTextPrompt): Promise<string>;
+}
+
+export interface AiUsageSnapshot {
+  requestCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  promptCacheHitTokens: number;
+  promptCacheMissTokens: number;
+  promptCacheHitRate: number;
+  lastUpdatedAt?: string;
+  routes?: Array<{
+    role: AiActorRole;
+    provider: string;
+    requestCount: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    promptCacheHitTokens: number;
+    promptCacheMissTokens: number;
+    promptCacheHitRate: number;
+    lastUpdatedAt?: string;
+  }>;
+}
+
+export interface AiUsageInspectable {
+  getUsageSnapshot(): AiUsageSnapshot;
 }
 
 interface OpenAiResponsesProviderOptions {
@@ -43,8 +76,16 @@ interface ChatCompletionsApiBody {
   choices?: Array<{
     message?: {
       content?: string | Array<{ type?: string; text?: string }>;
+      reasoning_content?: string;
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
+  };
 }
 
 export class OpenAiResponsesProvider implements AiProvider {
@@ -92,7 +133,7 @@ export class OpenAiResponsesProvider implements AiProvider {
   }
 }
 
-export class OpenAiChatCompletionsProvider implements AiProvider {
+export class OpenAiChatCompletionsProvider implements AiProvider, AiUsageInspectable {
   private readonly providerName: string;
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -100,6 +141,7 @@ export class OpenAiChatCompletionsProvider implements AiProvider {
   private readonly fetcher: typeof fetch;
   private readonly extraHeaders: Record<string, string>;
   private readonly extraBody: Record<string, unknown>;
+  private readonly usage: AiUsageSnapshot = createEmptyUsageSnapshot();
 
   constructor(options: OpenAiChatCompletionsProviderOptions) {
     this.providerName = options.providerName;
@@ -116,6 +158,19 @@ export class OpenAiChatCompletionsProvider implements AiProvider {
       throw new Error(`${this.providerName} API key is required for real AI demo generation`);
     }
 
+    const requestBody = {
+      model: this.model,
+      messages: prompt.messages ?? [
+        { role: 'system', content: prompt.instructions },
+        { role: 'user', content: prompt.input }
+      ],
+      max_tokens: prompt.maxOutputTokens ?? 220,
+      stream: false,
+      ...(prompt.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
+      ...this.extraBody,
+      ...(prompt.thinking ? { thinking: prompt.thinking } : {})
+    };
+
     const response = await this.fetcher(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -123,16 +178,7 @@ export class OpenAiChatCompletionsProvider implements AiProvider {
         'content-type': 'application/json',
         ...this.extraHeaders
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: 'system', content: prompt.instructions },
-          { role: 'user', content: prompt.input }
-        ],
-        max_tokens: prompt.maxOutputTokens ?? 220,
-        stream: false,
-        ...this.extraBody
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -140,15 +186,20 @@ export class OpenAiChatCompletionsProvider implements AiProvider {
     }
 
     const body = (await response.json()) as ChatCompletionsApiBody;
+    updateUsageSnapshot(this.usage, body.usage);
     const text = extractChatCompletionText(body).trim();
     if (!text) {
       throw new Error(`${this.providerName} chat completions returned no text output`);
     }
     return text;
   }
+
+  getUsageSnapshot(): AiUsageSnapshot {
+    return cloneUsageSnapshot(this.usage);
+  }
 }
 
-export class RoleRoutedAiProvider implements AiProvider {
+export class RoleRoutedAiProvider implements AiProvider, AiUsageInspectable {
   constructor(private readonly providers: { humanProvider: AiProvider; agentProvider: AiProvider }) {}
 
   async generateText(prompt: AiTextPrompt): Promise<string> {
@@ -160,6 +211,25 @@ export class RoleRoutedAiProvider implements AiProvider {
     }
     throw new Error('actorRole is required to route AI generation between DeepSeek and MiMo');
   }
+
+  getUsageSnapshot(): AiUsageSnapshot {
+    const routes = [
+      usageRoute('human_user', 'human', this.providers.humanProvider),
+      usageRoute('personal_agent', 'agent', this.providers.agentProvider)
+    ].filter((route): route is NonNullable<typeof route> => Boolean(route));
+    const aggregate = aggregateUsageSnapshots(routes);
+    return {
+      ...aggregate,
+      routes
+    };
+  }
+}
+
+export function getAiUsageSnapshot(provider?: AiProvider): AiUsageSnapshot | undefined {
+  if (!provider || !isUsageInspectable(provider)) {
+    return undefined;
+  }
+  return provider.getUsageSnapshot();
 }
 
 function extractResponseText(body: ResponsesApiBody): string {
@@ -177,15 +247,101 @@ function extractResponseText(body: ResponsesApiBody): string {
 }
 
 function extractChatCompletionText(body: ChatCompletionsApiBody): string {
-  const content = body.choices?.[0]?.message?.content;
+  const message = body.choices?.[0]?.message;
+  const content = message?.content;
   if (typeof content === 'string') {
-    return content;
+    return content || message?.reasoning_content || '';
   }
   if (Array.isArray(content)) {
-    return content
+    const text = content
       .filter((item) => item.type === 'text' && typeof item.text === 'string')
       .map((item) => item.text)
       .join('\n');
+    return text || message?.reasoning_content || '';
   }
-  return '';
+  return message?.reasoning_content || '';
+}
+
+function isUsageInspectable(provider: AiProvider): provider is AiProvider & AiUsageInspectable {
+  return typeof (provider as Partial<AiUsageInspectable>).getUsageSnapshot === 'function';
+}
+
+function createEmptyUsageSnapshot(): AiUsageSnapshot {
+  return {
+    requestCount: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    promptCacheHitTokens: 0,
+    promptCacheMissTokens: 0,
+    promptCacheHitRate: 0
+  };
+}
+
+function updateUsageSnapshot(
+  snapshot: AiUsageSnapshot,
+  usage: ChatCompletionsApiBody['usage'] | undefined
+): void {
+  snapshot.requestCount += 1;
+  snapshot.promptTokens += usage?.prompt_tokens ?? 0;
+  snapshot.completionTokens += usage?.completion_tokens ?? 0;
+  snapshot.totalTokens += usage?.total_tokens ?? 0;
+  snapshot.promptCacheHitTokens += usage?.prompt_cache_hit_tokens ?? 0;
+  snapshot.promptCacheMissTokens += usage?.prompt_cache_miss_tokens ?? 0;
+  snapshot.promptCacheHitRate = calculateCacheHitRate(snapshot);
+  snapshot.lastUpdatedAt = new Date().toISOString();
+}
+
+function cloneUsageSnapshot(snapshot: AiUsageSnapshot): AiUsageSnapshot {
+  return {
+    ...snapshot,
+    routes: snapshot.routes?.map((route) => ({ ...route }))
+  };
+}
+
+function usageRoute(
+  role: AiActorRole,
+  providerName: string,
+  provider: AiProvider
+): NonNullable<AiUsageSnapshot['routes']>[number] | undefined {
+  const snapshot = getAiUsageSnapshot(provider);
+  if (!snapshot) {
+    return undefined;
+  }
+  return {
+    role,
+    provider: providerName,
+    requestCount: snapshot.requestCount,
+    promptTokens: snapshot.promptTokens,
+    completionTokens: snapshot.completionTokens,
+    totalTokens: snapshot.totalTokens,
+    promptCacheHitTokens: snapshot.promptCacheHitTokens,
+    promptCacheMissTokens: snapshot.promptCacheMissTokens,
+    promptCacheHitRate: snapshot.promptCacheHitRate,
+    lastUpdatedAt: snapshot.lastUpdatedAt
+  };
+}
+
+function aggregateUsageSnapshots(
+  snapshots: Array<Omit<NonNullable<AiUsageSnapshot['routes']>[number], 'role' | 'provider'>>
+): AiUsageSnapshot {
+  const aggregate = snapshots.reduce((next, snapshot) => {
+    next.requestCount += snapshot.requestCount;
+    next.promptTokens += snapshot.promptTokens;
+    next.completionTokens += snapshot.completionTokens;
+    next.totalTokens += snapshot.totalTokens;
+    next.promptCacheHitTokens += snapshot.promptCacheHitTokens;
+    next.promptCacheMissTokens += snapshot.promptCacheMissTokens;
+    if (!next.lastUpdatedAt || (snapshot.lastUpdatedAt && snapshot.lastUpdatedAt > next.lastUpdatedAt)) {
+      next.lastUpdatedAt = snapshot.lastUpdatedAt;
+    }
+    return next;
+  }, createEmptyUsageSnapshot());
+  aggregate.promptCacheHitRate = calculateCacheHitRate(aggregate);
+  return aggregate;
+}
+
+function calculateCacheHitRate(snapshot: Pick<AiUsageSnapshot, 'promptCacheHitTokens' | 'promptCacheMissTokens'>): number {
+  const total = snapshot.promptCacheHitTokens + snapshot.promptCacheMissTokens;
+  return total > 0 ? snapshot.promptCacheHitTokens / total : 0;
 }

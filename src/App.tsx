@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Bot,
-  CalendarClock,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  ClipboardList,
   Download,
+  ExternalLink,
   FileText,
   MessageSquare,
   PanelRightOpen,
@@ -19,25 +20,27 @@ import {
   Users
 } from 'lucide-react';
 import {
+  checkAiStatus,
   confirmAgentAction,
   createStateEventSource,
   fetchState,
   fileDownloadUrl,
-  generateDemoAssets,
   humanReply,
   runAgent,
   sendMessage,
-  syncMatrixOnce,
   rejectAgentAction,
   uploadFile
 } from './client/apiClient';
 import type {
   AgentActionLog,
   AgentActionRequest,
+  AgentProgressEvent,
   AgentRunResult,
   AiAutoreplyPolicy,
   AiReplyJob,
+  AiRuntimeStatus,
   CalendarItem,
+  ChatResult,
   CoordinationResult,
   DeadlineAnswer,
   DemoState,
@@ -46,8 +49,10 @@ import type {
   MemoryItem,
   Message,
   RoomSummary,
-  TaskItem
+  TaskItem,
+  WebSearchAnswer
 } from './domain/types';
+import { sortMessagesChronologically } from './domain/messages';
 
 type AgentResult =
   | { kind: 'summary'; value: RoomSummary }
@@ -55,9 +60,11 @@ type AgentResult =
   | { kind: 'file-share'; value: FileShareAction }
   | { kind: 'coordination'; value: CoordinationResult }
   | { kind: 'agent-run'; value: AgentRunResult }
-  | { kind: 'human-reply'; value: Message }
-  | { kind: 'assets'; value: FileItem[] }
-  | { kind: 'sync'; value: { messagesAdded: number; checkpoints: DemoState['matrixObserverCheckpoints'] } };
+  | { kind: 'human-reply'; value: Message };
+
+type RoomFilter = 'all' | 'group' | 'direct';
+type EventStreamStatus = 'connecting' | 'connected' | 'disconnected';
+type RoomContentTab = 'chat' | 'tasks' | 'files' | 'calendar' | 'members';
 
 const apiBaseUrl = import.meta.env.VITE_AGENT_API_BASE ?? '';
 const currentUserId = 'user-lin';
@@ -66,11 +73,15 @@ const currentAgentId = 'agent-lin';
 function App() {
   const [state, setState] = useState<DemoState | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState('room-team');
+  const [roomSearch, setRoomSearch] = useState('');
+  const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
+  const [agentProgressEvents, setAgentProgressEvents] = useState<AgentProgressEvent[]>([]);
   const [composer, setComposer] = useState('');
   const [agentPrompt, setAgentPrompt] = useState('这次作业什么时候截止？');
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [eventStreamStatus, setEventStreamStatus] = useState<EventStreamStatus>('connecting');
 
   async function refreshState() {
     const nextState = await fetchState(apiBaseUrl);
@@ -81,17 +92,6 @@ function App() {
   useEffect(() => {
     let disposed = false;
     refreshState()
-      .then((nextState) => {
-        if (!disposed) {
-          const initialSummary = {
-            headline: '选择右侧动作开始真实 Agent 流程。',
-            deadlines: [],
-            todos: nextState.tasks.slice(0, 2).map((task) => `${task.deadline} · ${task.title}`),
-            sources: []
-          };
-          setAgentResult({ kind: 'summary', value: initialSummary });
-        }
-      })
       .catch((loadError) => {
         if (!disposed) {
           setError(loadError instanceof Error ? loadError.message : '无法连接本地 API 服务');
@@ -99,13 +99,27 @@ function App() {
       });
 
     const events = createStateEventSource(apiBaseUrl);
+    events.onopen = () => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+      }
+    };
     events.addEventListener('state', (event) => {
       if (!disposed) {
+        setEventStreamStatus('connected');
         setState(JSON.parse((event as MessageEvent).data) as DemoState);
+      }
+    });
+    events.addEventListener('agent-progress', (event) => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+        const progress = JSON.parse((event as MessageEvent).data) as AgentProgressEvent;
+        setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
       }
     });
     events.onerror = () => {
       if (!disposed) {
+        setEventStreamStatus('disconnected');
         setError('实时连接已断开；请确认本地 API 服务仍在运行。');
       }
     };
@@ -131,22 +145,10 @@ function App() {
   const selectedRoom = state.rooms.find((room) => room.id === selectedRoomId) ?? state.rooms[0];
   const currentUser = state.users.find((user) => user.id === currentUserId)!;
   const currentAgent = state.agents.find((agent) => agent.id === currentAgentId)!;
-  const roomMessages = state.messages.filter((message) => message.roomId === selectedRoom.id);
+  const roomMessages = sortMessagesChronologically(state.messages.filter((message) => message.roomId === selectedRoom.id));
   const roomFiles = state.files.filter((file) => file.roomId === selectedRoom.id);
-  const visibleFiles =
-    roomFiles.length > 0 ? roomFiles : state.files.filter((file) => currentAgent.allowedRoomIds.includes(file.roomId));
-  const visibleMemories = state.memories
-    .filter(
-      (memory) =>
-        memory.ownerAgentId === currentAgentId &&
-        (memory.scopeRoomIds.includes(selectedRoom.id) ||
-          memory.scopeRoomIds.some((roomId) => currentAgent.allowedRoomIds.includes(roomId)))
-    )
-    .slice(0, 5);
-  const roomTasks =
-    selectedRoom.id === 'room-class'
-      ? state.tasks
-      : state.tasks.filter((task) => task.id !== 'task-report');
+  const roomTasks = getTasksForRoom(state, selectedRoom.id);
+  const filteredRooms = filterRooms(state.rooms, roomSearch, roomFilter);
 
   async function runAction<T>(label: string, action: () => Promise<T>): Promise<T | undefined> {
     setBusyAction(label);
@@ -230,23 +232,48 @@ function App() {
     });
   }
 
-  async function handleGenerateAssets() {
-    await runAction('generate-assets', async () => {
-      const response = await generateDemoAssets(apiBaseUrl, {
+  async function handleAgentChat() {
+    const userText = agentPrompt.trim();
+    if (!userText) {
+      return;
+    }
+    await runAction('chat', async () => {
+      const response = await runAgent(apiBaseUrl, {
+        agentId: currentAgentId,
         roomId: selectedRoom.id,
-        senderId: currentUserId
+        userText
       });
-      setAgentResult({ kind: 'assets', value: response.files });
+      setAgentResult({ kind: 'agent-run', value: response });
       return response;
     });
   }
 
-  async function handleSyncMatrix() {
-    await runAction('matrix-sync', async () => {
-      const response = await syncMatrixOnce(apiBaseUrl);
-      setAgentResult({ kind: 'sync', value: response });
+  async function handleCheckAiStatus() {
+    setBusyAction('ai-status-check');
+    setError(null);
+    try {
+      const response = await checkAiStatus(apiBaseUrl);
+      setState((current) => (current ? { ...current, aiStatus: response.aiStatus } : current));
       return response;
-    });
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'LLM 状态检查失败');
+      return undefined;
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRefreshState() {
+    setBusyAction('refresh-state');
+    setError(null);
+    try {
+      return await refreshState();
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : '刷新状态失败');
+      return undefined;
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function handleAiHumanReply(userId: string) {
@@ -313,48 +340,51 @@ function App() {
     <main className="app-shell">
       <Sidebar
         currentUserName={currentUser.name}
-        rooms={state.rooms}
+        rooms={filteredRooms}
+        roomSearch={roomSearch}
+        roomFilter={roomFilter}
         selectedRoomId={selectedRoom.id}
+        onFilterChange={setRoomFilter}
+        onSearchChange={setRoomSearch}
         onSelectRoom={setSelectedRoomId}
       />
       <ChatPanel
         room={selectedRoom}
         messages={roomMessages}
+        sourceMessages={state.messages}
         files={state.files}
+        tasks={roomTasks}
+        calendar={state.calendar}
         users={state.users}
+        aiStatus={state.aiStatus}
         composer={composer}
         busyAction={busyAction}
         onComposerChange={setComposer}
         onSend={handleSendMessage}
         onFileUpload={handleUploadFile}
-        onAiHumanReply={handleAiHumanReply}
+        onSummarize={handleSummarize}
+        onRefreshTasks={handleRefreshState}
       />
       <AgentWorkbench
-        agentName={currentAgent.displayName}
+        agent={currentAgent}
+        selectedRoom={selectedRoom}
+        rooms={state.rooms}
         prompt={agentPrompt}
         error={error}
         busyAction={busyAction}
         result={agentResult}
-        files={visibleFiles}
-        tasks={roomTasks}
-        calendar={state.calendar}
+        aiStatus={state.aiStatus}
         actions={state.actionRequests}
-        logs={state.actionLogs}
-        memories={visibleMemories}
-        autoreplyPolicies={state.aiAutoreplyPolicies}
-        aiReplyJobs={state.aiReplyJobs}
-        users={state.users}
         selectedRoomId={selectedRoom.id}
         sourceMessages={state.messages}
         sourceFiles={state.files}
         onPromptChange={setAgentPrompt}
+        onAgentChat={handleAgentChat}
         onSummarize={handleSummarize}
         onDeadlineQuestion={handleDeadlineQuestion}
         onFindFile={handleFindFile}
         onFileShare={handleFileShare}
         onCoordinate={handleCoordinate}
-        onGenerateAssets={handleGenerateAssets}
-        onSyncMatrix={handleSyncMatrix}
         onConfirmAction={handleConfirmAgentAction}
         onRejectAction={handleRejectAgentAction}
       />
@@ -365,16 +395,23 @@ function App() {
 function Sidebar(props: {
   currentUserName: string;
   rooms: DemoState['rooms'];
+  roomSearch: string;
+  roomFilter: RoomFilter;
   selectedRoomId: string;
+  onFilterChange: (filter: RoomFilter) => void;
+  onSearchChange: (value: string) => void;
   onSelectRoom: (roomId: string) => void;
 }) {
+  const groupCount = props.rooms.filter((room) => room.type !== 'direct').length;
+  const directCount = props.rooms.filter((room) => room.type === 'direct').length;
+
   return (
     <aside className="sidebar">
       <div className="brand-row">
         <div className="brand-mark">A</div>
         <div>
           <h1>Agent IM</h1>
-          <p>Local real API workspace</p>
+          <p>AI Agent 协作工作台</p>
         </div>
       </div>
 
@@ -382,29 +419,50 @@ function Sidebar(props: {
         <div className="avatar">LW</div>
         <div>
           <strong>{props.currentUserName}</strong>
-          <span>个人 Agent 在线托管中</span>
+          <span><i /> 在线 | 个人 Agent</span>
         </div>
+        <ChevronRight size={16} />
+      </div>
+
+      <label className="room-search">
+        <Search size={16} />
+        <input
+          aria-label="search rooms"
+          placeholder="搜索会话"
+          value={props.roomSearch}
+          onChange={(event) => props.onSearchChange(event.target.value)}
+        />
+      </label>
+
+      <div className="room-tabs" aria-label="room filters">
+        <button className={props.roomFilter === 'all' ? 'is-active' : ''} type="button" onClick={() => props.onFilterChange('all')}>全部</button>
+        <button className={props.roomFilter === 'group' ? 'is-active' : ''} type="button" onClick={() => props.onFilterChange('group')}>群聊 {groupCount}</button>
+        <button className={props.roomFilter === 'direct' ? 'is-active' : ''} type="button" onClick={() => props.onFilterChange('direct')}>私聊 {directCount}</button>
       </div>
 
       <nav className="room-list" aria-label="rooms">
-        {props.rooms.map((room) => (
-          <button
-            aria-label={room.name}
-            className={`room-button ${room.id === props.selectedRoomId ? 'is-active' : ''}`}
-            key={room.id}
-            onClick={() => props.onSelectRoom(room.id)}
-            type="button"
-          >
-            <span className="room-icon">
-              {room.type === 'direct' ? <Bot size={16} /> : <MessageSquare size={16} />}
-            </span>
-            <span className="room-meta">
-              <strong>{room.name}</strong>
-              <small>{room.matrixAlias}</small>
-            </span>
-            {room.unreadCount > 0 ? <em>{room.unreadCount}</em> : null}
-          </button>
-        ))}
+        {props.rooms.length > 0 ? (
+          props.rooms.map((room) => (
+            <button
+              aria-label={room.name}
+              className={`room-button ${room.id === props.selectedRoomId ? 'is-active' : ''}`}
+              key={room.id}
+              onClick={() => props.onSelectRoom(room.id)}
+              type="button"
+            >
+              <span className="room-icon">
+                {room.type === 'direct' ? <Bot size={16} /> : <MessageSquare size={16} />}
+              </span>
+              <span className="room-meta">
+                <strong>{room.name}</strong>
+                <small>{room.matrixAlias}</small>
+              </span>
+              {room.unreadCount > 0 ? <em>{room.unreadCount}</em> : null}
+            </button>
+          ))
+        ) : (
+          <div className="room-empty">没有匹配的会话</div>
+        )}
       </nav>
 
       <div className="protocol-panel">
@@ -412,6 +470,7 @@ function Sidebar(props: {
         <div>
           <strong>风险评估</strong>
           <span>主 Agent + risk-mini-v1</span>
+          <b>低风险</b>
         </div>
       </div>
     </aside>
@@ -421,26 +480,52 @@ function Sidebar(props: {
 function ChatPanel(props: {
   room: DemoState['rooms'][number];
   messages: Message[];
+  sourceMessages: Message[];
   files: FileItem[];
+  tasks: TaskItem[];
+  calendar: CalendarItem[];
   users: DemoState['users'];
+  aiStatus?: AiRuntimeStatus;
   composer: string;
   busyAction: string | null;
   onComposerChange: (value: string) => void;
   onSend: () => void;
   onFileUpload: (file: File) => void;
-  onAiHumanReply: (userId: string) => void;
+  onSummarize: () => void;
+  onRefreshTasks: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<RoomContentTab>('chat');
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
   const roomFilesById = useMemo(() => new Map(props.files.map((file) => [file.id, file])), [props.files]);
-  const aiHumanMembers = props.users.filter(
-    (user) => props.room.memberIds.includes(user.id) && user.id !== currentUserId
-  );
+  const roomFiles = props.files.filter((file) => file.roomId === props.room.id);
+  const roomCalendar = props.calendar.filter((item) => item.roomId === props.room.id);
+  const roomMembers = props.room.memberIds
+    .map((memberId) => props.users.find((candidate) => candidate.id === memberId))
+    .filter((user): user is DemoState['users'][number] => Boolean(user));
+  const tabs: Array<{ id: RoomContentTab; label: string; count: number }> = [
+    { id: 'chat', label: '聊天', count: props.messages.length },
+    { id: 'tasks', label: '任务', count: props.tasks.length },
+    { id: 'files', label: '文件', count: roomFiles.length },
+    { id: 'calendar', label: '日程', count: roomCalendar.length },
+    { id: 'members', label: '成员', count: props.room.memberIds.length }
+  ];
+
+  useEffect(() => {
+    setActiveTab('chat');
+  }, [props.room.id]);
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView?.({ block: 'end' });
+  }, [props.room.id, props.messages.length]);
 
   return (
     <section className="chat-panel">
       <header className="chat-header">
-        <div>
-          <h2>{props.room.name}</h2>
-          <p>{props.room.matrixAlias}</p>
+        <div className="chat-title-block">
+          <div className="chat-title-line">
+            <h2>{props.room.name}</h2>
+          </div>
+          <p>{props.room.matrixAlias} · {props.room.memberIds.length} 成员</p>
         </div>
         <div className="chat-header-side">
           <div className="member-stack" aria-label="members">
@@ -453,21 +538,41 @@ function ChatPanel(props: {
               );
             })}
           </div>
-          <div className="ai-reply-bar" aria-label="AI 角色发言">
-            {aiHumanMembers.slice(0, 3).map((user) => (
-              <button
-                key={user.id}
-                type="button"
-                onClick={() => props.onAiHumanReply(user.id)}
-                disabled={Boolean(props.busyAction)}
-              >
-                <Sparkles size={14} />
-                <span>让{user.name}回复</span>
-              </button>
-            ))}
+          <div className="chat-top-actions">
+            <button type="button" onClick={props.onSummarize} disabled={Boolean(props.busyAction)}>
+              <RefreshCw size={15} />
+              <span>总结当前群聊</span>
+            </button>
           </div>
         </div>
       </header>
+
+      <div className="room-content-tabs" aria-label="room panels">
+        {tabs.map((tab) => (
+          <button
+            className={activeTab === tab.id ? 'is-active' : ''}
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span>{tab.label}</span>
+            <em>{tab.count}</em>
+          </button>
+        ))}
+      </div>
+
+      {activeTab !== 'chat' ? (
+        <RoomDetailPanel
+          activeTab={activeTab}
+          tasks={props.tasks}
+          files={roomFiles}
+          calendar={roomCalendar}
+          members={roomMembers}
+          messages={props.sourceMessages}
+          users={props.users}
+          onRefreshTasks={props.onRefreshTasks}
+        />
+      ) : null}
 
       <div className="message-list">
         {props.messages.map((message) => {
@@ -487,6 +592,7 @@ function ChatPanel(props: {
             </article>
           );
         })}
+        <div ref={messageEndRef} />
       </div>
 
       <footer className="composer">
@@ -505,7 +611,7 @@ function ChatPanel(props: {
           />
         </label>
         <input
-          aria-label="message"
+          aria-label="chat composer"
           onChange={(event) => props.onComposerChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -515,11 +621,211 @@ function ChatPanel(props: {
           placeholder="输入消息"
           value={props.composer}
         />
-        <button type="button" onClick={props.onSend} aria-label="send message" disabled={props.busyAction === 'send'}>
+        <button type="button" onClick={props.onSend} aria-label="send chat" disabled={props.busyAction === 'send'}>
           <Send size={18} />
         </button>
       </footer>
+
     </section>
+  );
+}
+
+function RoomDetailPanel(props: {
+  activeTab: Exclude<RoomContentTab, 'chat'>;
+  tasks: TaskItem[];
+  files: FileItem[];
+  calendar: CalendarItem[];
+  members: DemoState['users'];
+  messages: Message[];
+  users: DemoState['users'];
+  onRefreshTasks: () => void;
+}) {
+  if (props.activeTab === 'tasks') {
+    return (
+      <TaskExtractionPanel
+        tasks={props.tasks}
+        messages={props.messages}
+        users={props.users}
+        onRefresh={props.onRefreshTasks}
+      />
+    );
+  }
+
+  if (props.activeTab === 'files') {
+    return <RoomFilesPanel files={props.files} users={props.users} />;
+  }
+
+  if (props.activeTab === 'calendar') {
+    return <RoomCalendarPanel calendar={props.calendar} />;
+  }
+
+  return <RoomMembersPanel members={props.members} />;
+}
+
+function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] }) {
+  return (
+    <section className="room-detail-panel">
+      <div className="room-detail-header">
+        <div>
+          <h3>可用文件 <span>{props.files.length}</span></h3>
+          <p>只显示当前会话内 Agent 可见的文件元数据。</p>
+        </div>
+      </div>
+      <div className="detail-list">
+        {props.files.length > 0 ? props.files.map((file) => {
+          const uploader = props.users.find((user) => user.id === file.uploaderId);
+          return (
+            <div className="detail-row" key={file.id}>
+              <FileText size={16} />
+              <div>
+                <strong>{file.name}</strong>
+                <span>
+                  {uploader?.name ?? file.uploaderId} · {formatTime(file.updatedAt)} · {file.mxcUri ? '可下载' : '仅元数据'}
+                </span>
+              </div>
+              {file.mxcUri ? (
+                <a href={fileDownloadUrl(apiBaseUrl, file.id)} download={file.name} aria-label={`download ${file.name}`}>
+                  <Download size={15} />
+                </a>
+              ) : null}
+            </div>
+          );
+        }) : (
+          <div className="detail-empty">当前会话还没有可用文件。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RoomCalendarPanel(props: { calendar: CalendarItem[] }) {
+  return (
+    <section className="room-detail-panel">
+      <div className="room-detail-header">
+        <div>
+          <h3>相关日程 <span>{props.calendar.length}</span></h3>
+          <p>来自当前会话的内部日程数据，确认后会实时更新。</p>
+        </div>
+      </div>
+      <div className="detail-list">
+        {props.calendar.length > 0 ? props.calendar.map((item) => (
+          <div className="detail-row" key={item.id}>
+            <Clock3 size={16} />
+            <div>
+              <strong>{item.title}</strong>
+              <span>{formatDateTime(item.startsAt)} · {item.attendees.length} 人参与</span>
+            </div>
+          </div>
+        )) : (
+          <div className="detail-empty">当前会话还没有相关日程。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RoomMembersPanel(props: { members: DemoState['users'] }) {
+  return (
+    <section className="room-detail-panel">
+      <div className="room-detail-header">
+        <div>
+          <h3>成员 <span>{props.members.length}</span></h3>
+          <p>当前会话成员和在线状态。</p>
+        </div>
+      </div>
+      <div className="member-detail-grid">
+        {props.members.map((member) => (
+          <div className="member-detail" key={member.id}>
+            <i>{member.avatar}</i>
+            <div>
+              <strong>{member.name}</strong>
+              <span>{member.status === 'online' ? '在线' : '离线'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TaskExtractionPanel(props: {
+  tasks: TaskItem[];
+  messages: Message[];
+  users: DemoState['users'];
+  onRefresh: () => void;
+}) {
+  const taskRows = props.tasks.slice(0, 5);
+  const sourceMessages = taskRows
+    .map((task) => props.messages.find((message) => message.id === task.sourceMessageId))
+    .filter((message): message is Message => Boolean(message));
+  const latestSource = sortMessagesChronologically(sourceMessages).at(-1);
+  return (
+    <section className="task-extraction-panel">
+      <div className="task-extraction-header">
+        <div>
+          <h3>从当前对话中提取的任务 <span>{props.tasks.length}</span></h3>
+          <p>
+            {latestSource ? `最近来源 ${formatTime(latestSource.sentAt)}` : '当前对话暂无结构化任务'} · 基于 {sourceMessages.length} 条来源消息
+          </p>
+        </div>
+        <button type="button" onClick={props.onRefresh}>
+          <RefreshCw size={15} />
+          <span>刷新状态</span>
+        </button>
+      </div>
+      <div className="task-table" role="table" aria-label="extracted tasks">
+        <div className="task-table-row is-head" role="row">
+          <span>任务</span>
+          <span>负责人</span>
+          <span>截止时间</span>
+          <span>状态</span>
+          <span>来源消息</span>
+        </div>
+        {taskRows.length > 0 ? taskRows.map((task) => {
+          const source = props.messages.find((message) => message.id === task.sourceMessageId);
+          const owner = props.users.find((user) => task.owners.includes(user.name));
+          return (
+            <div className="task-table-row" role="row" key={task.id}>
+              <span className="task-name">
+                <span className={`task-source-dot ${task.status}`} />
+                {task.title}
+              </span>
+              <span>
+                <UserChip user={owner} fallback={task.owners.join('、')} />
+              </span>
+              <span>{task.deadline}</span>
+              <span><StatusPill status={task.status} /></span>
+              <span>{source ? `${formatTime(source.sentAt)} ${source.senderName}` : task.sourceMessageId}</span>
+            </div>
+          );
+        }) : (
+          <div className="task-table-empty">这个对话还没有可追溯的结构化任务。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function UserChip({ user, fallback }: { user?: DemoState['users'][number]; fallback: string }) {
+  return (
+    <span className="user-chip">
+      <i>{user?.avatar ?? fallback.slice(0, 2)}</i>
+      {user?.name ?? fallback}
+    </span>
+  );
+}
+
+function StatusPill({ status }: { status: TaskItem['status'] }) {
+  const labels: Record<TaskItem['status'], string> = {
+    pending: '待完成',
+    in_progress: '进行中',
+    done: '已完成'
+  };
+  return (
+    <span className={`task-status ${status}`}>
+      <b />
+      {labels[status]}
+    </span>
   );
 }
 
@@ -544,35 +850,34 @@ function FileAttachment(props: { file?: FileItem; fallbackName: string }) {
 }
 
 function AgentWorkbench(props: {
-  agentName: string;
+  agent: DemoState['agents'][number];
+  selectedRoom: DemoState['rooms'][number];
+  rooms: DemoState['rooms'];
   prompt: string;
   error: string | null;
   busyAction: string | null;
   result: AgentResult | null;
-  files: FileItem[];
-  tasks: TaskItem[];
-  calendar: CalendarItem[];
+  aiStatus?: AiRuntimeStatus;
   actions: AgentActionRequest[];
-  logs: AgentActionLog[];
-  memories: MemoryItem[];
-  autoreplyPolicies: AiAutoreplyPolicy[];
-  aiReplyJobs: AiReplyJob[];
-  users: DemoState['users'];
   selectedRoomId: string;
   sourceMessages: Message[];
   sourceFiles: FileItem[];
   onPromptChange: (value: string) => void;
+  onAgentChat: () => void;
   onSummarize: () => void;
   onDeadlineQuestion: () => void;
   onFindFile: () => void;
   onFileShare: () => void;
   onCoordinate: () => void;
-  onGenerateAssets: () => void;
-  onSyncMatrix: () => void;
   onConfirmAction: (actionId: string) => void;
   onRejectAction: (actionId: string) => void;
 }) {
-  const pendingActions = props.actions.filter((action) => action.status === 'needs_confirmation' || action.status === 'pending');
+  const pendingActions = props.actions.filter(
+    (action) =>
+      action.roomId === props.selectedRoomId &&
+      (action.status === 'needs_confirmation' || action.status === 'pending')
+  );
+  const aiStatus = deriveAiStatus(props.result, props.aiStatus);
 
   return (
     <aside className="agent-workbench">
@@ -581,208 +886,279 @@ function AgentWorkbench(props: {
           <Bot size={22} />
         </div>
         <div>
-          <h2>{props.agentName}</h2>
-          <p>可读群聊、文件、任务、日程</p>
+          <h2>我的 Agent</h2>
+          <p>{props.agent.displayName}</p>
         </div>
+        <span className={`ai-status-pill ${aiStatus.kind}`}>{aiStatus.label}</span>
       </header>
 
-      <div className="agent-query">
-        <label htmlFor="agent-prompt">Agent 输入</label>
-        <div className="query-row">
-          <input
-            id="agent-prompt"
-            value={props.prompt}
-            onChange={(event) => props.onPromptChange(event.target.value)}
+      <div className="agent-output-area">
+        {props.error ? <div className="error-banner">{props.error}</div> : null}
+        {props.result ? (
+          <ResultPanel
+            result={props.result}
+            sourceMessages={props.sourceMessages}
+            sourceFiles={props.sourceFiles}
           />
-          <button type="button" onClick={props.onDeadlineQuestion} aria-label="ask agent" disabled={Boolean(props.busyAction)}>
-            <Search size={17} />
-          </button>
-        </div>
-      </div>
+        ) : (
+          <div className="agent-output-placeholder" aria-hidden="true" />
+        )}
 
-      <div className="action-grid">
-        <ActionButton icon={<PanelRightOpen size={17} />} label="总结群聊" onClick={props.onSummarize} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<Clock3 size={17} />} label="问截止" onClick={props.onDeadlineQuestion} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<Search size={17} />} label="Agent 找文件" onClick={props.onFindFile} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<FileText size={17} />} label="离线代发" onClick={props.onFileShare} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<Users size={17} />} label="Agent 协调" onClick={props.onCoordinate} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<Upload size={17} />} label="生成真实文件" onClick={props.onGenerateAssets} disabled={Boolean(props.busyAction)} />
-        <ActionButton icon={<RefreshCw size={17} />} label="同步 Matrix" onClick={props.onSyncMatrix} disabled={Boolean(props.busyAction)} />
-      </div>
-
-      {props.error ? <div className="error-banner">{props.error}</div> : null}
-      {props.result ? (
-        <ResultPanel
-          result={props.result}
-          sourceMessages={props.sourceMessages}
-          sourceFiles={props.sourceFiles}
-        />
-      ) : null}
-
-      <section className="data-section">
-        <div className="section-title">
-          <Sparkles size={17} />
-          <h3>自动聊天</h3>
-        </div>
-        <div className="compact-list">
-          {props.autoreplyPolicies
-            .filter((policy) => policy.allowedRoomIds.includes(props.selectedRoomId))
-            .sort((a, b) => a.priority - b.priority)
-            .map((policy) => {
-              const user = props.users.find((candidate) => candidate.id === policy.userId);
-              const latestJob = props.aiReplyJobs.find(
-                (job) => job.targetUserId === policy.userId && job.roomId === props.selectedRoomId
-              );
-              return (
-                <div className="compact-row" key={policy.userId}>
-                  <strong>{user?.name ?? policy.userId} 自动回复</strong>
-                  <span>
-                    {policy.enabled ? '开启' : '关闭'} · {policy.triggerMode === 'all_messages' ? '任何消息' : '仅被提及'} ·{' '}
-                    {latestJob ? `${latestJob.status} ${latestJob.replyMessageId ?? ''}` : '等待新消息'}
-                  </span>
+        {pendingActions.length > 0 ? (
+          <section className="data-section confirmation-section">
+            <div className="section-title">
+              <AlertTriangle size={17} />
+              <h3>待确认动作</h3>
+            </div>
+            <div className="confirmation-list">
+              {pendingActions.map((action) => (
+                <div className="confirmation-row" key={action.id}>
+                  <div>
+                    <strong>{agentActionKindLabel(action.kind)}</strong>
+                    <span>{String(action.input.requestText ?? action.input.proposal ?? '等待人工确认')}</span>
+                    <small>{action.risk?.level ?? 'pending'} · {action.risk?.reason ?? '等待风险评估'}</small>
+                  </div>
+                  <div className="confirmation-actions">
+                    <button
+                      type="button"
+                      onClick={() => props.onConfirmAction(action.id)}
+                      disabled={Boolean(props.busyAction)}
+                    >
+                      确认
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => props.onRejectAction(action.id)}
+                      disabled={Boolean(props.busyAction)}
+                    >
+                      拒绝
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
-        </div>
-      </section>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
 
-      {pendingActions.length > 0 ? (
-        <section className="data-section confirmation-section">
-          <div className="section-title">
-            <AlertTriangle size={17} />
-            <h3>待确认动作</h3>
+      <div className="agent-dock">
+        <div className="action-grid">
+          <ActionButton icon={<PanelRightOpen size={17} />} label="总结群聊" onClick={props.onSummarize} disabled={Boolean(props.busyAction)} />
+          <ActionButton icon={<Clock3 size={17} />} label="问截止" onClick={props.onDeadlineQuestion} disabled={Boolean(props.busyAction)} />
+          <ActionButton icon={<Search size={17} />} label="Agent 找文件" onClick={props.onFindFile} disabled={Boolean(props.busyAction)} />
+          <ActionButton icon={<FileText size={17} />} label="请求代发" onClick={props.onFileShare} disabled={Boolean(props.busyAction)} />
+          <ActionButton icon={<Users size={17} />} label="Agent 协调" onClick={props.onCoordinate} disabled={Boolean(props.busyAction)} />
+        </div>
+
+        <div className="agent-query">
+          <label htmlFor="agent-prompt">问 Agent 或下指令</label>
+          <div className="query-row">
+            <input
+              id="agent-prompt"
+              value={props.prompt}
+              onChange={(event) => props.onPromptChange(event.target.value)}
+            />
+            <button type="button" onClick={props.onAgentChat} aria-label="send agent prompt" disabled={Boolean(props.busyAction)}>
+              <Send size={17} />
+            </button>
           </div>
-          <div className="confirmation-list">
-            {pendingActions.map((action) => (
-              <div className="confirmation-row" key={action.id}>
-                <div>
-                  <strong>{agentActionKindLabel(action.kind)}</strong>
-                  <span>{String(action.input.requestText ?? action.input.proposal ?? '等待人工确认')}</span>
-                  <small>{action.risk?.level ?? 'pending'} · {action.risk?.reason ?? '等待风险评估'}</small>
-                </div>
-                <div className="confirmation-actions">
-                  <button
-                    type="button"
-                    onClick={() => props.onConfirmAction(action.id)}
-                    disabled={Boolean(props.busyAction)}
-                  >
-                    确认
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => props.onRejectAction(action.id)}
-                    disabled={Boolean(props.busyAction)}
-                  >
-                    拒绝
-                  </button>
-                </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function AgentScopePanel(props: {
+  agent: DemoState['agents'][number];
+  rooms: DemoState['rooms'];
+  selectedRoom: DemoState['rooms'][number];
+  pendingCount: number;
+}) {
+  const readableRooms = props.rooms.filter((room) => props.agent.allowedRoomIds.includes(room.id));
+  return (
+    <section className="agent-card">
+      <div className="agent-card-grid">
+        <span>当前对话</span>
+        <strong>{props.selectedRoom.name}</strong>
+        <span>可读范围</span>
+        <strong>{readableRooms.map((room) => room.name).join('、') || '无'}</strong>
+        <span>可用工具</span>
+        <strong>{props.agent.allowedToolIds.map(toolIdLabel).join('、') || '只读问答'}</strong>
+        <span>待确认</span>
+        <strong>{props.pendingCount} 个</strong>
+      </div>
+    </section>
+  );
+}
+
+function RuntimeStepsPanel(props: {
+  busyAction: string | null;
+  logs: AgentActionLog[];
+  progressEvents: AgentProgressEvent[];
+}) {
+  const latestProgress = props.progressEvents.at(-1);
+  const hasTerminalProgress = latestProgress?.phase === 'completed' || latestProgress?.phase === 'failed';
+  const showBusyAction = Boolean(props.busyAction && !hasTerminalProgress);
+
+  return (
+    <section className="data-section runtime-section">
+      {props.progressEvents.length > 0 ? (
+        <>
+          <div className="section-title">
+            <RefreshCw size={17} />
+            <h3>实时步骤</h3>
+          </div>
+          <div className="compact-list runtime-progress-list">
+            {props.progressEvents.map((event) => (
+              <div className={`compact-row progress-${event.phase}`} key={event.id}>
+                <strong>{event.label}</strong>
+                <span>
+                  {agentProgressPhaseLabel(event.phase)}
+                  {event.detail ? ` · ${event.detail}` : ''}
+                  {event.toolCalls.length > 0 ? ` · ${event.toolCalls.join(' → ')}` : ''}
+                  {' · '}
+                  {formatTime(event.createdAt)}
+                </span>
               </div>
             ))}
           </div>
-        </section>
+        </>
       ) : null}
-
-      <section className="data-section">
-        <div className="section-title">
-          <FileText size={17} />
-          <h3>文件库</h3>
-        </div>
-        <div className="compact-list">
-          {props.files.slice(0, 5).map((file) => {
-            const content = (
-              <>
-                <strong>
-                  {file.name}
-                  {file.mxcUri ? <Download size={13} /> : null}
-                </strong>
-                <span>
-                  v{file.version} · {file.agentCanShare ? '允许代发' : '仅本人'} ·{' '}
-                  {file.mxcUri ? 'Matrix media' : '仅元数据'} · {formatFileSize(file.size)}
-                </span>
-              </>
-            );
-
-            return file.mxcUri ? (
-              <a
-                className="compact-row file-row-link"
-                href={fileDownloadUrl(apiBaseUrl, file.id)}
-                download={file.name}
-                key={file.id}
-              >
-                {content}
-              </a>
-            ) : (
-            <div className="compact-row" key={file.id}>
-              {content}
+      <div className="section-title">
+        <ShieldCheck size={17} />
+        <h3>运行记录</h3>
+      </div>
+      <div className="compact-list">
+        {showBusyAction ? (
+          <div className="compact-row is-running">
+            <strong>执行中</strong>
+            <span>{busyActionLabel(props.busyAction ?? '')}</span>
+          </div>
+        ) : null}
+        {props.logs.length > 0 ? (
+          props.logs.map((log) => (
+            <div className="compact-row" key={log.id}>
+              <strong>{log.action}</strong>
+              <span>{formatLogStatus(log)} · {log.toolCalls.join(' → ') || '未调用工具'} · {formatTime(log.createdAt)}</span>
             </div>
-            );
-          })}
-        </div>
-      </section>
+          ))
+        ) : (
+          <div className="compact-row is-empty">
+            <strong>暂无记录</strong>
+            <span>当前对话还没有 Agent 工具执行记录。</span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
-      <section className="data-section">
-        <div className="section-title">
-          <CalendarClock size={17} />
-          <h3>任务与日程</h3>
-        </div>
-        <div className="task-list">
-          {props.tasks.slice(0, 3).map((task) => (
-            <div className="task-row" key={task.id}>
-              <span className={`status-dot ${task.status}`} />
-              <div>
-                <strong>{task.title}</strong>
-                <small>{task.deadline} · {task.owners.join('、')}</small>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="calendar-strip">
-          <Clock3 size={15} />
-          <span>{props.calendar[0]?.title} · {formatTime(props.calendar[0]?.startsAt ?? '')}</span>
-        </div>
-      </section>
+function AutoReplyStatusPanel(props: {
+  autoreplyPolicies: AiAutoreplyPolicy[];
+  aiReplyJobs: AiReplyJob[];
+  selectedRoomId: string;
+  users: DemoState['users'];
+}) {
+  const policies = props.autoreplyPolicies
+    .filter((policy) => policy.allowedRoomIds.includes(props.selectedRoomId))
+    .sort((a, b) => a.priority - b.priority);
 
-      <section className="data-section">
-        <div className="section-title">
-          <Bot size={17} />
-          <h3>结构化记忆</h3>
-        </div>
-        <div className="memory-list">
-          {props.memories.length > 0 ? (
-            props.memories.map((memory) => (
-              <div className="memory-row" key={memory.id}>
-                <strong>{memory.kind}</strong>
-                <span>{memory.content}</span>
-                <small>{memory.sourceIds.length} 个来源 · {memory.scopeRoomIds.join('、')}</small>
-              </div>
-            ))
-          ) : (
-            <div className="memory-row is-empty">
-              <strong>等待 Agent 写入</strong>
-              <span>总结、问截止、文件代发和协调都会留下可追溯记忆。</span>
-            </div>
-          )}
-        </div>
-      </section>
+  if (policies.length === 0) {
+    return null;
+  }
 
-      <section className="data-section audit-section">
-        <div className="section-title">
-          <ShieldCheck size={17} />
-          <h3>审计记录</h3>
-        </div>
-        <div className="audit-list">
-          {props.logs.slice(0, 4).map((log, index) => (
-            <div className="audit-row" key={`${log.id}-${index}`}>
-              {log.risk.level === 'high' ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
-              <div>
-                <strong>{log.action}</strong>
-                <span>{log.risk.level} · {log.risk.reason}</span>
-              </div>
+  return (
+    <section className="data-section">
+      <div className="section-title">
+        <Sparkles size={17} />
+        <h3>自动回复状态</h3>
+      </div>
+      <div className="compact-list">
+        {policies.map((policy) => {
+          const user = props.users.find((candidate) => candidate.id === policy.userId);
+          const latestJob = props.aiReplyJobs.find(
+            (job) => job.targetUserId === policy.userId && job.roomId === props.selectedRoomId
+          );
+          return (
+            <div className="compact-row" key={policy.userId}>
+              <strong>{user?.name ?? policy.userId}</strong>
+              <span>
+                {policy.enabled ? '开启' : '关闭'} · {policy.triggerMode === 'all_messages' ? '任何消息' : '仅被提及'} ·{' '}
+                {latestJob ? formatAiReplyJobStatus(latestJob) : '等待新消息'}
+              </span>
             </div>
-          ))}
-        </div>
-      </section>
-    </aside>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function EvidencePanel(props: {
+  result: AgentResult | null;
+  sourceMessages: Message[];
+  sourceFiles: FileItem[];
+  sourceMemories: MemoryItem[];
+  actions: AgentActionRequest[];
+  logs: AgentActionLog[];
+}) {
+  const ids = getEvidenceIds(props.result, props.logs).slice(0, 5);
+  if (ids.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="data-section evidence-section">
+      <div className="section-title">
+        <ClipboardList size={17} />
+        <h3>判断依据</h3>
+      </div>
+      <ul className="evidence-list">
+        {ids.map((id) => (
+          <li key={id}>{formatCitation(id, props.sourceMessages, props.sourceFiles, props.sourceMemories, props.actions)}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SystemStatusPanel(props: {
+  aiStatus?: AiRuntimeStatus;
+  derived: { kind: 'connected' | 'fallback' | 'failed'; label: string };
+  eventStreamStatus: EventStreamStatus;
+  onCheck: () => void;
+  busy: boolean;
+}) {
+  const cacheRate = props.aiStatus?.cache ? Math.round(props.aiStatus.cache.promptCacheHitRate * 100) : 0;
+  const streamClass = props.eventStreamStatus === 'disconnected' ? 'bad' : props.eventStreamStatus === 'connected' ? 'good' : '';
+  const streamLabel =
+    props.eventStreamStatus === 'disconnected'
+      ? '断开'
+      : props.eventStreamStatus === 'connected'
+        ? '可用'
+        : '连接中';
+  const checkedAt = props.aiStatus?.lastCheckedAt ? formatTime(props.aiStatus.lastCheckedAt) : '未完成';
+  return (
+    <section className="data-section system-section">
+      <div className="section-title">
+        <ShieldCheck size={17} />
+        <h3>系统状态</h3>
+      </div>
+      <dl className="status-grid">
+        <dt>实时连接</dt>
+        <dd className={streamClass}>{streamLabel}</dd>
+        <dt>模型检查</dt>
+        <dd>{checkedAt}</dd>
+        <dt>缓存命中率</dt>
+        <dd>{cacheRate}%</dd>
+        <dt>模型</dt>
+        <dd>{props.aiStatus?.agentModel ?? 'fallback'}</dd>
+      </dl>
+      <button className="status-check-button" type="button" onClick={props.onCheck} disabled={props.busy}>
+        <RefreshCw size={15} />
+        <span>检查 LLM</span>
+      </button>
+    </section>
   );
 }
 
@@ -827,34 +1203,6 @@ function ResultPanel({
           <h3>AI 角色已发言</h3>
         </div>
         <p>{result.value.senderName}：{result.value.body}</p>
-      </section>
-    );
-  }
-
-  if (result.kind === 'assets') {
-    return (
-      <section className="result-panel">
-        <div className="result-heading">
-          <Upload size={18} />
-          <h3>真实文件已生成</h3>
-        </div>
-        <ul>
-          {result.value.map((file) => (
-            <li key={file.id}>{file.name} · {file.contentType} · {formatFileSize(file.size)}</li>
-          ))}
-        </ul>
-      </section>
-    );
-  }
-
-  if (result.kind === 'sync') {
-    return (
-      <section className="result-panel">
-        <div className="result-heading">
-          <RefreshCw size={18} />
-          <h3>Matrix 同步</h3>
-        </div>
-        <p>新增 {result.value.messagesAdded} 条 Matrix 事件，checkpoint {result.value.checkpoints.length} 个房间。</p>
       </section>
     );
   }
@@ -933,15 +1281,18 @@ function AgentRunResultPanel({
           <Search size={18} />
           <h3>{title}</h3>
         </div>
-        <ul>
-          {result.files.length > 0 ? (
-            result.files.map((file) => (
-              <li key={file.id}>{file.name} · {file.agentCanShare ? 'Agent 可代发' : '需要本人确认'}</li>
-            ))
-          ) : (
-            <li>没有找到符合授权边界的文件。</li>
-          )}
-        </ul>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <ul>
+            {result.files.length > 0 ? (
+              result.files.map((file) => (
+                <li key={file.id}>{file.name} · {file.agentCanShare ? 'Agent 可代发' : '需要本人确认'}</li>
+              ))
+            ) : (
+              <li>没有找到符合授权边界的文件。</li>
+            )}
+          </ul>
+        </FinalAnswer>
         <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
       </section>
     );
@@ -954,12 +1305,15 @@ function AgentRunResultPanel({
           <CheckCircle2 size={18} />
           <h3>{title}</h3>
         </div>
-        <p>{structured.headline}</p>
-        <ul>
-          {structured.todos.map((todo) => (
-            <li key={todo}>{todo}</li>
-          ))}
-        </ul>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.headline}</p>
+          <ul>
+            {structured.todos.map((todo) => (
+              <li key={todo}>{todo}</li>
+            ))}
+          </ul>
+        </FinalAnswer>
         <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
       </section>
     );
@@ -972,8 +1326,40 @@ function AgentRunResultPanel({
           <Search size={18} />
           <h3>{title}</h3>
         </div>
-        <p>{structured.answer}</p>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.answer}</p>
+        </FinalAnswer>
         <CitationRow citations={structured.citations} sourceMessages={sourceMessages} sourceFiles={sourceFiles} />
+        <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
+      </section>
+    );
+  }
+
+  if (isWebSearchAnswer(structured)) {
+    return (
+      <section className="result-panel">
+        <div className="result-heading">
+          <Search size={18} />
+          <h3>{title}</h3>
+        </div>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.answer}</p>
+          {structured.results.length > 0 ? (
+            <ul className="web-result-list">
+              {structured.results.map((item) => (
+                <li key={item.url}>
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    <span>{item.title}</span>
+                    <ExternalLink size={14} />
+                  </a>
+                  <small>{item.snippet}</small>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </FinalAnswer>
         <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
       </section>
     );
@@ -986,7 +1372,10 @@ function AgentRunResultPanel({
           <FileText size={18} />
           <h3>{title}</h3>
         </div>
-        <p>{structured.file?.name ?? '没有可自动代发的授权文件'}</p>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.file?.name ?? '没有可自动代发的授权文件'}</p>
+        </FinalAnswer>
         <RiskLine riskLevel={structured.risk.level} reason={structured.risk.reason} />
       </section>
     );
@@ -999,8 +1388,27 @@ function AgentRunResultPanel({
           <Users size={18} />
           <h3>{title}</h3>
         </div>
-        <p>{structured.proposedPlan}</p>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.proposedPlan}</p>
+        </FinalAnswer>
         <RiskLine riskLevel={structured.risk.level} reason={structured.risk.reason} />
+      </section>
+    );
+  }
+
+  if (isChatResult(structured)) {
+    return (
+      <section className="result-panel">
+        <div className="result-heading">
+          <MessageSquare size={18} />
+          <h3>{title}</h3>
+        </div>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.reply}</p>
+        </FinalAnswer>
+        <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
       </section>
     );
   }
@@ -1011,7 +1419,10 @@ function AgentRunResultPanel({
         <Bot size={18} />
         <h3>{title}</h3>
       </div>
-      <p>{result.requiresHuman ? '需要人工确认。' : 'Agent 已完成工具调用。'}</p>
+      <PlanLine plan={result.plan} reasoning={result.reasoning} />
+      <FinalAnswer>
+        <p>{result.requiresHuman ? '需要人工确认。' : 'Agent 已完成工具调用。'}</p>
+      </FinalAnswer>
       <RiskLine riskLevel={result.log.risk.level} reason={result.log.risk.reason} />
     </section>
   );
@@ -1025,9 +1436,29 @@ function agentIntentTitle(intent: AgentRunResult['intent']) {
     share_file: 'Agent 代发文件',
     coordinate: 'Agent 协调',
     task_update_suggest: '任务更新建议',
+    web_search: 'Agent 搜索',
     chat: 'Agent 对话'
   };
   return titles[intent];
+}
+
+function PlanLine({ plan, reasoning }: { plan?: string; reasoning?: string }) {
+  const thought = plan ?? reasoning;
+  return thought ? (
+    <div className="agent-thought">
+      <strong>思考过程</strong>
+      <p>{thought}</p>
+    </div>
+  ) : null;
+}
+
+function FinalAnswer({ children }: { children: ReactNode }) {
+  return (
+    <div className="agent-final">
+      <strong>最终回答</strong>
+      <div>{children}</div>
+    </div>
+  );
 }
 
 function isRoomSummary(value: AgentRunResult['result']): value is RoomSummary {
@@ -1035,7 +1466,11 @@ function isRoomSummary(value: AgentRunResult['result']): value is RoomSummary {
 }
 
 function isDeadlineAnswer(value: AgentRunResult['result']): value is DeadlineAnswer {
-  return Boolean(value && 'answer' in value && 'citations' in value);
+  return Boolean(value && 'answer' in value && 'citations' in value && !('results' in value));
+}
+
+function isWebSearchAnswer(value: AgentRunResult['result']): value is WebSearchAnswer {
+  return Boolean(value && 'answer' in value && 'results' in value && 'citations' in value);
 }
 
 function isFileShareAction(value: AgentRunResult['result']): value is FileShareAction {
@@ -1044,6 +1479,10 @@ function isFileShareAction(value: AgentRunResult['result']): value is FileShareA
 
 function isCoordinationResult(value: AgentRunResult['result']): value is CoordinationResult {
   return Boolean(value && 'proposedPlan' in value);
+}
+
+function isChatResult(value: AgentRunResult['result']): value is ChatResult {
+  return Boolean(value && 'reply' in value);
 }
 
 function RiskLine(props: { riskLevel: string; reason: string }) {
@@ -1069,7 +1508,151 @@ function agentActionKindLabel(kind: AgentActionRequest['kind']) {
   return labels[kind];
 }
 
-function formatCitation(citation: string, messages: Message[], files: FileItem[]) {
+function formatAiReplyJobStatus(job: AiReplyJob) {
+  if (job.status === 'completed') {
+    return `已回复 ${job.replyMessageId ?? ''}`.trim();
+  }
+  if (job.status === 'skipped') {
+    return `未生成回复 · ${job.reason}`;
+  }
+  if (job.status === 'failed') {
+    return `失败 · ${job.reason}`;
+  }
+  return `生成中 · ${job.reason}`;
+}
+
+function deriveAiStatus(
+  result: AgentResult | null,
+  globalStatus?: AiRuntimeStatus
+): { kind: 'connected' | 'fallback' | 'failed'; label: string } {
+  if (globalStatus?.configured) {
+    const model = globalStatus.agentModel ? ` · ${globalStatus.agentModel}` : '';
+    const cache = formatAiCacheLabel(globalStatus);
+    if (globalStatus.health === 'failed') {
+      return { kind: 'failed', label: 'LLM failed, fallback used' };
+    }
+    if (globalStatus.health === 'unknown') {
+      return { kind: 'fallback', label: `LLM configured, not checked${cache}` };
+    }
+    return { kind: 'connected', label: `LLM connected${model}${cache}` };
+  }
+  if (globalStatus && !globalStatus.configured) {
+    return { kind: 'fallback', label: 'LLM missing, fallback active' };
+  }
+  if (result?.kind !== 'agent-run') {
+    return { kind: 'fallback', label: 'LLM missing, fallback active' };
+  }
+  const toolCalls = result.value.log.toolCalls;
+  if (toolCalls.includes('fallback.local_context') && toolCalls.some((tool) => tool.includes('deepseek'))) {
+    return { kind: 'failed', label: 'LLM failed, fallback used' };
+  }
+  if (toolCalls.some((tool) => tool.includes('deepseek'))) {
+    return { kind: 'connected', label: 'LLM connected' };
+  }
+  return { kind: 'fallback', label: 'LLM missing, fallback active' };
+}
+
+function formatAiCacheLabel(status: AiRuntimeStatus): string {
+  const cache = status.cache;
+  if (!cache || cache.requestCount <= 0) {
+    return '';
+  }
+  return ` | cache ${Math.round(cache.promptCacheHitRate * 100)}%`;
+}
+
+function filterRooms(rooms: DemoState['rooms'], search: string, filter: RoomFilter): DemoState['rooms'] {
+  const query = search.trim().toLowerCase();
+  return rooms.filter((room) => {
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'group' && room.type !== 'direct') ||
+      (filter === 'direct' && room.type === 'direct');
+    const matchesSearch =
+      !query ||
+      room.name.toLowerCase().includes(query) ||
+      room.matrixAlias.toLowerCase().includes(query);
+    return matchesFilter && matchesSearch;
+  });
+}
+
+function getTasksForRoom(state: DemoState, roomId: string): TaskItem[] {
+  const selectedRoom = state.rooms.find((room) => room.id === roomId);
+  return state.tasks.filter((task) => {
+    const source = state.messages.find((message) => message.id === task.sourceMessageId);
+    if (!source) {
+      return false;
+    }
+    if (source.roomId === roomId) {
+      return true;
+    }
+    return selectedRoom?.type === 'team' && source.roomId === 'room-class';
+  });
+}
+
+function toolIdLabel(toolId: string): string {
+  const labels: Record<string, string> = {
+    room_search: '读群聊',
+    file_share: '文件代发',
+    task_update: '任务更新',
+    calendar_suggest: '日程建议'
+  };
+  return labels[toolId] ?? toolId;
+}
+
+function busyActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    summary: '正在总结当前对话',
+    deadline: '正在检索截止时间',
+    'find-file': '正在检索文件',
+    'file-share': '正在评估文件代发',
+    coordination: '正在生成协调建议',
+    chat: '正在生成 Agent 回答',
+    send: '正在发送消息',
+    'upload-file': '正在上传并索引文件',
+    'ai-status-check': '正在检查 LLM 连接',
+    'refresh-state': '正在刷新本地状态'
+  };
+  return labels[action] ?? action;
+}
+
+function formatLogStatus(log: AgentActionLog): string {
+  const statusLabels: Record<AgentActionLog['status'], string> = {
+    executed: '已执行',
+    needs_confirmation: '待确认',
+    blocked: '已阻止'
+  };
+  return `${statusLabels[log.status]} · ${log.risk.level}`;
+}
+
+function agentProgressPhaseLabel(phase: AgentProgressEvent['phase']): string {
+  const labels: Record<AgentProgressEvent['phase'], string> = {
+    started: '已接收',
+    planning: '规划中',
+    executing: '执行中',
+    completed: '已完成',
+    failed: '失败'
+  };
+  return labels[phase];
+}
+
+function agentProgressPhaseOrder(phase: AgentProgressEvent['phase']): number {
+  const order: Record<AgentProgressEvent['phase'], number> = {
+    started: 0,
+    planning: 1,
+    executing: 2,
+    completed: 3,
+    failed: 4
+  };
+  return order[phase];
+}
+
+function formatCitation(
+  citation: string,
+  messages: Message[],
+  files: FileItem[],
+  memories: MemoryItem[] = [],
+  actions: AgentActionRequest[] = []
+) {
   const message = messages.find((candidate) => candidate.id === citation);
   if (message) {
     return `${message.senderName} ${formatTime(message.sentAt)} 的消息`;
@@ -1080,6 +1663,16 @@ function formatCitation(citation: string, messages: Message[], files: FileItem[]
     return file.name;
   }
 
+  const memory = memories.find((candidate) => candidate.id === citation);
+  if (memory) {
+    return `Agent 记忆：${truncateText(memory.content, 72)}`;
+  }
+
+  const action = actions.find((candidate) => candidate.id === citation);
+  if (action) {
+    return `待确认动作：${agentActionKindLabel(action.kind)} · ${formatActionInput(action)}`;
+  }
+
   if (citation.startsWith('$')) {
     return `Matrix 事件 ${citation.slice(1, 7)}`;
   }
@@ -1087,11 +1680,50 @@ function formatCitation(citation: string, messages: Message[], files: FileItem[]
   return citation;
 }
 
+function formatActionInput(action: AgentActionRequest): string {
+  return truncateText(String(action.input.requestText ?? action.input.proposal ?? action.kind), 56);
+}
+
+function truncateText(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
+function getEvidenceIds(result: AgentResult | null, logs: AgentActionLog[]): string[] {
+  if (result?.kind === 'agent-run') {
+    const structured = result.value.result;
+    const citations = isDeadlineAnswer(structured) ? structured.citations : [];
+    return uniqueStrings([
+      ...citations,
+      ...result.value.log.contextIds,
+      result.value.memory?.id,
+      result.value.actionRequest?.id
+    ]);
+  }
+  if (result?.kind === 'deadline') {
+    return result.value.citations;
+  }
+  const latest = logs[0];
+  return latest ? latest.contextIds : [];
+}
+
 function formatTime(value: string) {
   if (!value) {
     return '';
   }
   return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  if (!value) {
+    return '';
+  }
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false
@@ -1109,6 +1741,10 @@ function formatFileSize(size?: number) {
     return `${(size / 1024).toFixed(1)} KB`;
   }
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter(Boolean) as string[])];
 }
 
 export default App;

@@ -1,7 +1,10 @@
 node_modules/
 dist/
 data/*.json
+.env*
+!.env.example
 synapse-data/
 .playwright-mcp/
 tmp/
 *.tsbuildinfo
+*.log

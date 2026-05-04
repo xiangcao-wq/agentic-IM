@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { completeAgentAction, rejectAgentAction } from '../domain/actionQueue';
+import { blockAgentAction, completeAgentAction, rejectAgentAction } from '../domain/actionQueue';
 import {
   answerDeadlineQuestion,
   coordinateAgents,
@@ -8,16 +8,28 @@ import {
 } from '../domain/agentEngine';
 import { createDemoState } from '../domain/demoState';
 import { buildShortTermContext, listAgentMemories } from '../domain/memory';
-import type { AgentActionLog, AgentActionRequest, AgentRunRequest, DemoState, FileItem, Message } from '../domain/types';
+import type {
+  AgentActionLog,
+  AgentActionRequest,
+  AgentProgressEvent,
+  AgentRunRequest,
+  AiRuntimeStatus,
+  DemoState,
+  FileItem,
+  Message
+} from '../domain/types';
+import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
-import { runAiAutoreplies } from './aiAutoreply';
-import type { AiProvider } from './aiProvider';
+import { recordSkippedAiAutoreplies, runAiAutoreplies } from './aiAutoreply';
+import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
 import { runAgentIntent } from './agentRunRuntime';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
 import { createRuntimeDemoAssets, type DemoAsset } from './demoAssets';
+import { extractTextChunks } from './fileTextIndex';
 import { MatrixStore } from './matrixClient';
 import { JsonStateStore, type StateStore } from './stateStore';
+import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
 interface ServerOptions {
   dbPath: string;
@@ -25,10 +37,11 @@ interface ServerOptions {
   host?: string;
   matrixBootstrapPath?: string | null;
   stateStore?: StateStore;
-  aiProvider?: AiProvider;
+  aiProvider?: AiProvider | null;
   apiToken?: string | null;
   allowedOrigins?: string[];
   maxUploadBytes?: number;
+  webSearchProvider?: WebSearchProvider | null;
 }
 
 interface RunningServer {
@@ -44,7 +57,10 @@ const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8'
 };
 
-const defaultAllowedOrigins = ['http://127.0.0.1:5175', 'http://localhost:5175'];
+const defaultAllowedOrigins = [5175, 5176, 5177, 5178, 5179].flatMap((port) => [
+  `http://127.0.0.1:${port}`,
+  `http://localhost:${port}`
+]);
 const defaultMaxUploadBytes = 10 * 1024 * 1024;
 
 export async function createAppServer(options: ServerOptions): Promise<RunningServer> {
@@ -56,17 +72,28 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       ? process.env.MATRIX_BOOTSTRAP_PATH ?? 'data/matrix-bootstrap.json'
       : options.matrixBootstrapPath;
   const matrixStore = matrixPath ? await MatrixStore.fromFile(matrixPath) : null;
-  const aiProvider = options.aiProvider ?? createAiDemoSeedProvider(process.env);
-  const enableAutoreplyRuntime = Boolean(options.aiProvider || process.env.DEEPSEEK_API_KEY?.trim());
+  const aiProvider =
+    options.aiProvider === null
+      ? undefined
+      : options.aiProvider ?? (process.env.DEEPSEEK_API_KEY?.trim() ? createAiDemoSeedProvider(process.env) : undefined);
+  const webSearchProvider =
+    options.webSearchProvider === null
+      ? undefined
+      : options.webSearchProvider ?? createConfiguredWebSearchProvider(process.env);
   const apiToken = options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN?.trim() : options.apiToken;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(process.env.AGENT_IM_ALLOWED_ORIGINS);
   const maxUploadBytes =
     options.maxUploadBytes ?? Number(process.env.AGENT_IM_MAX_UPLOAD_BYTES ?? defaultMaxUploadBytes);
   const eventClients = new Set<EventClient>();
+  let aiStatusProbe: Partial<AiRuntimeStatus> | undefined;
 
   async function readRuntimeState(): Promise<DemoState> {
     const state = await db.read();
-    return matrixStore ? matrixStore.hydrateState(state) : state;
+    const runtimeState = matrixStore ? await matrixStore.hydrateState(state) : state;
+    return {
+      ...runtimeState,
+      aiStatus: createAiRuntimeStatus(aiProvider, aiStatusProbe)
+    };
   }
 
   async function publishRuntimeState(): Promise<void> {
@@ -95,6 +122,11 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         return sendJson(response, await readRuntimeState());
       }
 
+      if (request.method === 'POST' && url.pathname === '/api/ai/status/check') {
+        aiStatusProbe = await checkAiRuntimeHealth(aiProvider);
+        return sendJson(response, { aiStatus: createAiRuntimeStatus(aiProvider, aiStatusProbe) });
+      }
+
       if (request.method === 'GET' && url.pathname === '/api/agent/actions') {
         const state = await db.read();
         return sendJson(response, { actions: state.actionRequests });
@@ -113,10 +145,86 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const decision = actionReviewMatch[2] as 'confirm' | 'reject';
         const body = await readJson<{ reviewerId: string; reason: string }>(request);
         const state = await db.read();
-        const resolved = await resolveAgentActionReview(state, actionId, decision, body, matrixStore);
+        const action = state.actionRequests.find((candidate) => candidate.id === actionId);
+        const runId = createRuntimeId('agent-action');
+        let progressSequence = 0;
+        const publishActionProgress = (
+          event: Omit<AgentProgressEvent, 'id' | 'createdAt' | 'sequence' | 'runId' | 'agentId' | 'roomId'>
+        ) => {
+          if (!action) {
+            return;
+          }
+          publish(
+            eventClients,
+            'agent-progress',
+            createAgentProgressEvent({
+              ...event,
+              runId,
+              agentId: action.agentId,
+              roomId: action.roomId,
+              sequence: progressSequence
+            })
+          );
+          progressSequence += 1;
+        };
 
+        publishActionProgress({
+          phase: 'started',
+          label: decision === 'confirm' ? '收到确认请求' : '收到拒绝请求',
+          detail: `${action?.kind ?? actionId}: ${body.reason || 'no reason provided'}`,
+          toolCalls: [`agent_action.${decision}`],
+          riskLevel: action?.risk?.level
+        });
+        publishActionProgress({
+          phase: 'executing',
+          label: '校验确认动作',
+          detail: actionId,
+          toolCalls: [`agent_action.${decision}`],
+          riskLevel: action?.risk?.level
+        });
+
+        let resolved: Awaited<ReturnType<typeof resolveAgentActionReview>>;
+        try {
+          resolved = await resolveAgentActionReview(state, actionId, decision, body, matrixStore);
+        } catch (error) {
+          publishActionProgress({
+            phase: 'failed',
+            label: decision === 'confirm' ? '确认动作失败' : '拒绝动作失败',
+            detail: error instanceof Error ? error.message : 'unknown action review error',
+            toolCalls: [`agent_action.${decision}`],
+            riskLevel: action?.risk?.level
+          });
+          throw error;
+        }
+
+        publishActionProgress({
+          phase: 'executing',
+          label: actionReviewMutationLabel(resolved.action, decision),
+          detail: actionReviewMutationDetail(resolved.action),
+          toolCalls: actionReviewMutationToolCalls(resolved.action, resolved.log, decision),
+          riskLevel: resolved.log.risk.level
+        });
         await db.write(resolved.state);
+        publishActionProgress({
+          phase: 'executing',
+          label: '写入审计日志',
+          detail: resolved.log.action,
+          toolCalls: resolved.log.toolCalls,
+          riskLevel: resolved.log.risk.level
+        });
         await publishRuntimeState();
+        publishActionProgress({
+          phase: resolved.action.status === 'blocked' ? 'failed' : 'completed',
+          label:
+            resolved.action.status === 'blocked'
+              ? '确认被阻止'
+              : decision === 'confirm'
+                ? '完成确认动作'
+                : '完成拒绝动作',
+          detail: resolved.log.risk.reason,
+          toolCalls: resolved.log.toolCalls,
+          riskLevel: resolved.log.risk.level
+        });
         return sendJson(response, { action: resolved.action, log: resolved.log });
       }
 
@@ -181,7 +289,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         let nextState = { ...baseState, messages: appendMessage(baseState.messages, message) };
         let autoReplies: Message[] = [];
         let autoReplyJobs: DemoState['aiReplyJobs'] = [];
-        if (enableAutoreplyRuntime) {
+        if (aiProvider) {
           const runtimeState = matrixStore ? await matrixStore.hydrateState(nextState) : nextState;
           const auto = await runAiAutoreplies({
             state: runtimeState,
@@ -193,6 +301,14 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           nextState = auto.state;
           autoReplies = auto.messages;
           autoReplyJobs = auto.jobs;
+        } else {
+          const skipped = recordSkippedAiAutoreplies({
+            state: nextState,
+            triggerMessage: message,
+            reason: 'AI provider is not configured; no simulated human reply was generated.'
+          });
+          nextState = skipped.state;
+          autoReplyJobs = skipped.jobs;
         }
         await db.write(nextState);
         await publishRuntimeState();
@@ -200,6 +316,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       }
 
       if (request.method === 'POST' && url.pathname === '/api/ai/human-reply') {
+        if (!aiProvider) {
+          throw new HttpError(503, 'AI provider is not configured');
+        }
         const body = await readJson<{ roomId: string; userId: string; prompt?: string }>(request);
         const state = await readRuntimeState();
         const profile = getAiActorProfile(state, body.userId, body.roomId);
@@ -288,10 +407,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }
 
         const log = createFileUploadLog(baseState, file, message, Boolean(matrixStore));
+        const chunks = extractTextChunks(file, bytes);
 
         const nextState = {
           ...baseState,
           files: [file, ...baseState.files],
+          fileTextChunks: [...chunks, ...(baseState.fileTextChunks ?? [])],
           messages: appendMessage(baseState.messages, message),
           actionLogs: [log, ...baseState.actionLogs]
         };
@@ -418,7 +539,40 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       if (request.method === 'POST' && url.pathname === '/api/agent/run') {
         const body = await readJson<AgentRunRequest>(request);
         const runtimeState = await readRuntimeState();
-        const runtime = await runAgentIntent(runtimeState, body, aiProvider);
+        const runId = createRuntimeId('agent-run');
+        let progressSequence = 0;
+        const publishProgress = (event: Omit<AgentProgressEvent, 'id' | 'createdAt' | 'sequence'>) => {
+          publish(eventClients, 'agent-progress', createAgentProgressEvent({ ...event, sequence: progressSequence }));
+          progressSequence += 1;
+        };
+        publishProgress({
+          runId,
+          agentId: body.agentId,
+          roomId: body.roomId,
+          phase: 'started',
+          label: '收到 Agent 请求',
+          detail: body.userText,
+          toolCalls: []
+        });
+
+        let runtime: Awaited<ReturnType<typeof runAgentIntent>>;
+        try {
+          runtime = await runAgentIntent(runtimeState, body, aiProvider, {
+            runId,
+            onProgress: publishProgress
+          }, { webSearchProvider });
+        } catch (error) {
+          publishProgress({
+            runId,
+            agentId: body.agentId,
+            roomId: body.roomId,
+            phase: 'failed',
+            label: 'Agent 执行失败',
+            detail: error instanceof Error ? error.message : 'unknown Agent runtime error',
+            toolCalls: []
+          });
+          throw error;
+        }
         let message = runtime.response.message;
         if (matrixStore && message) {
           message = await matrixStore.sendMessage(
@@ -488,7 +642,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         return sendJson(response, { error: error.message }, error.status);
       }
       const message = error instanceof Error ? error.message : 'unknown error';
-      sendJson(response, { error: message }, 500);
+      sendJson(response, { error: message }, statusForUnhandledError(message));
     }
   });
 
@@ -629,6 +783,7 @@ async function generateDemoAssetsForRoom(
     }
 
     const log = createFileUploadLog(nextState, file, message, Boolean(input.matrixStore));
+    const chunks = extractTextChunks(file, asset.bytes);
     files.push(file);
     if (message) {
       messages.push(message);
@@ -636,6 +791,7 @@ async function generateDemoAssetsForRoom(
     nextState = {
       ...nextState,
       files: [file, ...nextState.files],
+      fileTextChunks: [...chunks, ...(nextState.fileTextChunks ?? [])],
       messages: appendMessage(nextState.messages, message),
       actionLogs: [log, ...nextState.actionLogs]
     };
@@ -676,6 +832,7 @@ function mergeRuntimeState(
   return {
     ...baseState,
     messages: appendMessage(baseState.messages, message),
+    fileTextChunks: runtimeState.fileTextChunks,
     actionLogs: runtimeState.actionLogs,
     actionRequests: runtimeState.actionRequests,
     memories: runtimeState.memories,
@@ -687,9 +844,103 @@ function appendMessage(messages: Message[], message: Message | undefined): Messa
   if (!message) {
     return messages;
   }
-  return [...messages.filter((candidate) => candidate.id !== message.id), message].sort((a, b) =>
-    a.sentAt.localeCompare(b.sentAt)
-  );
+  return sortMessagesChronologically([...messages.filter((candidate) => candidate.id !== message.id), message]);
+}
+
+function createAiRuntimeStatus(aiProvider: AiProvider | undefined, probe?: Partial<AiRuntimeStatus>): AiRuntimeStatus {
+  if (!aiProvider) {
+    return {
+      configured: false,
+      provider: 'fallback',
+      health: 'missing'
+    };
+  }
+
+  const cache = createAiRuntimeCacheStatus(aiProvider);
+  return {
+    configured: true,
+    provider: 'deepseek',
+    health: probe?.health ?? (cache && cache.requestCount > 0 ? 'connected' : 'unknown'),
+    agentModel: process.env.DEEPSEEK_AGENT_MODEL?.trim() || 'deepseek-v4-pro',
+    humanModel: process.env.DEEPSEEK_HUMAN_MODEL?.trim() || 'deepseek-v4-flash',
+    baseUrlHost: hostFromUrl(process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com'),
+    cache,
+    lastCheckedAt: probe?.lastCheckedAt,
+    lastError: probe?.lastError,
+    lastLatencyMs: probe?.lastLatencyMs
+  };
+}
+
+function createAiRuntimeCacheStatus(aiProvider: AiProvider | undefined): AiRuntimeStatus['cache'] {
+  const usage = getAiUsageSnapshot(aiProvider);
+  if (!usage) {
+    return undefined;
+  }
+  return {
+    requestCount: usage.requestCount,
+    promptCacheHitTokens: usage.promptCacheHitTokens,
+    promptCacheMissTokens: usage.promptCacheMissTokens,
+    promptCacheHitRate: usage.promptCacheHitRate,
+    lastUpdatedAt: usage.lastUpdatedAt,
+    routes: usage.routes?.map((route) => ({
+      role: route.role,
+      provider: route.provider,
+      requestCount: route.requestCount,
+      promptCacheHitTokens: route.promptCacheHitTokens,
+      promptCacheMissTokens: route.promptCacheMissTokens,
+      promptCacheHitRate: route.promptCacheHitRate,
+      lastUpdatedAt: route.lastUpdatedAt
+    }))
+  };
+}
+
+async function checkAiRuntimeHealth(aiProvider: AiProvider | undefined): Promise<Partial<AiRuntimeStatus>> {
+  const startedAt = Date.now();
+  const checkedAt = new Date().toISOString();
+  if (!aiProvider) {
+    return {
+      health: 'missing',
+      lastCheckedAt: checkedAt,
+      lastLatencyMs: 0
+    };
+  }
+
+  try {
+    await aiProvider.generateText({
+      actorRole: 'human_user',
+      actorId: 'health-check-human',
+      instructions: 'You are checking whether the human-simulation model is reachable. Reply only ok.',
+      input: 'Reply ok.',
+      maxOutputTokens: 8
+    });
+    await aiProvider.generateText({
+      actorRole: 'personal_agent',
+      actorId: 'health-check-agent',
+      instructions: 'You are checking whether the personal-agent model is reachable. Reply only ok.',
+      input: 'Reply ok.',
+      maxOutputTokens: 8
+    });
+    return {
+      health: 'connected',
+      lastCheckedAt: checkedAt,
+      lastLatencyMs: Date.now() - startedAt
+    };
+  } catch (error) {
+    return {
+      health: 'failed',
+      lastCheckedAt: checkedAt,
+      lastLatencyMs: Date.now() - startedAt,
+      lastError: error instanceof Error ? error.message : 'unknown AI provider error'
+    };
+  }
+}
+
+function hostFromUrl(value: string): string {
+  try {
+    return new URL(value).host;
+  } catch {
+    return value.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  }
 }
 
 async function resolveAgentActionReview(
@@ -707,36 +958,46 @@ async function resolveAgentActionReview(
     throw new Error('reviewerId is required');
   }
 
+  let nextState = state;
+  let blockedRisk: AgentActionLog['risk'] | undefined;
+  if (decision === 'confirm') {
+    const executed = await executeConfirmedAgentAction(nextState, action, matrixStore);
+    nextState = executed.state;
+    blockedRisk = executed.blockedRisk;
+  }
+
   const log = createRuntimeLog({
     agentId: action.agentId,
     roomId: action.roomId,
     action: `${decision}_action:${action.id}`,
-    status: decision === 'confirm' ? 'executed' : 'blocked',
-    risk: {
+    status: decision === 'confirm' && !blockedRisk ? 'executed' : 'blocked',
+    risk: blockedRisk ?? {
       level: decision === 'confirm' ? 'low' : 'medium',
       score: decision === 'confirm' ? 0.2 : 0.64,
       reason: `Human review by ${input.reviewerId}: ${input.reason || 'no reason provided'}`,
       model: 'human-review-v1'
     },
     contextIds: [action.id, input.reviewerId],
-    toolCalls: [`agent_action.${decision}`]
+    toolCalls: [`agent_action.${decision}`, ...confirmedActionToolCalls(action.kind, blockedRisk)]
   });
-  let nextState = {
-    ...state,
-    actionLogs: [log, ...state.actionLogs]
+  nextState = {
+    ...nextState,
+    actionLogs: [log, ...nextState.actionLogs]
   };
 
-  if (decision === 'confirm') {
-    nextState = await executeConfirmedAgentAction(nextState, action, matrixStore);
-  }
-
   const resolved =
-    decision === 'confirm'
+    decision === 'confirm' && !blockedRisk
       ? completeAgentAction(nextState, action.id, {
           logId: log.id,
           risk: log.risk,
           updatedAt: log.createdAt
         })
+      : decision === 'confirm'
+        ? blockAgentAction(nextState, action.id, {
+            logId: log.id,
+            risk: log.risk,
+            updatedAt: log.createdAt
+          })
       : rejectAgentAction(nextState, action.id, {
           logId: log.id,
           risk: log.risk,
@@ -754,9 +1015,47 @@ async function executeConfirmedAgentAction(
   state: DemoState,
   action: AgentActionRequest,
   matrixStore: MatrixStore | null
-): Promise<DemoState> {
+): Promise<{ state: DemoState; blockedRisk?: AgentActionLog['risk'] }> {
+  if (action.kind === 'coordinate') {
+    const patch = parseCalendarPatch(action.input.calendarPatch);
+    if (!patch) {
+      return { state, blockedRisk: missingPatchRisk('coordinate', 'calendarPatch') };
+    }
+    const current = state.calendar.find((item) => item.id === patch.itemId);
+    if (!current || current.startsAt !== patch.oldStartsAt) {
+      return { state, blockedRisk: stalePatchRisk('coordinate calendar patch') };
+    }
+    return {
+      state: {
+        ...state,
+        calendar: state.calendar.map((item) =>
+          item.id === patch.itemId ? { ...item, startsAt: patch.newStartsAt } : item
+        )
+      }
+    };
+  }
+
+  if (action.kind === 'task_update_suggest') {
+    const patch = parseTaskPatch(action.input.taskPatch);
+    if (!patch) {
+      return { state, blockedRisk: missingPatchRisk('task_update_suggest', 'taskPatch') };
+    }
+    const current = state.tasks.find((task) => task.id === patch.taskId);
+    if (!current || current.status !== patch.oldStatus) {
+      return { state, blockedRisk: stalePatchRisk('task status patch') };
+    }
+    return {
+      state: {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === patch.taskId ? { ...task, status: patch.newStatus } : task
+        )
+      }
+    };
+  }
+
   if (action.kind !== 'share_file') {
-    return state;
+    return { state };
   }
 
   const result = await createFileShareAction(
@@ -771,7 +1070,7 @@ async function executeConfirmedAgentAction(
   );
 
   if (result.status !== 'executed' || !result.message) {
-    return state;
+    return { state };
   }
 
   let message = result.message;
@@ -796,9 +1095,153 @@ async function executeConfirmedAgentAction(
   }
 
   return {
-    ...state,
-    messages: [...state.messages.filter((candidate) => candidate.id !== message.id), message],
-    actionLogs: [...state.actionLogs, result.log]
+    state: {
+      ...state,
+      messages: appendMessage(state.messages, message),
+      actionLogs: [...state.actionLogs, result.log]
+    }
+  };
+}
+
+function confirmedActionToolCalls(kind: AgentActionRequest['kind'], blockedRisk?: AgentActionLog['risk']): string[] {
+  if (blockedRisk) {
+    return ['agent_action.blocked'];
+  }
+  if (kind === 'coordinate') {
+    return ['calendar.update'];
+  }
+  if (kind === 'task_update_suggest') {
+    return ['task.update'];
+  }
+  if (kind === 'share_file') {
+    return ['file.share'];
+  }
+  return [];
+}
+
+function actionReviewMutationLabel(
+  action: AgentActionRequest,
+  decision: 'confirm' | 'reject'
+): string {
+  if (decision === 'reject') {
+    return '记录拒绝决定';
+  }
+  if (action.status === 'blocked') {
+    if (action.kind === 'coordinate') {
+      return '日程变更被阻止';
+    }
+    if (action.kind === 'task_update_suggest') {
+      return '任务更新被阻止';
+    }
+    if (action.kind === 'share_file') {
+      return '文件代发被阻止';
+    }
+    return '确认动作被阻止';
+  }
+  if (action.kind === 'coordinate') {
+    return '应用日程变更';
+  }
+  if (action.kind === 'task_update_suggest') {
+    return '更新任务状态';
+  }
+  if (action.kind === 'share_file') {
+    return '执行文件代发';
+  }
+  return '执行确认动作';
+}
+
+function actionReviewMutationDetail(action: AgentActionRequest): string | undefined {
+  if (action.kind === 'coordinate') {
+    const patch = parseCalendarPatch(action.input.calendarPatch);
+    return patch ? `${patch.title ?? patch.itemId}: ${patch.oldStartsAt} -> ${patch.newStartsAt}` : undefined;
+  }
+  if (action.kind === 'task_update_suggest') {
+    const patch = parseTaskPatch(action.input.taskPatch);
+    return patch ? `${patch.taskId}: ${patch.oldStatus} -> ${patch.newStatus}` : undefined;
+  }
+  if (action.kind === 'share_file') {
+    const fileName = action.input.fileName ?? action.input.requestText;
+    return typeof fileName === 'string' ? fileName : undefined;
+  }
+  return undefined;
+}
+
+function actionReviewMutationToolCalls(
+  action: AgentActionRequest,
+  log: AgentActionLog,
+  decision: 'confirm' | 'reject'
+): string[] {
+  if (decision === 'reject') {
+    return ['agent_action.reject'];
+  }
+  if (action.status === 'blocked') {
+    return ['agent_action.blocked'];
+  }
+  return confirmedActionToolCalls(action.kind).length > 0 ? confirmedActionToolCalls(action.kind) : log.toolCalls;
+}
+
+function parseCalendarPatch(value: unknown):
+  | { itemId: string; oldStartsAt: string; newStartsAt: string; title?: string }
+  | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const patch = value as Record<string, unknown>;
+  if (
+    typeof patch.itemId !== 'string' ||
+    typeof patch.oldStartsAt !== 'string' ||
+    typeof patch.newStartsAt !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    itemId: patch.itemId,
+    oldStartsAt: patch.oldStartsAt,
+    newStartsAt: patch.newStartsAt,
+    title: typeof patch.title === 'string' ? patch.title : undefined
+  };
+}
+
+function parseTaskPatch(value: unknown):
+  | { taskId: string; oldStatus: DemoState['tasks'][number]['status']; newStatus: DemoState['tasks'][number]['status'] }
+  | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const patch = value as Record<string, unknown>;
+  if (
+    typeof patch.taskId !== 'string' ||
+    !isTaskStatus(patch.oldStatus) ||
+    !isTaskStatus(patch.newStatus)
+  ) {
+    return undefined;
+  }
+  return {
+    taskId: patch.taskId,
+    oldStatus: patch.oldStatus,
+    newStatus: patch.newStatus
+  };
+}
+
+function isTaskStatus(value: unknown): value is DemoState['tasks'][number]['status'] {
+  return value === 'pending' || value === 'in_progress' || value === 'done';
+}
+
+function missingPatchRisk(kind: string, patchName: string): AgentActionLog['risk'] {
+  return {
+    level: 'high',
+    score: 0.91,
+    reason: `Cannot confirm ${kind}: missing explicit ${patchName}; no internal data was changed.`,
+    model: 'runtime-confirmation-gate-v1'
+  };
+}
+
+function stalePatchRisk(label: string): AgentActionLog['risk'] {
+  return {
+    level: 'high',
+    score: 0.88,
+    reason: `Cannot confirm ${label}: current state no longer matches the queued patch; no internal data was changed.`,
+    model: 'runtime-confirmation-gate-v1'
   };
 }
 
@@ -809,6 +1252,16 @@ class HttpError extends Error {
   ) {
     super(message);
   }
+}
+
+function statusForUnhandledError(message: string): number {
+  if (message.includes('cannot read')) {
+    return 403;
+  }
+  if (message.startsWith('unknown agent') || message.startsWith('unknown user') || message.startsWith('unknown room')) {
+    return 400;
+  }
+  return 500;
 }
 
 function parseAllowedOrigins(raw: string | undefined): string[] {
@@ -976,10 +1429,22 @@ function createAgentCoordinationMessage(state: DemoState, agentId: string, body:
 
 function createRuntimeLog(input: Omit<AgentActionLog, 'id' | 'createdAt'>): AgentActionLog {
   return {
-    id: `log-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: createRuntimeId('log'),
     createdAt: new Date().toISOString(),
     ...input
   };
+}
+
+function createAgentProgressEvent(input: Omit<AgentProgressEvent, 'id' | 'createdAt'>): AgentProgressEvent {
+  return {
+    id: createRuntimeId('progress'),
+    createdAt: new Date().toISOString(),
+    ...input
+  };
+}
+
+function createRuntimeId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function getRoomName(state: DemoState, roomId: string): string {

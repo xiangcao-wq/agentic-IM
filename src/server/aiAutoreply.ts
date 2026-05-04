@@ -1,4 +1,5 @@
-import { buildShortTermContext } from '../domain/memory';
+import { buildAgentContextBundle, buildShortTermContext } from '../domain/memory';
+import { sortMessagesChronologically } from '../domain/messages';
 import type { AgentActionLog, AiAutoreplyPolicy, AiReplyJob, DemoState, Message } from '../domain/types';
 import { buildHumanReplyInstructions, getAiActorProfile } from './aiActors';
 import type { AiProvider } from './aiProvider';
@@ -40,9 +41,12 @@ export async function runAiAutoreplies(input: RunAiAutorepliesInput): Promise<{
         actorId: policy.userId,
         instructions: buildHumanReplyInstructions(nextState, profile),
         input: [
-          '你正在模拟真实聊天：对方不在线时，你作为这个用户继续完成任务对接。直接回复当前消息，不要解释自己是 AI。',
-          `触发消息：${input.triggerMessage.senderName}：${input.triggerMessage.body}`,
-          buildShortTermContext(nextState, input.triggerMessage.roomId)
+          buildAiHumanReplyContext(nextState, profile.userId, input.triggerMessage),
+          '',
+          '## Trigger message',
+          `${input.triggerMessage.senderName}: ${input.triggerMessage.body}`,
+          '',
+          'Reply as this real user in the current chat. Continue the task handoff directly and do not explain that you are AI.'
         ].join('\n\n'),
         maxOutputTokens: 180
       });
@@ -83,6 +87,59 @@ export async function runAiAutoreplies(input: RunAiAutorepliesInput): Promise<{
   }
 
   return { state: nextState, messages, jobs };
+}
+
+export function recordSkippedAiAutoreplies(input: {
+  state: DemoState;
+  triggerMessage: Message;
+  reason: string;
+}): {
+  state: DemoState;
+  jobs: AiReplyJob[];
+} {
+  const policies = selectAutoreplyPolicies(input.state, input.triggerMessage);
+  const now = new Date().toISOString();
+  const jobs = policies.slice(0, 1).map(
+    (policy): AiReplyJob => ({
+      id: `ai-reply-job-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      roomId: input.triggerMessage.roomId,
+      targetUserId: policy.userId,
+      triggeringMessageId: input.triggerMessage.id,
+      status: 'skipped',
+      reason: input.reason,
+      createdAt: now,
+      updatedAt: now
+    })
+  );
+
+  if (jobs.length === 0) {
+    return { state: input.state, jobs };
+  }
+
+  return {
+    state: {
+      ...input.state,
+      aiReplyJobs: [...jobs, ...input.state.aiReplyJobs]
+    },
+    jobs
+  };
+}
+
+function buildAiHumanReplyContext(state: DemoState, userId: string, triggerMessage: Message): string {
+  const user = state.users.find((candidate) => candidate.id === userId);
+  if (user?.agentId) {
+    try {
+      return buildAgentContextBundle(state, {
+        roomId: triggerMessage.roomId,
+        agentId: user.agentId,
+        userText: triggerMessage.body,
+        focus: 'chat'
+      }).text;
+    } catch {
+      // Fallback keeps the reply available if an actor profile and agent permissions diverge.
+    }
+  }
+  return buildShortTermContext(state, triggerMessage.roomId);
 }
 
 function selectAutoreplyPolicies(state: DemoState, message: Message): AiAutoreplyPolicy[] {
@@ -148,7 +205,5 @@ function createAutoreplyLog(policy: AiAutoreplyPolicy, trigger: Message, reply: 
 }
 
 function appendMessage(messages: Message[], message: Message): Message[] {
-  return [...messages.filter((candidate) => candidate.id !== message.id), message].sort((a, b) =>
-    a.sentAt.localeCompare(b.sentAt)
-  );
+  return sortMessagesChronologically([...messages.filter((candidate) => candidate.id !== message.id), message]);
 }

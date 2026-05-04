@@ -114,8 +114,375 @@ describe('runtime upgrade APIs', () => {
       contentType: 'application/pdf',
       size: 708
     });
-    expect(denied.ok).toBe(false);
+    expect(denied.status).toBe(403);
     expect(await denied.text()).toContain('cannot read room-class');
+  });
+
+  it('defaults /api/agent/run to an LLM-directed chat response when intent is omitted', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        intent: 'chat',
+        plan: 'Answer directly from the structured room context.',
+        answer: 'The current team room is focused on assignment planning and file handoff.'
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'What is this room about?'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.plan).toBe('Answer directly from the structured room context.');
+    expect(response.result.reply).toContain('assignment planning');
+    expect(aiProvider.calls).toHaveLength(1);
+  });
+
+  it('uses the LLM decision intent instead of the legacy request intent', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        intent: 'summary',
+        plan: 'The user asked for a recap, so run the room summarizer.',
+        confidence: 0.93
+      }),
+      JSON.stringify({
+        headline: 'LLM selected summary result',
+        deadlines: ['2026-05-12 23:59'],
+        todos: ['Prepare the final report'],
+        sources: ['msg-01']
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'deadline',
+        userText: 'Please summarize this room instead.'
+      })
+    });
+
+    expect(response.intent).toBe('summary');
+    expect(response.plan).toBe('The user asked for a recap, so run the room summarizer.');
+    expect(response.result.headline).toBe('LLM selected summary result');
+    expect(aiProvider.calls).toHaveLength(2);
+  });
+
+  it('answers deadline variants with contextual LLM responses', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({ intent: 'deadline', plan: 'Check task deadlines for a casual Chinese phrasing.' }),
+      JSON.stringify({ answer: '要在 5月12日 23:59 前提交。', sources: ['msg-02'] }),
+      JSON.stringify({ intent: 'deadline', plan: 'Map the English deadline wording to the assignment due date.' }),
+      JSON.stringify({ answer: 'The deadline is May 12 at 23:59.', sources: ['msg-02'] }),
+      JSON.stringify({ intent: 'deadline', plan: 'Compare the due date with the current context and answer remaining time.' }),
+      JSON.stringify({ answer: '距离截止还有大约 8 天，需要优先完成报告和演示稿。', sources: ['msg-02', 'task-report'] })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const casual = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'deadline',
+        userText: '什么时候交？'
+      })
+    });
+    const english = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'deadline',
+        userText: 'deadline 是？'
+      })
+    });
+    const remaining = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'deadline',
+        userText: '还有几天？'
+      })
+    });
+
+    expect(casual.result.answer).toContain('5月12日 23:59');
+    expect(english.result.answer).toContain('May 12');
+    expect(remaining.result.answer).toContain('大约 8 天');
+    expect(casual.plan).toContain('casual Chinese');
+    expect(english.plan).toContain('English deadline');
+    expect(remaining.plan).toContain('remaining time');
+    expect(aiProvider.calls).toHaveLength(6);
+  });
+
+  it('computes remaining days in fallback deadline answers', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '这次作业还有几天截止？'
+      })
+    });
+
+    expect(response.intent).toBe('deadline');
+    expect(response.result.answer).toContain('还有大约');
+    expect(response.result.answer).toContain('5月12日 23:59');
+  });
+
+  it('uses the LLM file-share assessment to pick a file and risk level', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createStateWithShareablePlan(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        intent: 'share_file',
+        plan: 'Match the request to the latest authorized action plan and evaluate sharing risk.'
+      }),
+      JSON.stringify({
+        matchedFileId: 'file-plan-latest',
+        risk: {
+          level: 'low',
+          score: 0.16,
+          reason: 'The requester is in the room and the file is explicitly shareable.'
+        },
+        reasoning: 'The action-plan wording matches the PDF title and tags.'
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'share_file',
+        userText: 'please send the latest action plan',
+        targetUserId: 'user-chen'
+      })
+    });
+
+    expect(response.intent).toBe('share_file');
+    expect(response.plan).toContain('latest authorized action plan');
+    expect(response.result.file.id).toBe('file-plan-latest');
+    expect(response.result.risk).toMatchObject({
+      level: 'low',
+      score: 0.16,
+      model: 'llm-driven'
+    });
+    expect(response.result.status).toBe('executed');
+  });
+
+  it('finds latest slides from mixed-language queries without duplicate display rows', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    const latestSlides = state.files.find((file) => file.id === 'file-slides-v3');
+    expect(latestSlides).toBeTruthy();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: latestSlides
+            ? [
+                {
+                  id: 'file-plan-decoy',
+                  name: 'decoy action plan.pdf',
+                  uploaderId: 'user-lin',
+                  version: 20,
+                  roomId: 'room-team',
+                  updatedAt: '2026-05-04T11:00:00.000Z',
+                  visibility: 'room',
+                  agentCanShare: true,
+                  tags: ['plan', 'pdf', 'slides'],
+                  summary: 'Action plan PDF that is related but is not the slide deck.',
+                  mxcUri: 'mxc://localhost/decoy-plan',
+                  contentType: 'application/pdf',
+                  size: 512
+                },
+                {
+                  ...latestSlides,
+                  id: 'file-slides-v3-older-copy',
+                  version: 2,
+                  updatedAt: '2026-05-03T10:00:00.000Z'
+                },
+                ...state.files
+              ]
+            : state.files
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'find_file',
+        userText: 'latest slides'
+      })
+    });
+
+    expect(response.files[0].id).toBe('file-slides-v3');
+    expect(response.files.map((file: { id: string }) => file.id)).toContain('file-slides-v3');
+    expect(new Set(response.files.map((file: { name: string }) => file.name)).size).toBe(response.files.length);
+  });
+
+  it('surfaces metadata-only shareable files instead of saying no file was found', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'share_file',
+        userText: '把最新演示稿发给陈晨',
+        targetUserId: 'user-chen'
+      })
+    });
+
+    expect(response.result.status).toBe('needs_confirmation');
+    expect(response.result.file.id).toBe('file-slides-v3');
+    expect(response.result.risk.reason).not.toContain('无法确认');
+  });
+
+  it('keeps responsibility questions as chat even when they mention materials', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '现在谁在负责访谈材料？'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('陈晨');
+    expect(response.log.toolCalls).toContain('fallback.local_context');
+  });
+
+  it('guards LLM coordinate decisions for plain responsibility and priority questions', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        intent: 'coordinate',
+        plan: 'The model over-classified this as coordination because it mentioned today priorities.',
+        targetUserId: 'user-chen'
+      }),
+      '陈晨负责访谈材料；你今天先确认她补的食堂预约段，再准备周二 20:30 合稿检查。'
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '这个群现在谁负责访谈材料？我今天应该先做什么？'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('陈晨负责访谈材料');
+    expect(response.log.toolCalls).not.toContain('agent_to_agent.negotiate');
+    expect(aiProvider.calls).toHaveLength(2);
+  });
+
+  it('falls back when the LLM provider fails', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createFailingAiProvider()
+    });
+    servers.push(app);
+
+    const deadline = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'deadline',
+        userText: 'deadline?'
+      })
+    });
+    const chat = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'who can you act for?'
+      })
+    });
+
+    expect(deadline.intent).toBe('deadline');
+    expect(deadline.result.answer).toContain('5月12日 23:59');
+    expect(deadline.plan).toBeTruthy();
+    expect(chat.intent).toBe('chat');
+    expect(chat.result.reply).toContain('林雯');
+    expect(chat.result.reply).not.toContain('当前 AI 服务不可用');
+    expect(chat.log.toolCalls).toContain('fallback.local_context');
+    expect(chat.requiresHuman).toBe(false);
   });
 
   it('generates openable demo assets and uploads them to Matrix media', async () => {
@@ -148,7 +515,7 @@ describe('runtime upgrade APIs', () => {
     expect(generated.files.every((file: { mxcUri?: string }) => file.mxcUri?.startsWith('mxc://localhost/'))).toBe(true);
   });
 
-  it('writes unified Agent coordination into the Matrix agent room', async () => {
+  it('queues unified Agent coordination instead of writing high-risk changes directly', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
@@ -177,15 +544,21 @@ describe('runtime upgrade APIs', () => {
     });
     const state = await requestJson(`${app.url}/api/state`);
 
-    expect(coordination.message).toMatchObject({
-      roomId: 'room-agent',
-      agentLabel: '林雯的 Agent 协调',
-      sourceAgentId: 'agent-lin'
-    });
+    expect(coordination.message).toBeUndefined();
     expect(state.messages.some((message: { id: string; roomId: string; agentLabel?: string }) =>
       message.id.startsWith('$') &&
       message.roomId === 'room-agent' &&
       message.agentLabel === '林雯的 Agent 协调'
+    )).toBe(false);
+    expect(coordination.actionRequest).toMatchObject({
+      kind: 'coordinate',
+      status: 'needs_confirmation',
+      requiresHuman: true
+    });
+    expect(state.actionRequests.some((request: { id: string; kind: string; status: string }) =>
+      request.id === coordination.actionRequest.id &&
+      request.kind === 'coordinate' &&
+      request.status === 'needs_confirmation'
     )).toBe(true);
   });
 
@@ -273,6 +646,28 @@ function createFakeAiProvider(text: string): AiProvider & { calls: Array<Record<
     async generateText(prompt) {
       calls.push(prompt as unknown as Record<string, unknown>);
       return text;
+    }
+  };
+}
+
+function createSequenceAiProvider(texts: string[]): AiProvider & { calls: Array<Record<string, unknown>> } {
+  const calls: Array<Record<string, unknown>> = [];
+  let index = 0;
+  return {
+    calls,
+    async generateText(prompt) {
+      calls.push(prompt as unknown as Record<string, unknown>);
+      const next = texts[index] ?? texts[texts.length - 1];
+      index += 1;
+      return next;
+    }
+  };
+}
+
+function createFailingAiProvider(): AiProvider {
+  return {
+    async generateText() {
+      throw new Error('LLM unavailable');
     }
   };
 }

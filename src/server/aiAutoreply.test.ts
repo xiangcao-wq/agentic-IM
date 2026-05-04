@@ -1,0 +1,83 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import { createDemoState } from '../domain/demoState';
+import type { Message } from '../domain/types';
+import { runAiAutoreplies } from './aiAutoreply';
+import type { AiProvider } from './aiProvider';
+
+describe('AI autoreply context', () => {
+  it('builds simulated human replies from structured context including authorized text file chunks', async () => {
+    const state = createDemoState();
+    state.files.unshift({
+      id: 'file-interview-notes',
+      name: 'interview-notes.txt',
+      uploaderId: 'user-lin',
+      version: 1,
+      roomId: 'room-team',
+      updatedAt: '2026-05-04T12:00:00+08:00',
+      visibility: 'room',
+      agentCanShare: true,
+      tags: ['访谈', '引用'],
+      summary: '访谈材料补充记录。',
+      mxcUri: 'mxc://demo/interview-notes',
+      contentType: 'text/plain',
+      size: 96
+    });
+    state.fileTextChunks.unshift({
+      id: 'file-interview-notes-chunk-0',
+      fileId: 'file-interview-notes',
+      roomId: 'room-team',
+      uploaderId: 'user-lin',
+      index: 0,
+      text: '引用一致性需要陈晨核对，行动计划和访谈纪要要对齐。',
+      createdAt: '2026-05-04T12:00:00+08:00'
+    });
+    const triggerMessage: Message = {
+      id: 'msg-user-asks-chen',
+      roomId: 'room-team',
+      senderId: 'user-lin',
+      senderName: '林雯',
+      body: '@陈晨 你看一下引用一致性在哪里需要核对。',
+      sentAt: '2026-05-04T13:00:00+08:00',
+      type: 'text'
+    };
+    const aiProvider = createRecordingProvider('我会核对引用一致性。');
+
+    await runAiAutoreplies({
+      state,
+      triggerMessage,
+      aiProvider,
+      async sendMessage(_sendState, input) {
+        return {
+          id: 'msg-ai-chen',
+          roomId: input.roomId,
+          senderId: input.senderId,
+          senderName: '陈晨',
+          body: input.body,
+          sentAt: '2026-05-04T13:01:00+08:00',
+          type: 'text'
+        };
+      }
+    });
+
+    expect(aiProvider.calls).toHaveLength(1);
+    expect(aiProvider.calls[0].input).toContain('## File text excerpts');
+    expect(aiProvider.calls[0].input).toContain('interview-notes.txt');
+    expect(aiProvider.calls[0].input.indexOf('# Authorized Agent Context')).toBeGreaterThanOrEqual(0);
+    expect(aiProvider.calls[0].input.indexOf('## Trigger message')).toBeGreaterThan(
+      aiProvider.calls[0].input.indexOf('# Authorized Agent Context')
+    );
+    expect(aiProvider.calls[0].input).toContain('引用一致性需要陈晨核对');
+  });
+});
+
+function createRecordingProvider(text: string): AiProvider & { calls: Array<Record<string, string>> } {
+  const calls: Array<Record<string, string>> = [];
+  return {
+    calls,
+    async generateText(prompt) {
+      calls.push(prompt as unknown as Record<string, string>);
+      return text;
+    }
+  };
+}

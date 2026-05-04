@@ -2,6 +2,7 @@ import { runFileShareAction } from './agentRuntime';
 import { buildActorInstructions, demoActors, type DemoActorId } from './aiDemoActors';
 import type { AiProvider } from './aiProvider';
 import { createDemoAssets, type DemoAsset } from './demoAssets';
+import { extractTextChunks } from './fileTextIndex';
 import type { AgentActionLog, DemoState, FileItem, Message } from '../domain/types';
 
 interface SendOptions {
@@ -154,9 +155,11 @@ async function uploadScenarioAssets(
       }
     );
     messages.push(message);
+    const chunks = extractTextChunks(file, asset.bytes);
     nextState = {
       ...nextState,
       files: [file, ...nextState.files],
+      fileTextChunks: [...chunks, ...(nextState.fileTextChunks ?? [])],
       actionLogs: [
         createAssetUploadLog({
           file,
@@ -231,13 +234,14 @@ function buildTurnPrompt(state: DemoState, goal: string): string {
   const tasks = state.tasks.map((task) => `${task.title} - ${task.deadline} - ${task.status}`).join('\n');
 
   return [
-    `目标：${goal}`,
-    '',
     '当前小组文件：',
     files,
     '',
     '当前任务：',
     tasks,
+    '',
+    '## Current Turn Goal',
+    goal,
     '',
     '请生成一条自然、具体、可推进任务的聊天消息。'
   ].join('\n');

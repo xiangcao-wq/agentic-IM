@@ -120,6 +120,142 @@ describe('agent confirmation queue API', () => {
       status: 'executed'
     });
   });
+
+  it('updates calendar data only after confirming a queued coordination action', async () => {
+    const app = await startTestServer();
+
+    const planned = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'Move the final review to Wednesday 23:00 and coordinate with Chen.'
+      })
+    });
+    const beforeConfirm = await requestJson(`${app.url}/api/state`);
+
+    expect(planned.actionRequest).toMatchObject({
+      kind: 'coordinate',
+      status: 'needs_confirmation'
+    });
+    expect(planned.actionRequest.input.calendarPatch).toMatchObject({
+      itemId: 'cal-review',
+      oldStartsAt: '2026-05-05T20:30:00+08:00',
+      newStartsAt: '2026-05-06T23:00:00+08:00'
+    });
+    expect(beforeConfirm.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-05T20:30:00+08:00'
+    );
+
+    const confirmed = await requestJson(`${app.url}/api/agent/actions/${planned.actionRequest.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Human approved the new review time'
+      })
+    });
+    const afterConfirm = await requestJson(`${app.url}/api/state`);
+
+    expect(confirmed.action).toMatchObject({
+      status: 'executed',
+      requiresHuman: false
+    });
+    expect(afterConfirm.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-06T23:00:00+08:00'
+    );
+  });
+
+  it('updates task status only after confirming a queued task update suggestion', async () => {
+    const base = createDemoState();
+    const app = await startTestServer({
+      ...base,
+      tasks: [
+        {
+          id: 'task-interview',
+          title: '访谈材料',
+          deadline: '5月12日 23:59',
+          owners: ['陈晨'],
+          status: 'pending',
+          sourceMessageId: 'msg-05'
+        },
+        ...base.tasks
+      ]
+    });
+
+    const planned = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '建议把访谈材料任务标记为进行中'
+      })
+    });
+    const beforeConfirm = await requestJson(`${app.url}/api/state`);
+
+    expect(planned.actionRequest.input.taskPatch).toMatchObject({
+      taskId: 'task-interview',
+      oldStatus: 'pending',
+      newStatus: 'in_progress'
+    });
+    expect(beforeConfirm.tasks.find((task: { id: string }) => task.id === 'task-interview').status).toBe('pending');
+
+    await requestJson(`${app.url}/api/agent/actions/${planned.actionRequest.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Human approved status change'
+      })
+    });
+    const afterConfirm = await requestJson(`${app.url}/api/state`);
+
+    expect(afterConfirm.tasks.find((task: { id: string }) => task.id === 'task-interview').status).toBe('in_progress');
+  });
+
+  it('blocks confirmation instead of mutating state when a queued action has no explicit patch', async () => {
+    const base = createDemoState();
+    const app = await startTestServer({
+      ...base,
+      actionRequests: [
+        {
+          id: 'action-no-patch',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          kind: 'coordinate',
+          status: 'needs_confirmation',
+          input: {
+            proposal: 'Move something sometime'
+          },
+          risk: {
+            level: 'high',
+            score: 0.9,
+            reason: 'Missing explicit patch',
+            model: 'test'
+          },
+          createdAt: '2026-05-04T08:00:00.000Z',
+          updatedAt: '2026-05-04T08:00:00.000Z',
+          requiresHuman: true
+        }
+      ]
+    });
+
+    const confirmed = await requestJson(`${app.url}/api/agent/actions/action-no-patch/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Try to confirm without a patch'
+      })
+    });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(confirmed.action).toMatchObject({
+      id: 'action-no-patch',
+      status: 'blocked',
+      requiresHuman: true
+    });
+    expect(state.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-05T20:30:00+08:00'
+    );
+  });
 });
 
 async function startTestServer(initialState?: DemoState) {
