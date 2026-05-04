@@ -93,6 +93,7 @@ export interface FileItem {
   tags: string[];
   summary: string;
   mxcUri?: string;
+  localPath?: string;
   contentType?: string;
   size?: number;
   matrixEventId?: string;

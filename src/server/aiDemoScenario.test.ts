@@ -58,7 +58,7 @@ describe('AI demo scenario', () => {
       now: '2026-05-04T08:30:00.000Z'
     });
 
-    expect(result.state.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(3);
+    expect(result.state.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(6);
     expect(sentMessages.some((message) => message.agentLabel === '林雯的 Agent 代发')).toBe(true);
     expect(sentMessages.some((message) => message.agentLabel === '陈晨的 Agent 协调')).toBe(true);
     expect(result.state.actionRequests.some((request) => request.kind === 'share_file')).toBe(true);

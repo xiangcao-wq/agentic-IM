@@ -279,16 +279,16 @@ export async function createFileShareAction(
     };
 
     const canExecuteShare =
-      Boolean(file?.mxcUri) &&
+      hasDownloadableBacking(file) &&
       Boolean(file?.agentCanShare) &&
       (risk.level === 'low' || options.forceExecute);
     const status = file && canExecuteShare ? 'executed' : 'needs_confirmation';
-    const gatedRisk: RiskAssessment = file && !file.mxcUri
+    const gatedRisk: RiskAssessment = file && !hasDownloadableBacking(file)
       ? {
           ...risk,
           level: risk.level === 'high' ? 'high' : 'medium',
           score: Math.max(risk.score, 0.55),
-          reason: `${risk.reason} 文件只有元数据，没有 Matrix media backing，不能自动代发。`
+          reason: `${risk.reason} 文件只有元数据，没有 Matrix 或本地可下载文件备份，不能自动代发。`
         }
       : risk;
     const message =
@@ -548,7 +548,7 @@ function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined
     };
   }
 
-  if (!file.mxcUri || !file.contentType || !file.size) {
+  if (!hasDownloadableBacking(file) || !file.contentType || !file.size) {
     return {
       level: 'medium',
       score: 0.58,
@@ -640,6 +640,10 @@ function createAgentFileMessage(input: {
     contentType: input.file.contentType,
     size: input.file.size
   };
+}
+
+function hasDownloadableBacking(file: FileItem | undefined): boolean {
+  return Boolean(file?.mxcUri || file?.localPath);
 }
 
 function createActionLog(input: Omit<AgentActionLog, 'id' | 'createdAt'>): AgentActionLog {

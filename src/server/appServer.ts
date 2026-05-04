@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, join, resolve } from 'node:path';
 import { blockAgentAction, completeAgentAction, rejectAgentAction } from '../domain/actionQueue';
 import {
   answerDeadlineQuestion,
@@ -41,6 +43,7 @@ interface ServerOptions {
   apiToken?: string | null;
   allowedOrigins?: string[];
   maxUploadBytes?: number;
+  mediaDir?: string;
   webSearchProvider?: WebSearchProvider | null;
 }
 
@@ -84,6 +87,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(process.env.AGENT_IM_ALLOWED_ORIGINS);
   const maxUploadBytes =
     options.maxUploadBytes ?? Number(process.env.AGENT_IM_MAX_UPLOAD_BYTES ?? defaultMaxUploadBytes);
+  const mediaDir = options.mediaDir ?? process.env.AGENT_IM_MEDIA_DIR ?? join(process.cwd(), 'data', 'media');
   const eventClients = new Set<EventClient>();
   let aiStatusProbe: Partial<AiRuntimeStatus> | undefined;
 
@@ -235,13 +239,20 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         if (!file) {
           return sendJson(response, { error: 'file not found' }, 404);
         }
-        if (!matrixStore || !file.mxcUri) {
-          return sendJson(response, { error: 'Matrix media is not available for this file' }, 404);
+        if (matrixStore && file.mxcUri) {
+          const media = await matrixStore.downloadMedia(file.mxcUri, file.name);
+          return sendBytes(response, media.bytes, {
+            contentType: media.contentType || file.contentType || 'application/octet-stream',
+            filename: file.name
+          });
+        }
+        if (!file.localPath) {
+          return sendJson(response, { error: 'media is not available for this file' }, 404);
         }
 
-        const media = await matrixStore.downloadMedia(file.mxcUri, file.name);
+        const media = await readLocalMediaFile(mediaDir, file.localPath);
         return sendBytes(response, media.bytes, {
-          contentType: media.contentType || file.contentType || 'application/octet-stream',
+          contentType: file.contentType || 'application/octet-stream',
           filename: file.name
         });
       }
@@ -403,6 +414,8 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           );
           file = { ...file, matrixEventId: message.id };
         } else {
+          const localPath = await writeLocalMediaFile(mediaDir, file.id, file.name, bytes);
+          file = { ...file, localPath, size: bytes.byteLength };
           message = createFileUploadMessage(state, file);
         }
 
@@ -436,7 +449,8 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const generated = await generateDemoAssetsForRoom(baseState, state, {
           roomId: body.roomId,
           senderId: body.senderId,
-          matrixStore
+          matrixStore,
+          mediaDir
         });
         await db.write(generated.state);
         await publishRuntimeState();
@@ -737,7 +751,7 @@ function createFileUploadLog(
     contextIds,
     toolCalls: [
       'file_library.create',
-      ...(usedMatrix ? ['matrix.media.upload', 'matrix.send_event'] : ['local.message.create'])
+      ...(usedMatrix ? ['matrix.media.upload', 'matrix.send_event'] : ['local.media.write', 'local.message.create'])
     ]
   });
 }
@@ -745,7 +759,7 @@ function createFileUploadLog(
 async function generateDemoAssetsForRoom(
   baseState: DemoState,
   runtimeState: DemoState,
-  input: { roomId: string; senderId: string; matrixStore: MatrixStore | null }
+  input: { roomId: string; senderId: string; matrixStore: MatrixStore | null; mediaDir: string }
 ): Promise<{ state: DemoState; files: FileItem[]; messages: Message[] }> {
   let nextState = baseState;
   const files: FileItem[] = [];
@@ -779,6 +793,8 @@ async function generateDemoAssetsForRoom(
       );
       file = { ...file, matrixEventId: message.id };
     } else {
+      const localPath = await writeLocalMediaFile(input.mediaDir, file.id, file.name, asset.bytes);
+      file = { ...file, localPath, size: asset.bytes.byteLength };
       message = createFileUploadMessage(runtimeState, file);
     }
 
@@ -845,6 +861,40 @@ function appendMessage(messages: Message[], message: Message | undefined): Messa
     return messages;
   }
   return sortMessagesChronologically([...messages.filter((candidate) => candidate.id !== message.id), message]);
+}
+
+async function writeLocalMediaFile(
+  mediaDir: string,
+  fileId: string,
+  filename: string,
+  bytes: Uint8Array
+): Promise<string> {
+  await mkdir(mediaDir, { recursive: true });
+  const relativePath = `${safePathSegment(fileId)}-${safePathSegment(filename)}`;
+  const targetPath = resolveMediaPath(mediaDir, relativePath);
+  await writeFile(targetPath, bytes);
+  return relativePath;
+}
+
+async function readLocalMediaFile(mediaDir: string, localPath: string): Promise<{ bytes: Uint8Array }> {
+  const targetPath = resolveMediaPath(mediaDir, localPath);
+  return { bytes: await readFile(targetPath) };
+}
+
+function resolveMediaPath(mediaDir: string, relativePath: string): string {
+  const root = resolve(mediaDir);
+  const target = resolve(root, basename(relativePath));
+  if (target !== root && !target.startsWith(`${root}\\`) && !target.startsWith(`${root}/`)) {
+    throw new HttpError(400, 'invalid media path');
+  }
+  return target;
+}
+
+function safePathSegment(value: string): string {
+  return basename(value)
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120) || 'file';
 }
 
 function createAiRuntimeStatus(aiProvider: AiProvider | undefined, probe?: Partial<AiRuntimeStatus>): AiRuntimeStatus {
@@ -1318,10 +1368,11 @@ const uploadPolicy = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'image/jpeg',
     'image/png',
+    'image/svg+xml',
     'text/markdown',
     'text/plain'
   ]),
-  allowedExtensions: new Set(['.docx', '.jpeg', '.jpg', '.json', '.md', '.pdf', '.png', '.pptx', '.txt', '.xlsx'])
+  allowedExtensions: new Set(['.docx', '.jpeg', '.jpg', '.json', '.md', '.pdf', '.png', '.pptx', '.svg', '.txt', '.xlsx'])
 };
 
 function validateFileUpload(

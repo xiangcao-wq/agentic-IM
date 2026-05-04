@@ -106,6 +106,7 @@ Optional variables:
 - `VITE_AGENT_API_TOKEN`: frontend token value used when `AGENT_IM_API_TOKEN` is enabled.
 - `AGENT_IM_ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS; defaults to local Vite origins.
 - `AGENT_IM_MAX_UPLOAD_BYTES`: upload size limit; defaults to 10 MB.
+- `AGENT_IM_MEDIA_DIR`: local media fallback directory; defaults to `data/media` when Matrix media is not configured.
 
 ## Infra Plan
 

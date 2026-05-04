@@ -505,12 +505,16 @@ describe('runtime upgrade APIs', () => {
       })
     });
 
-    expect(generated.files).toHaveLength(4);
+    expect(generated.files).toHaveLength(8);
     expect(generated.files.map((file: { contentType: string }) => file.contentType)).toEqual([
       'text/plain; charset=utf-8',
-      'text/markdown; charset=utf-8',
+      'text/plain; charset=utf-8',
       'application/pdf',
-      'image/png'
+      'application/pdf',
+      'image/svg+xml',
+      'image/svg+xml',
+      'text/markdown; charset=utf-8',
+      'text/plain; charset=utf-8'
     ]);
     expect(generated.files.every((file: { mxcUri?: string }) => file.mxcUri?.startsWith('mxc://localhost/'))).toBe(true);
   });

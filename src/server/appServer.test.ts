@@ -207,11 +207,11 @@ describe('real local agent IM server', () => {
     });
   });
 
-  it('uploads a file through the API and persists Matrix media metadata when Matrix mode is disabled', async () => {
+  it('uploads a file through the API and stores local downloadable media when Matrix mode is disabled', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
-    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, mediaDir: join(dir, 'media') });
     servers.push(app);
 
     const file = await fetch(`${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`, {
@@ -235,6 +235,12 @@ describe('real local agent IM server', () => {
       size: 33
     });
     expect(file.mxcUri).toBeUndefined();
+    expect(file.localPath).toContain(file.id);
+
+    const download = await fetch(`${app.url}/api/files/${file.id}/download`);
+    expect(download.ok).toBe(true);
+    expect(download.headers.get('content-type')).toContain('text/plain');
+    expect(await download.text()).toBe('访谈对象：校园服务中心');
 
     const state = await requestJson(`${app.url}/api/state`);
     expect(state.files.some((item: { id: string }) => item.id === file.id)).toBe(true);
@@ -249,11 +255,37 @@ describe('real local agent IM server', () => {
     ).toBe(true);
   });
 
+  it('generates local demo assets that can be downloaded without Matrix', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, mediaDir: join(dir, 'media') });
+    servers.push(app);
+
+    const generated = await requestJson(`${app.url}/api/demo/assets/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin'
+      })
+    });
+
+    expect(generated.files).toHaveLength(8);
+    expect(generated.files.every((file: { localPath?: string; mxcUri?: string }) => file.localPath && !file.mxcUri)).toBe(true);
+
+    const poster = generated.files.find((file: { name: string; id: string }) => file.name.endsWith('.svg'));
+    expect(poster?.id).toBeTruthy();
+    const posterResponse = await fetch(`${app.url}/api/files/${poster!.id}/download`);
+    expect(posterResponse.ok).toBe(true);
+    expect(posterResponse.headers.get('content-type')).toContain('image/svg+xml');
+    expect(await posterResponse.text()).toContain('<svg');
+  });
+
   it('indexes uploaded text files but skips binary document uploads', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
-    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, mediaDir: join(dir, 'media') });
     servers.push(app);
 
     const textFile = await fetch(`${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`, {

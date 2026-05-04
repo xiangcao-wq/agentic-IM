@@ -697,16 +697,17 @@ function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] })
       <div className="detail-list">
         {props.files.length > 0 ? props.files.map((file) => {
           const uploader = props.users.find((user) => user.id === file.uploaderId);
+          const downloadable = isDownloadableFile(file);
           return (
             <div className="detail-row" key={file.id}>
               <FileText size={16} />
               <div>
                 <strong>{file.name}</strong>
                 <span>
-                  {uploader?.name ?? file.uploaderId} · {formatTime(file.updatedAt)} · {file.mxcUri ? '可下载' : '仅元数据'}
+                  {uploader?.name ?? file.uploaderId} · {formatTime(file.updatedAt)} · {downloadable ? '可下载' : '仅元数据'}
                 </span>
               </div>
-              {file.mxcUri ? (
+              {downloadable ? (
                 <a href={fileDownloadUrl(apiBaseUrl, file.id)} download={file.name} aria-label={`download ${file.name}`}>
                   <Download size={15} />
                 </a>
@@ -854,7 +855,7 @@ function StatusPill({ status }: { status: TaskItem['status'] }) {
 
 function FileAttachment(props: { file?: FileItem; fallbackName: string }) {
   const label = props.file?.name ?? props.fallbackName;
-  if (props.file?.mxcUri) {
+  if (isDownloadableFile(props.file)) {
     return (
       <a className="file-chip" href={fileDownloadUrl(apiBaseUrl, props.file.id)} download={props.file.name}>
         <FileText size={16} />
@@ -865,11 +866,15 @@ function FileAttachment(props: { file?: FileItem; fallbackName: string }) {
   }
 
   return (
-    <div className="file-chip is-unavailable" title="文件没有 Matrix media backing，暂不能下载">
+    <div className="file-chip is-unavailable" title="文件没有可下载的 Matrix 或本地媒体备份，暂不能下载">
       <FileText size={16} />
       <span>{label}</span>
     </div>
   );
+}
+
+function isDownloadableFile(file: FileItem | undefined): file is FileItem {
+  return Boolean(file?.mxcUri || file?.localPath);
 }
 
 function AgentWorkbench(props: {

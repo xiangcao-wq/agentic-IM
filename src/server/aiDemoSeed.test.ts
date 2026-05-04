@@ -97,9 +97,9 @@ describe('AI demo seed runner', () => {
     expect(calls).toContain('init');
     expect(calls).toContain('write');
     expect(summary.matrixEvents).toBeGreaterThanOrEqual(6);
-    expect(summary.generatedFiles).toBe(3);
+    expect(summary.generatedFiles).toBe(6);
     expect(summary.agentActionRequests).toBeGreaterThanOrEqual(1);
-    expect(writtenState?.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(3);
+    expect(writtenState?.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(6);
     expect(writtenState?.actionLogs.some((log) => log.toolCalls.includes('ai_provider.generate_text'))).toBe(true);
     expect(sentMessages.some((message) => message.agentLabel === '陈晨的 Agent 协调')).toBe(true);
   });

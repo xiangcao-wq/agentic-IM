@@ -361,7 +361,7 @@ function toContextFile(state: DemoState, file: DemoState['files'][number]): Agen
     updatedAt: file.updatedAt,
     visibility: file.visibility,
     agentCanShare: file.agentCanShare,
-    downloadable: Boolean(file.mxcUri),
+    downloadable: Boolean(file.mxcUri || file.localPath),
     tags: file.tags,
     summary: file.summary,
     contentType: file.contentType,
