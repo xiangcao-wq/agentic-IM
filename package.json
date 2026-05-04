@@ -1,0 +1,37 @@
+{
+  "name": "personal-agent-im-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "api": "tsx src/server/start.ts",
+    "matrix:up": "docker compose -f docker-compose.matrix.yml up -d synapse && npm run matrix:bootstrap",
+    "matrix:bootstrap": "tsx src/server/matrixBootstrap.ts",
+    "ai:seed": "tsx src/server/aiDemoSeed.ts",
+    "infra:up": "npm run matrix:up",
+    "infra:reset": "tsx scripts/reset-demo.mjs",
+    "infra:smoke": "node scripts/smoke.mjs",
+    "dev": "vite --host 127.0.0.1 --port 5175",
+    "dev:full": "node scripts/dev-full.mjs",
+    "build": "tsc --noEmit && vite build",
+    "smoke:browser": "node scripts/browser-smoke.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "lucide-react": "^0.554.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^27.2.0",
+    "playwright": "^1.59.1",
+    "tsx": "^4.21.0",
+    "vitest": "^4.0.13"
+  }
+}

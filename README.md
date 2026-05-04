@@ -1,0 +1,129 @@
+# Agent IM Demo
+
+一个真实本地可跑通的个人 Agent 融合即时通信 demo。前端不再直接使用内存假状态，聊天、Agent 操作和审计记录都通过本地 API 写入 `data/agent-im-db.json`。
+
+## Run
+
+```bash
+npm install
+npm run dev:full
+```
+
+默认地址：
+
+- Frontend: `http://127.0.0.1:5175`
+- API: `http://127.0.0.1:8791`
+- Persistent DB: `data/agent-im-db.json`
+
+也可以分开启动：
+
+```bash
+npm run api
+npm run dev
+```
+
+## Verified Flow
+
+1. 发送一条真实用户消息，后端写入 `messages`。
+2. 点击“问截止”，Agent 从服务端状态读取班级群和文件上下文，生成回答和审计记录。
+3. 点击“离线代发”，Agent 评估低风险后创建一条带有“林雯的 Agent 代发”标识的文件消息。
+4. 点击“Agent 协调”，Agent 识别多人日程变更为高风险，生成需要人工确认的协调建议。
+
+## Quality Gates
+
+```bash
+npm run test
+npm run build
+npm run infra:smoke
+```
+
+当前测试覆盖：
+
+- 核心个人 Agent 行为
+- 本地 API 持久化集成流程
+- 前端 API 客户端请求路径
+- Agent 待确认动作前端审核
+- Matrix 显式同步和媒体下载
+
+## Operations
+
+Reset local product state back to the clean demo seed:
+
+```bash
+npm run infra:reset
+```
+
+Run a smoke check against running API and web servers:
+
+```bash
+npm run dev:full
+npm run infra:smoke
+```
+
+`/api/state` no longer pulls Matrix room history on every read. Matrix events enter the product state only when `POST /api/matrix/sync-once` is called from the UI or smoke script, which keeps old 联调消息 from polluting a clean demo after `npm run infra:reset`.
+
+## Current Boundary
+
+Matrix mode:
+
+```bash
+npm run matrix:up
+npm run dev:full
+```
+
+When `data/matrix-bootstrap.json` exists, the API writes chat messages through the local Synapse homeserver, persists the returned Matrix event ids in the local DB, and keeps files, tasks, calendar, Agent actions, and audit logs in the local persistent DB. Historical Matrix events are imported only by explicit sync.
+
+The Synapse container listens on `http://127.0.0.1:8008`. Demo Matrix users are `lin`, `chen`, `zhao`, and `teacher` with the local development password `demo-pass`.
+
+Real AI demo seed:
+
+```bash
+$env:DEEPSEEK_API_KEY = "sk-..."
+npm run matrix:up
+npm run ai:seed
+npm run dev:full
+```
+
+`npm run ai:seed` routes real model calls by actor type through `src/server/aiProvider.ts`; it has no mock fallback. Human-like AI users use DeepSeek Flash, while personal Agents use DeepSeek Pro. If the DeepSeek key is missing or either route fails the preflight request, the command exits before reading the state file or touching Matrix. The seed flow creates real openable demo assets, uploads them to the Matrix media repository, asks AI actors to generate human and Agent conversation turns, runs the Agent file-share tool, and persists files, action requests, and audit logs back to `data/agent-im-db.json`.
+
+Model routing:
+
+- Human AI actors: `DEEPSEEK_HUMAN_MODEL`, defaults to `deepseek-v4-flash`.
+- Personal Agents: `DEEPSEEK_AGENT_MODEL`, defaults to `deepseek-v4-pro`.
+- DeepSeek API base: `DEEPSEEK_BASE_URL`, defaults to `https://api.deepseek.com`.
+- Both routes use `DEEPSEEK_API_KEY`.
+
+Optional variables:
+
+- `AGENT_IM_DB_PATH`: override for the JSON state file.
+- `MATRIX_BOOTSTRAP_PATH`: override for Matrix bootstrap credentials.
+- `AGENT_IM_API_TOKEN`: require `x-agent-im-token` or `Authorization: Bearer ...` on state-changing API requests.
+- `VITE_AGENT_API_TOKEN`: frontend token value used when `AGENT_IM_API_TOKEN` is enabled.
+- `AGENT_IM_ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS; defaults to local Vite origins.
+- `AGENT_IM_MAX_UPLOAD_BYTES`: upload size limit; defaults to 10 MB.
+
+## Infra Plan
+
+The active infrastructure plan is stored at:
+
+`docs/superpowers/plans/2026-05-04-agent-im-infra.md`
+
+Current infra status:
+
+- Matrix Synapse handles real rooms, events, and media upload/download.
+- The API owns product state, Agent actions, file metadata, tasks, calendar, and audit logs.
+- Persistence now goes through `StateStore` in `src/server/stateStore.ts`; the current implementation is `JsonStateStore`.
+- Database-ready collection names and state shape validation live in `src/server/stateSchema.ts`.
+- Agent action queue types and pure state transitions live in `src/domain/actionQueue.ts`.
+- `/api/agent/share-file` now runs through `src/server/agentRuntime.ts`, creating an action request plus audit log before tool execution.
+- Confirmation queue endpoints are available at `GET /api/agent/actions`, `POST /api/agent/actions/:id/confirm`, and `POST /api/agent/actions/:id/reject`; the frontend workbench shows pending actions and confirm/reject controls.
+- Confirmed file-share actions now execute the actual share tool and persist the resulting message.
+- Uploads are constrained by size, MIME type, and extension.
+- `appServer.ts` no longer owns the JSON persistence implementation directly, which makes the next SQLite/Postgres step isolated.
+
+Next infra priorities:
+
+1. Migrate summary, deadline, and coordination endpoints into the shared runtime pipeline.
+2. Add a background Matrix observer loop using `/sync` tokens instead of manual sync.
+3. Move JSON persistence to SQLite/Postgres transactions for concurrent Agent writes.
+4. Add role-based identities instead of the current fixed demo user.

@@ -1,0 +1,65 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import { createDemoState } from '../domain/demoState';
+import { runFileShareAction } from './agentRuntime';
+
+describe('agent runtime', () => {
+  it('queues, executes, and audits a low-risk file share action', async () => {
+    const baseState = createDemoState();
+    const state = {
+      ...baseState,
+      files: baseState.files.map((file) =>
+        file.id === 'file-slides-v3'
+          ? {
+              ...file,
+              mxcUri: 'mxc://localhost/slides-v3',
+              contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              size: 4096
+            }
+          : file
+      )
+    };
+
+    const result = await runFileShareAction(state, {
+      id: 'action-runtime-share',
+      createdAt: '2026-05-04T08:10:00.000Z',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      requesterId: 'user-chen',
+      requestText: '林雯不在线的话，能把最新演示稿发一下吗？'
+    });
+
+    expect(result.result.status).toBe('executed');
+    expect(result.actionRequest).toMatchObject({
+      id: 'action-runtime-share',
+      kind: 'share_file',
+      status: 'executed',
+      requiresHuman: false,
+      logId: result.result.log.id
+    });
+    expect(result.state.actionRequests[0]).toBe(result.actionRequest);
+    expect(result.state.actionLogs[0]).toBe(result.result.log);
+    expect(result.state.actionLogs[0].toolCalls).toContain('file_library.lookup_latest');
+  });
+
+  it('keeps high-risk file share actions in the confirmation queue', async () => {
+    const state = createDemoState();
+
+    const result = await runFileShareAction(state, {
+      id: 'action-runtime-unknown-requester',
+      createdAt: '2026-05-04T08:11:00.000Z',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      requesterId: 'user-missing',
+      requestText: '把文件发给我'
+    });
+
+    expect(result.result.status).toBe('needs_confirmation');
+    expect(result.result.requiresHuman).toBe(true);
+    expect(result.actionRequest.status).toBe('needs_confirmation');
+    expect(result.actionRequest.requiresHuman).toBe(true);
+    expect(result.actionRequest.risk?.level).toBe('high');
+    expect(result.actionRequest.logId).toBeUndefined();
+    expect(result.state.actionLogs[0]).toBe(result.result.log);
+  });
+});

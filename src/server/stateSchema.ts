@@ -1,0 +1,99 @@
+import type { AiAutoreplyPolicy, DemoState } from '../domain/types';
+
+export const STATE_COLLECTION_KEYS = [
+  'users',
+  'agents',
+  'rooms',
+  'messages',
+  'files',
+  'tasks',
+  'calendar',
+  'actionLogs',
+  'actionRequests',
+  'memories',
+  'matrixObserverCheckpoints',
+  'aiAutoreplyPolicies',
+  'aiReplyJobs'
+] as const;
+
+export type StateCollectionKey = (typeof STATE_COLLECTION_KEYS)[number];
+export type StateCollections = Pick<DemoState, StateCollectionKey>;
+
+export function getStateCollections(state: DemoState): StateCollections {
+  const normalized = validateDemoStateShape(state);
+  return {
+    users: normalized.users,
+    agents: normalized.agents,
+    rooms: normalized.rooms,
+    messages: normalized.messages,
+    files: normalized.files,
+    tasks: normalized.tasks,
+    calendar: normalized.calendar,
+    actionLogs: normalized.actionLogs,
+    actionRequests: normalized.actionRequests,
+    memories: normalized.memories,
+    matrixObserverCheckpoints: normalized.matrixObserverCheckpoints,
+    aiAutoreplyPolicies: normalized.aiAutoreplyPolicies,
+    aiReplyJobs: normalized.aiReplyJobs
+  };
+}
+
+export function validateDemoStateShape(value: unknown): DemoState {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid DemoState: expected object');
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (candidate.actionRequests === undefined) {
+    candidate.actionRequests = [];
+  }
+  if (candidate.memories === undefined) {
+    candidate.memories = [];
+  }
+  if (candidate.matrixObserverCheckpoints === undefined) {
+    candidate.matrixObserverCheckpoints = [];
+  }
+  if (!Array.isArray(candidate.aiAutoreplyPolicies) || candidate.aiAutoreplyPolicies.length === 0) {
+    candidate.aiAutoreplyPolicies = createDefaultAiAutoreplyPolicies();
+  }
+  if (candidate.aiReplyJobs === undefined) {
+    candidate.aiReplyJobs = [];
+  }
+
+  for (const key of STATE_COLLECTION_KEYS) {
+    if (!Array.isArray(candidate[key])) {
+      throw new Error(`Invalid DemoState.${key}: expected array`);
+    }
+  }
+
+  return value as DemoState;
+}
+
+function createDefaultAiAutoreplyPolicies(): AiAutoreplyPolicy[] {
+  return [
+    {
+      userId: 'user-chen',
+      enabled: true,
+      allowedRoomIds: ['room-team'],
+      triggerMode: 'all_messages',
+      cooldownMs: 0,
+      priority: 10
+    },
+    {
+      userId: 'user-zhao',
+      enabled: true,
+      allowedRoomIds: ['room-team'],
+      triggerMode: 'mentions_only',
+      cooldownMs: 0,
+      priority: 20
+    },
+    {
+      userId: 'user-teacher',
+      enabled: true,
+      allowedRoomIds: ['room-class'],
+      triggerMode: 'mentions_only',
+      cooldownMs: 0,
+      priority: 30
+    }
+  ];
+}

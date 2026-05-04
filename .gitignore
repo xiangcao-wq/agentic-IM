@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/*.json
+synapse-data/
+.playwright-mcp/
+tmp/
+*.tsbuildinfo

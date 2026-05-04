@@ -1,0 +1,158 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  askDeadline,
+  confirmAgentAction,
+  generateDemoAssets,
+  fetchState,
+  fileDownloadUrl,
+  humanReply,
+  listAgentActions,
+  listMemories,
+  rejectAgentAction,
+  runAgent,
+  sendMessage,
+  shareFile,
+  syncMatrixOnce
+} from './apiClient';
+
+describe('api client', () => {
+  it('adds the configured API token header to write requests', async () => {
+    vi.stubEnv('VITE_AGENT_API_TOKEN', 'local-secret');
+    vi.resetModules();
+    const { sendMessage: sendMessageWithToken } = await import('./apiClient');
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      return Response.json({ ok: true, body });
+    });
+
+    await sendMessageWithToken('/api-root', { roomId: 'room-team', senderId: 'user-lin', body: 'hello' }, fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api-root/api/messages',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-agent-im-token': 'local-secret'
+        })
+      })
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it('uses the real backend endpoints for state, messages, and agent actions', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      return Response.json({ ok: true, body });
+    });
+
+    await fetchState('/api-root', fetchMock);
+    await sendMessage('/api-root', { roomId: 'room-team', senderId: 'user-lin', body: 'hello' }, fetchMock);
+    await askDeadline(
+      '/api-root',
+      { agentId: 'agent-lin', roomId: 'room-class', question: '什么时候截止？' },
+      fetchMock
+    );
+    await shareFile(
+      '/api-root',
+      {
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        requesterId: 'user-chen',
+        requestText: '发一下最新版'
+      },
+      fetchMock
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api-root/api/state', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api-root/api/messages',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api-root/api/agent/deadline',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api-root/api/agent/share-file',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('builds encoded file download URLs', () => {
+    expect(fileDownloadUrl('/api-root/', 'file uploaded/report')).toBe(
+      '/api-root/api/files/file%20uploaded%2Freport/download'
+    );
+  });
+
+  it('uses confirmation queue endpoints', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      return Response.json({ ok: true, body });
+    });
+
+    await listAgentActions('/api-root', fetchMock);
+    await confirmAgentAction(
+      '/api-root',
+      { actionId: 'action-1', reviewerId: 'user-lin', reason: 'approved' },
+      fetchMock
+    );
+    await rejectAgentAction(
+      '/api-root',
+      { actionId: 'action-2', reviewerId: 'user-lin', reason: 'rejected' },
+      fetchMock
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api-root/api/agent/actions', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api-root/api/agent/actions/action-1/confirm',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api-root/api/agent/actions/action-2/reject',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('uses runtime upgrade endpoints', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      return Response.json({ ok: true, body });
+    });
+
+    await humanReply('/api-root', { roomId: 'room-team', userId: 'user-chen', prompt: 'reply' }, fetchMock);
+    await runAgent(
+      '/api-root',
+      { agentId: 'agent-lin', roomId: 'room-team', intent: 'find_file', userText: '行动计划' },
+      fetchMock
+    );
+    await listMemories('/api-root', 'agent-lin', fetchMock);
+    await generateDemoAssets('/api-root', { roomId: 'room-team', senderId: 'user-lin' }, fetchMock);
+    await syncMatrixOnce('/api-root', fetchMock);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api-root/api/ai/human-reply',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api-root/api/agent/run',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api-root/api/memories?agentId=agent-lin', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api-root/api/demo/assets/generate',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      '/api-root/api/matrix/sync-once',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+});
