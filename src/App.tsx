@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   AlertTriangle,
   Bot,
@@ -69,6 +71,13 @@ type RoomContentTab = 'chat' | 'tasks' | 'files' | 'calendar' | 'members';
 const apiBaseUrl = import.meta.env.VITE_AGENT_API_BASE ?? '';
 const currentUserId = 'user-lin';
 const currentAgentId = 'agent-lin';
+
+const softAppear = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+  transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
+} as const;
 
 function App() {
   const [state, setState] = useState<DemoState | null>(null);
@@ -337,58 +346,60 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <Sidebar
-        currentUserName={currentUser.name}
-        rooms={filteredRooms}
-        roomSearch={roomSearch}
-        roomFilter={roomFilter}
-        selectedRoomId={selectedRoom.id}
-        onFilterChange={setRoomFilter}
-        onSearchChange={setRoomSearch}
-        onSelectRoom={setSelectedRoomId}
-      />
-      <ChatPanel
-        room={selectedRoom}
-        messages={roomMessages}
-        sourceMessages={state.messages}
-        files={state.files}
-        tasks={roomTasks}
-        calendar={state.calendar}
-        users={state.users}
-        aiStatus={state.aiStatus}
-        composer={composer}
-        busyAction={busyAction}
-        onComposerChange={setComposer}
-        onSend={handleSendMessage}
-        onFileUpload={handleUploadFile}
-        onSummarize={handleSummarize}
-        onRefreshTasks={handleRefreshState}
-      />
-      <AgentWorkbench
-        agent={currentAgent}
-        selectedRoom={selectedRoom}
-        rooms={state.rooms}
-        prompt={agentPrompt}
-        error={error}
-        busyAction={busyAction}
-        result={agentResult}
-        aiStatus={state.aiStatus}
-        actions={state.actionRequests}
-        selectedRoomId={selectedRoom.id}
-        sourceMessages={state.messages}
-        sourceFiles={state.files}
-        onPromptChange={setAgentPrompt}
-        onAgentChat={handleAgentChat}
-        onSummarize={handleSummarize}
-        onDeadlineQuestion={handleDeadlineQuestion}
-        onFindFile={handleFindFile}
-        onFileShare={handleFileShare}
-        onCoordinate={handleCoordinate}
-        onConfirmAction={handleConfirmAgentAction}
-        onRejectAction={handleRejectAgentAction}
-      />
-    </main>
+    <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
+      <main className="app-shell">
+        <Sidebar
+          currentUserName={currentUser.name}
+          rooms={filteredRooms}
+          roomSearch={roomSearch}
+          roomFilter={roomFilter}
+          selectedRoomId={selectedRoom.id}
+          onFilterChange={setRoomFilter}
+          onSearchChange={setRoomSearch}
+          onSelectRoom={setSelectedRoomId}
+        />
+        <ChatPanel
+          room={selectedRoom}
+          messages={roomMessages}
+          sourceMessages={state.messages}
+          files={state.files}
+          tasks={roomTasks}
+          calendar={state.calendar}
+          users={state.users}
+          aiStatus={state.aiStatus}
+          composer={composer}
+          busyAction={busyAction}
+          onComposerChange={setComposer}
+          onSend={handleSendMessage}
+          onFileUpload={handleUploadFile}
+          onSummarize={handleSummarize}
+          onRefreshTasks={handleRefreshState}
+        />
+        <AgentWorkbench
+          agent={currentAgent}
+          selectedRoom={selectedRoom}
+          rooms={state.rooms}
+          prompt={agentPrompt}
+          error={error}
+          busyAction={busyAction}
+          result={agentResult}
+          aiStatus={state.aiStatus}
+          actions={state.actionRequests}
+          selectedRoomId={selectedRoom.id}
+          sourceMessages={state.messages}
+          sourceFiles={state.files}
+          onPromptChange={setAgentPrompt}
+          onAgentChat={handleAgentChat}
+          onSummarize={handleSummarize}
+          onDeadlineQuestion={handleDeadlineQuestion}
+          onFindFile={handleFindFile}
+          onFileShare={handleFileShare}
+          onCoordinate={handleCoordinate}
+          onConfirmAction={handleConfirmAgentAction}
+          onRejectAction={handleRejectAgentAction}
+        />
+      </main>
+    </Tooltip.Provider>
   );
 }
 
@@ -443,12 +454,15 @@ function Sidebar(props: {
       <nav className="room-list" aria-label="rooms">
         {props.rooms.length > 0 ? (
           props.rooms.map((room) => (
-            <button
+            <motion.button
               aria-label={room.name}
               className={`room-button ${room.id === props.selectedRoomId ? 'is-active' : ''}`}
               key={room.id}
               onClick={() => props.onSelectRoom(room.id)}
               type="button"
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.985 }}
+              transition={{ duration: 0.16 }}
             >
               <span className="room-icon">
                 {room.type === 'direct' ? <Bot size={16} /> : <MessageSquare size={16} />}
@@ -458,7 +472,7 @@ function Sidebar(props: {
                 <small>{room.matrixAlias}</small>
               </span>
               {room.unreadCount > 0 ? <em>{room.unreadCount}</em> : null}
-            </button>
+            </motion.button>
           ))
         ) : (
           <div className="room-empty">没有匹配的会话</div>
@@ -562,23 +576,32 @@ function ChatPanel(props: {
       </div>
 
       {activeTab !== 'chat' ? (
-        <RoomDetailPanel
-          activeTab={activeTab}
-          tasks={props.tasks}
-          files={roomFiles}
-          calendar={roomCalendar}
-          members={roomMembers}
-          messages={props.sourceMessages}
-          users={props.users}
-          onRefreshTasks={props.onRefreshTasks}
-        />
+        <motion.div className="room-detail-motion" key={activeTab} {...softAppear}>
+          <RoomDetailPanel
+            activeTab={activeTab}
+            tasks={props.tasks}
+            files={roomFiles}
+            calendar={roomCalendar}
+            members={roomMembers}
+            messages={props.sourceMessages}
+            users={props.users}
+            onRefreshTasks={props.onRefreshTasks}
+          />
+        </motion.div>
       ) : null}
 
       <div className="message-list">
         {props.messages.map((message) => {
           const attachedFile = message.fileId ? roomFilesById.get(message.fileId) : undefined;
           return (
-            <article className={`message-row ${message.senderId === currentUserId ? 'is-self' : ''}`} key={message.id}>
+            <motion.article
+              className={`message-row ${message.senderId === currentUserId ? 'is-self' : ''}`}
+              key={message.id}
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+            >
               <div className="message-avatar">{message.senderName.slice(0, 2)}</div>
               <div className="message-bubble">
                 <div className="message-topline">
@@ -589,7 +612,7 @@ function ChatPanel(props: {
                 <p>{message.body}</p>
                 {message.fileId ? <FileAttachment file={attachedFile} fallbackName={message.body} /> : null}
               </div>
-            </article>
+            </motion.article>
           );
         })}
         <div ref={messageEndRef} />
@@ -878,6 +901,7 @@ function AgentWorkbench(props: {
       (action.status === 'needs_confirmation' || action.status === 'pending')
   );
   const aiStatus = deriveAiStatus(props.result, props.aiStatus);
+  const resultKey = props.result ? getAgentResultKey(props.result) : 'empty-agent-result';
 
   return (
     <aside className="agent-workbench">
@@ -893,16 +917,26 @@ function AgentWorkbench(props: {
       </header>
 
       <div className="agent-output-area">
-        {props.error ? <div className="error-banner">{props.error}</div> : null}
-        {props.result ? (
-          <ResultPanel
-            result={props.result}
-            sourceMessages={props.sourceMessages}
-            sourceFiles={props.sourceFiles}
-          />
-        ) : (
-          <div className="agent-output-placeholder" aria-hidden="true" />
-        )}
+        <AnimatePresence mode="popLayout">
+          {props.error ? (
+            <motion.div className="error-banner" key="agent-error" {...softAppear}>
+              {props.error}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+        <AnimatePresence mode="popLayout">
+          {props.result ? (
+            <motion.div className="agent-result-motion" key={resultKey} {...softAppear}>
+              <ResultPanel
+                result={props.result}
+                sourceMessages={props.sourceMessages}
+                sourceFiles={props.sourceFiles}
+              />
+            </motion.div>
+          ) : (
+            <motion.div className="agent-output-placeholder" key="empty-agent-result" aria-hidden="true" />
+          )}
+        </AnimatePresence>
 
         {pendingActions.length > 0 ? (
           <section className="data-section confirmation-section">
@@ -912,7 +946,7 @@ function AgentWorkbench(props: {
             </div>
             <div className="confirmation-list">
               {pendingActions.map((action) => (
-                <div className="confirmation-row" key={action.id}>
+                <motion.div className="confirmation-row" key={action.id} layout {...softAppear}>
                   <div>
                     <strong>{agentActionKindLabel(action.kind)}</strong>
                     <span>{String(action.input.requestText ?? action.input.proposal ?? '等待人工确认')}</span>
@@ -934,7 +968,7 @@ function AgentWorkbench(props: {
                       拒绝
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </section>
@@ -1164,11 +1198,29 @@ function SystemStatusPanel(props: {
 
 function ActionButton(props: { icon: ReactNode; label: string; onClick: () => void; disabled: boolean }) {
   return (
-    <button className="action-button" onClick={props.onClick} type="button" disabled={props.disabled}>
-      {props.icon}
-      <span>{props.label}</span>
-      <ChevronRight size={15} />
-    </button>
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>
+        <motion.button
+          className="action-button"
+          onClick={props.onClick}
+          type="button"
+          disabled={props.disabled}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ duration: 0.14 }}
+        >
+          {props.icon}
+          <span>{props.label}</span>
+          <ChevronRight size={15} />
+        </motion.button>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content className="tooltip-content" side="top" align="center" sideOffset={8}>
+          {props.label}
+          <Tooltip.Arrow className="tooltip-arrow" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
@@ -1260,6 +1312,16 @@ function ResultPanel({
       <RiskLine riskLevel={result.value.risk.level} reason={result.value.risk.reason} />
     </section>
   );
+}
+
+function getAgentResultKey(result: AgentResult): string {
+  if (result.kind === 'agent-run') {
+    return `${result.kind}:${result.value.log.id}`;
+  }
+  if (result.kind === 'human-reply') {
+    return `${result.kind}:${result.value.id}`;
+  }
+  return `${result.kind}:${JSON.stringify(result.value).slice(0, 80)}`;
 }
 
 function AgentRunResultPanel({

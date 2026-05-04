@@ -21,7 +21,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "@vitejs/plugin-react": "^5.1.1",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
