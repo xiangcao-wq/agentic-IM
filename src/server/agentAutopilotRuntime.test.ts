@@ -99,6 +99,45 @@ describe('agent autopilot runtime', () => {
     expect(result.state.actionLogs.filter((log) => log.toolCalls.includes('a2a.session'))).toHaveLength(2);
   });
 
+  it('answers explicit Agent mentions as delegated chat without requiring a shortcut intent', async () => {
+    const state = createDemoState();
+    const trigger: Message = {
+      id: 'msg-autopilot-chat-mention',
+      roomId: 'room-team',
+      senderId: 'user-chen',
+      senderName: 'Chen Chen',
+      body: 'Lin Agent, who is responsible for interview materials?',
+      sentAt: '2026-05-04T20:42:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger,
+      sendMessage: async (_sendState, message) => ({
+        ...message,
+        id: `sent-${message.id}`,
+        sentAt: '2026-05-04T20:42:02.000Z'
+      })
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.responses[0].intent).toBe('chat');
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({
+      type: 'agent',
+      roomId: 'room-team',
+      senderId: 'user-lin',
+      sourceAgentId: 'agent-lin'
+    });
+    expect(result.messages[0].body).toContain('访谈');
+    expect(result.sessions[0]).toMatchObject({
+      status: 'completed',
+      targetAgentIds: ['agent-lin']
+    });
+    expect(result.state.messages.some((message) => message.id === result.messages[0].id)).toBe(true);
+  });
+
   it('sweeps pending room messages without duplicating completed A2A sessions', async () => {
     const state = withDownloadableSlides(createDemoState());
     const trigger: Message = {

@@ -122,6 +122,40 @@ describe('real local agent IM server', () => {
     }
   });
 
+  it('returns an Agent chat message for explicit delegated A2A chat over HTTP', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-chen',
+        body: 'Lin Agent, who is responsible for interview materials?'
+      })
+    });
+
+    expect(sentMessage.autopilotSessions).toHaveLength(1);
+    expect(sentMessage.autopilotSessions[0]).toMatchObject({
+      status: 'completed',
+      targetAgentIds: ['agent-lin']
+    });
+    expect(sentMessage.autopilotMessages).toHaveLength(1);
+    expect(sentMessage.autopilotMessages[0]).toMatchObject({
+      type: 'agent',
+      roomId: 'room-team',
+      senderId: 'user-lin',
+      sourceAgentId: 'agent-lin'
+    });
+
+    const state = await requestJson(`${app.url}/api/state`);
+    expect(state.messages.some((message: { id: string }) => message.id === sentMessage.autopilotMessages[0].id)).toBe(true);
+  });
+
   it('updates an Agent autopilot policy and changes later message automation', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

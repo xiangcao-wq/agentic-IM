@@ -92,6 +92,21 @@ try {
     throw new Error('Expected /api/messages to return an autopilot A2A session.');
   }
 
+  const a2aChatResponse = await page.request.post(`${baseUrl}/api/messages`, {
+    data: {
+      roomId: 'room-team',
+      senderId: 'user-chen',
+      body: 'Lin Agent, who is responsible for interview materials?'
+    }
+  });
+  if (!a2aChatResponse.ok()) {
+    throw new Error(`A2A chat trigger failed with HTTP ${a2aChatResponse.status()}`);
+  }
+  const a2aChatPayload = await a2aChatResponse.json();
+  if (!Array.isArray(a2aChatPayload.autopilotMessages) || a2aChatPayload.autopilotMessages.length === 0) {
+    throw new Error('Expected explicit Agent mention to return an autopilot chat message.');
+  }
+
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
   await page.locator('[data-testid="a2a-session-panel"]').waitFor({ timeout: 120_000 });
@@ -104,6 +119,7 @@ try {
       screenshot: 'tmp/agent-im-browser-smoke.png',
       agentIntent: agentRunPayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
+      a2aChatMessages: a2aChatPayload.autopilotMessages.length,
       autopilotToggle: 'ok',
       autopilotSweep: {
         processed: sweepPayload.processedMessageIds?.length ?? 0,

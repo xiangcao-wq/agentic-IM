@@ -71,8 +71,10 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
     );
     state = runtime.state;
 
-    const deliveredMessage = runtime.response.message
-      ? await deliverAutopilotMessage(state, runtime.response.message, input.sendMessage)
+    const outboundMessage =
+      runtime.response.message ?? createAutopilotTextMessage(state, candidate.agentId, input.triggerMessage, runtime.response);
+    const deliveredMessage = outboundMessage
+      ? await deliverAutopilotMessage(state, outboundMessage, input.sendMessage)
       : undefined;
     if (deliveredMessage) {
       messages.push(deliveredMessage);
@@ -162,31 +164,30 @@ function selectAutopilotCandidates(
   state: DemoState,
   triggerMessage: Message
 ): Array<{ agentId: string; intent: AgentRunIntent; policy: AgentAutopilotPolicy; explicitlyMentioned: boolean }> {
-  const intent = inferAutopilotIntent(triggerMessage.body);
-  if (!intent) {
-    return [];
-  }
-
+  const inferredIntent = inferAutopilotIntent(triggerMessage.body);
   return (state.agentAutopilotPolicies ?? [])
     .filter((policy) => policy.enabled)
     .filter((policy) => policy.allowedRoomIds.includes(triggerMessage.roomId))
-    .filter((policy) => policyAllowsIntent(policy, intent))
-    .filter((policy) => {
+    .flatMap((policy) => {
       const agent = state.agents.find((candidate) => candidate.id === policy.agentId);
       const owner = agent ? state.users.find((candidate) => candidate.id === agent.ownerId) : undefined;
       if (!agent || !owner || owner.id === triggerMessage.senderId) {
-        return false;
+        return [];
       }
-      return mentionsAgent(triggerMessage.body, agent.displayName, owner.name, owner.id) || intent === 'share_file';
-    })
-    .map((policy) => {
-      const agent = state.agents.find((candidate) => candidate.id === policy.agentId);
-      const owner = agent ? state.users.find((candidate) => candidate.id === agent.ownerId) : undefined;
+      const explicitlyMentioned = mentionsAgent(triggerMessage.body, agent.displayName, owner.name, owner.id);
+      const explicitAgentMention = mentionsAgentDirectly(triggerMessage.body, agent.displayName, owner.name, owner.id);
+      const intent = inferredIntent ?? (explicitAgentMention ? 'chat' : undefined);
+      if (!intent || !policyAllowsIntent(policy, intent)) {
+        return [];
+      }
+      if (!explicitlyMentioned && intent !== 'share_file') {
+        return [];
+      }
       return {
         agentId: policy.agentId,
         intent,
         policy,
-        explicitlyMentioned: Boolean(agent && owner && mentionsAgent(triggerMessage.body, agent.displayName, owner.name, owner.id))
+        explicitlyMentioned
       };
     });
 }
@@ -240,12 +241,59 @@ function mentionsAgent(text: string, agentName: string, ownerName: string, owner
   );
 }
 
+function mentionsAgentDirectly(text: string, agentName: string, ownerName: string, ownerId: string): boolean {
+  const lowered = text.toLowerCase();
+  const ownerSlug = ownerId.replace(/^user-/, '').toLowerCase();
+  const normalizedOwnerName = ownerName.toLowerCase();
+  return (
+    lowered.includes(agentName.toLowerCase()) ||
+    lowered.includes(`${normalizedOwnerName} agent`) ||
+    lowered.includes(`${normalizedOwnerName}的 agent`) ||
+    lowered.includes(`${ownerSlug} agent`) ||
+    lowered.includes(`${ownerSlug}'s agent`)
+  );
+}
+
 async function deliverAutopilotMessage(
   state: DemoState,
   message: Message,
   sendMessage: AgentAutopilotInput['sendMessage']
 ): Promise<Message> {
   return sendMessage ? sendMessage(state, message) : message;
+}
+
+function createAutopilotTextMessage(
+  state: DemoState,
+  agentId: string,
+  triggerMessage: Message,
+  response: AgentRunResult
+): Message | undefined {
+  if (response.intent !== 'chat' || response.requiresHuman) {
+    return undefined;
+  }
+  const reply = typeof (response.result as { reply?: unknown } | undefined)?.reply === 'string'
+    ? (response.result as { reply: string }).reply.trim()
+    : '';
+  if (!reply) {
+    return undefined;
+  }
+  const agent = state.agents.find((candidate) => candidate.id === agentId);
+  const owner = agent ? state.users.find((candidate) => candidate.id === agent.ownerId) : undefined;
+  if (!agent || !owner) {
+    return undefined;
+  }
+
+  return {
+    id: `msg-agent-chat-${triggerMessage.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: triggerMessage.roomId,
+    senderId: owner.id,
+    senderName: agent.displayName,
+    body: reply,
+    sentAt: new Date().toISOString(),
+    type: 'agent',
+    agentLabel: `${owner.name}的 Agent`,
+    sourceAgentId: agent.id
+  };
 }
 
 function createA2ASession(input: {
