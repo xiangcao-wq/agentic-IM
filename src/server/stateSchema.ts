@@ -11,6 +11,8 @@ export const STATE_COLLECTION_KEYS = [
   'calendar',
   'actionLogs',
   'actionRequests',
+  'a2aSessions',
+  'agentAutopilotPolicies',
   'memories',
   'matrixObserverCheckpoints',
   'aiAutoreplyPolicies',
@@ -33,6 +35,8 @@ export function getStateCollections(state: DemoState): StateCollections {
     calendar: normalized.calendar,
     actionLogs: normalized.actionLogs,
     actionRequests: normalized.actionRequests,
+    a2aSessions: normalized.a2aSessions,
+    agentAutopilotPolicies: normalized.agentAutopilotPolicies,
     memories: normalized.memories,
     matrixObserverCheckpoints: normalized.matrixObserverCheckpoints,
     aiAutoreplyPolicies: normalized.aiAutoreplyPolicies,
@@ -48,6 +52,12 @@ export function validateDemoStateShape(value: unknown): DemoState {
   const candidate = value as Record<string, unknown>;
   if (candidate.actionRequests === undefined) {
     candidate.actionRequests = [];
+  }
+  if (candidate.a2aSessions === undefined) {
+    candidate.a2aSessions = [];
+  }
+  if (!Array.isArray(candidate.agentAutopilotPolicies) || candidate.agentAutopilotPolicies.length === 0) {
+    candidate.agentAutopilotPolicies = createDefaultAgentAutopilotPolicies();
   }
   if (candidate.fileTextChunks === undefined) {
     candidate.fileTextChunks = [];
@@ -72,6 +82,42 @@ export function validateDemoStateShape(value: unknown): DemoState {
   }
 
   return value as DemoState;
+}
+
+function createDefaultAgentAutopilotPolicies(): DemoState['agentAutopilotPolicies'] {
+  return [
+    {
+      agentId: 'agent-lin',
+      enabled: true,
+      allowedRoomIds: ['room-team'],
+      autoExecuteMaxRisk: 'low',
+      allowedActions: [
+        'reply',
+        'search_files',
+        'share_low_risk_files',
+        'suggest_task_updates',
+        'coordinate_schedule',
+        'a2a_negotiate'
+      ],
+      updatedAt: '2026-05-04T12:00:00+08:00'
+    },
+    {
+      agentId: 'agent-chen',
+      enabled: false,
+      allowedRoomIds: ['room-team', 'room-agent'],
+      autoExecuteMaxRisk: 'low',
+      allowedActions: ['reply', 'search_files', 'a2a_negotiate'],
+      updatedAt: '2026-05-04T12:00:00+08:00'
+    },
+    {
+      agentId: 'agent-zhao',
+      enabled: false,
+      allowedRoomIds: ['room-team', 'room-agent'],
+      autoExecuteMaxRisk: 'low',
+      allowedActions: ['reply', 'search_files', 'coordinate_schedule', 'a2a_negotiate'],
+      updatedAt: '2026-05-04T12:00:00+08:00'
+    }
+  ];
 }
 
 function createDefaultAiAutoreplyPolicies(): AiAutoreplyPolicy[] {

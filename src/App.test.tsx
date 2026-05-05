@@ -148,6 +148,51 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('cache 75%');
   });
 
+  it('renders real A2A autopilot sessions in the Agent workbench', async () => {
+    const state = createDemoState();
+    state.a2aSessions = [
+      {
+        id: 'a2a-session-1',
+        roomId: 'room-team',
+        initiatorAgentId: 'agent-chen',
+        targetAgentIds: ['agent-lin'],
+        goal: 'Chen asked Lin Agent to send the latest slides.',
+        status: 'completed',
+        turns: [
+          {
+            id: 'a2a-turn-1',
+            agentId: 'agent-lin',
+            kind: 'tool_result',
+            message: 'Delivered file-slides-v3 to the room.',
+            toolCalls: ['file.share'],
+            createdAt: '2026-05-04T08:04:00.000Z'
+          }
+        ],
+        proposedActionRequestIds: [],
+        contextIds: ['msg-03', 'file-slides-v3'],
+        risk: {
+          level: 'low',
+          score: 0.18,
+          reason: 'Authorized room file handoff.',
+          model: 'runtime-confirmation-gate-v1'
+        },
+        createdAt: '2026-05-04T08:04:00.000Z',
+        updatedAt: '2026-05-04T08:04:00.000Z'
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(host.querySelector('[data-testid="a2a-session-panel"]')).toBeTruthy();
+    expect(host.querySelector('.autopilot-policy.enabled')).toBeTruthy();
+    expect(host.textContent).toContain('Chen asked Lin Agent to send the latest slides.');
+    expect(host.textContent).toContain('Delivered file-slides-v3 to the room.');
+    expect(host.textContent).toContain('low');
+  });
+
   it('marks the system event stream as disconnected when SSE fails', async () => {
     await act(async () => {
       root.render(<App />);

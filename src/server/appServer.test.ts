@@ -90,6 +90,38 @@ describe('real local agent IM server', () => {
     expect(persisted.actionLogs.length).toBe(finalState.actionLogs.length);
   });
 
+  it('uses local message storage when MATRIX_BOOTSTRAP_PATH disables Matrix', async () => {
+    const previousMatrixPath = process.env.MATRIX_BOOTSTRAP_PATH;
+    process.env.MATRIX_BOOTSTRAP_PATH = 'none';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      await writeFile(dbPath, JSON.stringify(createStateWithMatrixBackedSlides(), null, 2), 'utf8');
+      const app = await createAppServer({ dbPath, port: 0, aiProvider: null });
+      servers.push(app);
+
+      const sentMessage = await requestJson(`${app.url}/api/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          roomId: 'room-team',
+          senderId: 'user-chen',
+          body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
+        })
+      });
+
+      expect(sentMessage.body).toContain('latest slides');
+      expect(sentMessage.autopilotSessions).toHaveLength(1);
+      expect(sentMessage.autopilotSessions[0].targetAgentIds).toContain('agent-lin');
+    } finally {
+      if (previousMatrixPath === undefined) {
+        delete process.env.MATRIX_BOOTSTRAP_PATH;
+      } else {
+        process.env.MATRIX_BOOTSTRAP_PATH = previousMatrixPath;
+      }
+    }
+  });
+
   it('automatically replies as an offline AI user after a real Matrix chat message', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -253,6 +285,104 @@ describe('real local agent IM server', () => {
           log.toolCalls.includes('file_library.create')
       )
     ).toBe(true);
+  });
+
+  it('runs Agent autopilot from a real user message and records the A2A handoff', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: state.files.map((file) =>
+            file.id === 'file-slides-v3'
+              ? {
+                  ...file,
+                  localPath: 'seed-slides-v3.pptx',
+                  contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  size: 4096
+                }
+              : file
+          )
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-chen',
+        body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
+      })
+    });
+
+    expect(sentMessage.autopilotSessions).toHaveLength(1);
+    expect(sentMessage.autopilotMessages).toHaveLength(1);
+    expect(sentMessage.autopilotMessages[0]).toMatchObject({
+      type: 'file',
+      sourceAgentId: 'agent-lin',
+      fileId: 'file-slides-v3'
+    });
+
+    const finalState = await requestJson(`${app.url}/api/state`);
+    expect(finalState.a2aSessions[0]).toMatchObject({
+      initiatorAgentId: 'agent-chen',
+      targetAgentIds: ['agent-lin'],
+      status: 'completed'
+    });
+    expect(finalState.actionLogs[0].toolCalls).toContain('a2a.session');
+  });
+
+  it('records multiple A2A sessions from one explicitly addressed user message', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          agentAutopilotPolicies: state.agentAutopilotPolicies.map((policy) => ({
+            ...policy,
+            enabled: policy.agentId === 'agent-lin' || policy.agentId === 'agent-chen'
+          }))
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-zhao',
+        body: 'Lin Agent and Chen Agent, what is the deadline?'
+      })
+    });
+
+    expect(sentMessage.autopilotSessions).toHaveLength(2);
+    expect(sentMessage.autopilotSessions.map((session: { targetAgentIds: string[] }) => session.targetAgentIds[0])).toEqual([
+      'agent-lin',
+      'agent-chen'
+    ]);
+
+    const finalState = await requestJson(`${app.url}/api/state`);
+    expect(finalState.a2aSessions.slice(0, 2)).toHaveLength(2);
+    expect(finalState.actionLogs.filter((log: { toolCalls: string[] }) => log.toolCalls.includes('a2a.session'))).toHaveLength(2);
   });
 
   it('generates local demo assets that can be downloaded without Matrix', async () => {

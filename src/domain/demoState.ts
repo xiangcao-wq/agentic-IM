@@ -497,6 +497,40 @@ export function createDemoState(): DemoState {
       }
     ],
     actionRequests: [],
+    a2aSessions: [],
+    agentAutopilotPolicies: [
+      {
+        agentId: 'agent-lin',
+        enabled: true,
+        allowedRoomIds: ['room-team'],
+        autoExecuteMaxRisk: 'low',
+        allowedActions: [
+          'reply',
+          'search_files',
+          'share_low_risk_files',
+          'suggest_task_updates',
+          'coordinate_schedule',
+          'a2a_negotiate'
+        ],
+        updatedAt: '2026-05-04T12:00:00+08:00'
+      },
+      {
+        agentId: 'agent-chen',
+        enabled: false,
+        allowedRoomIds: ['room-team', 'room-agent'],
+        autoExecuteMaxRisk: 'low',
+        allowedActions: ['reply', 'search_files', 'a2a_negotiate'],
+        updatedAt: '2026-05-04T12:00:00+08:00'
+      },
+      {
+        agentId: 'agent-zhao',
+        enabled: false,
+        allowedRoomIds: ['room-team', 'room-agent'],
+        autoExecuteMaxRisk: 'low',
+        allowedActions: ['reply', 'search_files', 'coordinate_schedule', 'a2a_negotiate'],
+        updatedAt: '2026-05-04T12:00:00+08:00'
+      }
+    ],
     memories: [],
     matrixObserverCheckpoints: [],
     aiAutoreplyPolicies: [

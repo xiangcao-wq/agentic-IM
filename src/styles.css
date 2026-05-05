@@ -1537,6 +1537,71 @@ button:disabled {
   gap: 6px;
 }
 
+.a2a-row strong {
+  justify-content: space-between;
+}
+
+.a2a-row em {
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #0f6970;
+  background: #e7f3f2;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.a2a-row.status-needs_confirmation em {
+  color: #986315;
+  background: #fff3d7;
+}
+
+.a2a-row.status-blocked em {
+  color: #a23a4f;
+  background: #ffe8ed;
+}
+
+.a2a-row small {
+  display: block;
+  margin-top: 5px;
+  color: #657477;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.a2a-confirmation-hint {
+  color: #986315 !important;
+  font-weight: 700;
+}
+
+.autopilot-policy {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #d8e4e6;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #f7fafb;
+}
+
+.autopilot-policy span {
+  color: #213235;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.autopilot-policy small {
+  color: #617276;
+  font-size: 12px;
+}
+
+.autopilot-policy.enabled {
+  border-color: #bfe1d1;
+  background: #f2faf5;
+}
+
+.autopilot-policy.disabled {
+  opacity: 0.72;
+}
+
 .file-row-link {
   color: inherit;
   text-decoration: none;

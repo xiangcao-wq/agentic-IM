@@ -15,6 +15,15 @@ export type AiAutoreplyTriggerMode = 'all_messages' | 'mentions_only';
 export type AiReplyJobStatus = 'pending' | 'completed' | 'skipped' | 'failed';
 export type MemoryKind = 'summary' | 'deadline' | 'file' | 'coordination' | 'note';
 export type AgentPlanMode = 'answer' | 'execute' | 'request_confirmation';
+export type AgentAutopilotAction =
+  | 'reply'
+  | 'search_files'
+  | 'share_low_risk_files'
+  | 'suggest_task_updates'
+  | 'coordinate_schedule'
+  | 'a2a_negotiate';
+export type A2ASessionStatus = 'active' | 'completed' | 'needs_confirmation' | 'blocked';
+export type A2ATurnKind = 'observation' | 'proposal' | 'response' | 'tool_result';
 export type AiRuntimeProvider = 'deepseek' | 'fallback';
 export type AiRuntimeHealth = 'missing' | 'unknown' | 'connected' | 'failed';
 export type AgentRunIntent =
@@ -162,6 +171,39 @@ export interface AgentActionLog {
   createdAt: string;
 }
 
+export interface AgentAutopilotPolicy {
+  agentId: string;
+  enabled: boolean;
+  allowedRoomIds: string[];
+  autoExecuteMaxRisk: RiskLevel;
+  allowedActions: AgentAutopilotAction[];
+  updatedAt: string;
+}
+
+export interface A2ATurn {
+  id: string;
+  agentId: string;
+  kind: A2ATurnKind;
+  message: string;
+  toolCalls: string[];
+  createdAt: string;
+}
+
+export interface A2ASession {
+  id: string;
+  roomId: string;
+  initiatorAgentId: string;
+  targetAgentIds: string[];
+  goal: string;
+  status: A2ASessionStatus;
+  turns: A2ATurn[];
+  proposedActionRequestIds: string[];
+  contextIds: string[];
+  risk: RiskAssessment;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AgentProgressPhase = 'started' | 'planning' | 'executing' | 'completed' | 'failed';
 
 export interface AgentProgressEvent {
@@ -276,6 +318,8 @@ export interface DemoState {
   calendar: CalendarItem[];
   actionLogs: AgentActionLog[];
   actionRequests: AgentActionRequest[];
+  a2aSessions: A2ASession[];
+  agentAutopilotPolicies: AgentAutopilotPolicy[];
   memories: MemoryItem[];
   matrixObserverCheckpoints: MatrixObserverCheckpoint[];
   aiAutoreplyPolicies: AiAutoreplyPolicy[];

@@ -385,6 +385,8 @@ function App() {
           result={agentResult}
           aiStatus={state.aiStatus}
           actions={state.actionRequests}
+          a2aSessions={state.a2aSessions}
+          autopilotPolicies={state.agentAutopilotPolicies}
           selectedRoomId={selectedRoom.id}
           sourceMessages={state.messages}
           sourceFiles={state.files}
@@ -887,6 +889,8 @@ function AgentWorkbench(props: {
   result: AgentResult | null;
   aiStatus?: AiRuntimeStatus;
   actions: AgentActionRequest[];
+  a2aSessions: DemoState['a2aSessions'];
+  autopilotPolicies: DemoState['agentAutopilotPolicies'];
   selectedRoomId: string;
   sourceMessages: Message[];
   sourceFiles: FileItem[];
@@ -907,6 +911,15 @@ function AgentWorkbench(props: {
   );
   const aiStatus = deriveAiStatus(props.result, props.aiStatus);
   const resultKey = props.result ? getAgentResultKey(props.result) : 'empty-agent-result';
+  const roomA2ASessions = props.a2aSessions
+    .filter(
+      (session) =>
+        session.roomId === props.selectedRoomId &&
+        (session.initiatorAgentId === props.agent.id || session.targetAgentIds.includes(props.agent.id))
+    )
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 3);
+  const autopilotPolicy = props.autopilotPolicies.find((policy) => policy.agentId === props.agent.id);
 
   return (
     <aside className="agent-workbench">
@@ -978,6 +991,38 @@ function AgentWorkbench(props: {
             </div>
           </section>
         ) : null}
+
+        {roomA2ASessions.length > 0 ? (
+          <section className="data-section a2a-section" data-testid="a2a-session-panel">
+            <div className="section-title">
+              <MessageSquare size={17} />
+              <h3>Agent 托管协作</h3>
+            </div>
+            <div className="compact-list">
+              {roomA2ASessions.map((session) => {
+                const latestTurn = session.turns.at(-1);
+                const relatedPending = pendingActions.filter((action) =>
+                  session.proposedActionRequestIds.includes(action.id)
+                );
+                return (
+                  <motion.div className={`compact-row a2a-row status-${session.status}`} key={session.id} layout {...softAppear}>
+                    <strong>
+                      <span>{a2aStatusLabel(session.status)}</span>
+                      <em>{session.risk.level}</em>
+                    </strong>
+                    <span>{session.goal}</span>
+                    {latestTurn ? <small>{latestTurn.message}</small> : null}
+                    {relatedPending.length > 0 ? (
+                      <small className="a2a-confirmation-hint">
+                        等待确认：{relatedPending.map((action) => agentActionKindLabel(action.kind)).join('、')}
+                      </small>
+                    ) : null}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
       </div>
 
       <div className="agent-dock">
@@ -988,6 +1033,17 @@ function AgentWorkbench(props: {
           <ActionButton icon={<FileText size={17} />} label="请求代发" onClick={props.onFileShare} disabled={Boolean(props.busyAction)} />
           <ActionButton icon={<Users size={17} />} label="Agent 协调" onClick={props.onCoordinate} disabled={Boolean(props.busyAction)} />
         </div>
+
+        {autopilotPolicy ? (
+          <div className={`autopilot-policy ${autopilotPolicy.enabled ? 'enabled' : 'disabled'}`}>
+            <span>{autopilotPolicy.enabled ? '托管模式已开启' : '托管模式未开启'}</span>
+            <small>
+              {autopilotPolicy.allowedRoomIds.includes(props.selectedRoomId)
+                ? `当前房间可用 · ${autopilotPolicy.allowedActions.length} 项授权`
+                : '当前房间未授权'}
+            </small>
+          </div>
+        ) : null}
 
         <div className="agent-query">
           <label htmlFor="agent-prompt">问 Agent 或下指令</label>
@@ -1573,6 +1629,16 @@ function agentActionKindLabel(kind: AgentActionRequest['kind']) {
     task_update_suggest: '任务更新建议'
   };
   return labels[kind];
+}
+
+function a2aStatusLabel(status: DemoState['a2aSessions'][number]['status']) {
+  const labels: Record<DemoState['a2aSessions'][number]['status'], string> = {
+    active: '进行中',
+    completed: '已完成',
+    needs_confirmation: '待确认',
+    blocked: '已阻止'
+  };
+  return labels[status];
 }
 
 function formatAiReplyJobStatus(job: AiReplyJob) {

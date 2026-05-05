@@ -24,6 +24,7 @@ import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
 import { recordSkippedAiAutoreplies, runAiAutoreplies } from './aiAutoreply';
 import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
+import { runAgentAutopilotForMessage } from './agentAutopilotRuntime';
 import { runAgentIntent } from './agentRunRuntime';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
@@ -72,7 +73,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   await db.init();
   const matrixPath =
     options.matrixBootstrapPath === undefined
-      ? process.env.MATRIX_BOOTSTRAP_PATH ?? 'data/matrix-bootstrap.json'
+      ? normalizeMatrixBootstrapPath(process.env.MATRIX_BOOTSTRAP_PATH)
       : options.matrixBootstrapPath;
   const matrixStore = matrixPath ? await MatrixStore.fromFile(matrixPath) : null;
   const aiProvider =
@@ -321,9 +322,44 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           nextState = skipped.state;
           autoReplyJobs = skipped.jobs;
         }
+        const autopilot = await runAgentAutopilotForMessage({
+          state: matrixStore ? await matrixStore.hydrateState(nextState) : nextState,
+          triggerMessage: message,
+          aiProvider,
+          webSearchProvider,
+          sendMessage: async (sendState, outbound) =>
+            matrixStore
+              ? matrixStore.sendMessage(
+                  sendState,
+                  {
+                    roomId: outbound.roomId,
+                    senderId: outbound.senderId,
+                    body: outbound.body
+                  },
+                  {
+                    agentLabel: outbound.agentLabel,
+                    sourceAgentId: outbound.sourceAgentId,
+                    fileId: outbound.fileId,
+                    fileName: outbound.fileId
+                      ? sendState.files.find((file) => file.id === outbound.fileId)?.name
+                      : undefined,
+                    mxcUri: outbound.mxcUri,
+                    mimeType: outbound.contentType,
+                    size: outbound.size
+                  }
+                )
+              : outbound
+        });
+        nextState = autopilot.state;
         await db.write(nextState);
         await publishRuntimeState();
-        return sendJson(response, { ...message, autoReplies, autoReplyJobs }, 201);
+        return sendJson(response, {
+          ...message,
+          autoReplies,
+          autoReplyJobs,
+          autopilotSessions: autopilot.sessions,
+          autopilotMessages: autopilot.messages
+        }, 201);
       }
 
       if (request.method === 'POST' && url.pathname === '/api/ai/human-reply') {
@@ -991,6 +1027,17 @@ function hostFromUrl(value: string): string {
   } catch {
     return value.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   }
+}
+
+function normalizeMatrixBootstrapPath(value: string | undefined): string | null {
+  if (value !== undefined) {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === 'none' || normalized === 'false' || normalized === 'off' || normalized === 'local') {
+      return null;
+    }
+    return value;
+  }
+  return 'data/matrix-bootstrap.json';
 }
 
 async function resolveAgentActionReview(

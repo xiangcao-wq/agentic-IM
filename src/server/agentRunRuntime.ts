@@ -1611,7 +1611,7 @@ async function generateChatReply(state: DemoState, input: AgentRunRequest, aiPro
   });
 }
 
-function buildCacheFriendlyMessages(
+export function buildCacheFriendlyMessages(
   systemPrompt: string,
   context: string,
   requestTail: string
@@ -1625,13 +1625,26 @@ function buildCacheFriendlyMessages(
 }
 
 function splitContextForPrefixCache(context: string): { stable: string; volatile: string } {
-  const marker = '\n## Agent memory\n';
-  const index = context.indexOf(marker);
-  if (index < 0) {
+  const blocks = context.split(/\n(?=## )/);
+  if (blocks.length <= 1) {
     return { stable: context, volatile: '' };
   }
+
+  const stableSections = [blocks[0]];
+  const volatileSections: string[] = [];
+  const stableTitles = new Set(['Tasks', 'Files', 'Members']);
+
+  for (const block of blocks.slice(1)) {
+    const title = block.match(/^## ([^\n]+)/)?.[1]?.trim();
+    if (title && stableTitles.has(title)) {
+      stableSections.push(block);
+    } else {
+      volatileSections.push(block);
+    }
+  }
+
   return {
-    stable: context.slice(0, index),
-    volatile: context.slice(index + 1)
+    stable: stableSections.filter(Boolean).join('\n\n'),
+    volatile: volatileSections.filter(Boolean).join('\n\n')
   };
 }
