@@ -220,6 +220,64 @@ describe('real local agent IM server', () => {
     );
   });
 
+  it('returns a schedule counter-proposal when the requested time conflicts over HTTP', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          calendar: [
+            ...state.calendar,
+            {
+              id: 'cal-chen-conflict',
+              title: 'Chen interview material sync',
+              startsAt: '2026-05-06T21:00:00+08:00',
+              roomId: 'room-team',
+              attendees: ['user-chen'],
+              sourceTaskId: 'task-interview-materials'
+            }
+          ],
+          agentAutopilotPolicies: state.agentAutopilotPolicies.map((policy) => ({
+            ...policy,
+            enabled: ['agent-lin', 'agent-chen'].includes(policy.agentId)
+          }))
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-zhao',
+        body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 21:00.'
+      })
+    });
+
+    const chenTurn = sentMessage.autopilotSessions[0].turns.find((turn: { agentId: string }) => turn.agentId === 'agent-chen');
+    expect(chenTurn).toMatchObject({
+      kind: 'counter_proposal'
+    });
+    expect(chenTurn.message).toContain('Chen interview material sync');
+
+    const currentState = await requestJson(`${app.url}/api/state`);
+    const actionId = sentMessage.autopilotSessions[0].proposedActionRequestIds[0];
+    const action = currentState.actionRequests.find((request: { id: string }) => request.id === actionId);
+    expect(action.input.calendarPatch).toMatchObject({
+      itemId: 'cal-review',
+      newStartsAt: '2026-05-06T23:00:00+08:00'
+    });
+  });
+
   it('updates an Agent autopilot policy and changes later message automation', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

@@ -115,6 +115,53 @@ describe('agent autopilot runtime', () => {
     expect(result.state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }))).toEqual(originalCalendar);
   });
 
+  it('counter-proposes a later time when a target Agent owner has a calendar conflict', async () => {
+    const baseState = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
+    const state: DemoState = {
+      ...baseState,
+      calendar: [
+        ...baseState.calendar,
+        {
+          id: 'cal-chen-conflict',
+          title: 'Chen interview material sync',
+          startsAt: '2026-05-06T21:00:00+08:00',
+          roomId: 'room-team',
+          attendees: ['user-chen'],
+          sourceTaskId: 'task-interview-materials'
+        }
+      ]
+    };
+    const trigger: Message = {
+      id: 'msg-autopilot-counter-proposal',
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      senderName: 'Zhao Yiming',
+      body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 21:00.',
+      sentAt: '2026-05-04T20:37:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger
+    });
+
+    const chenTurn = result.sessions[0].turns.find((turn) => turn.agentId === 'agent-chen');
+    expect(chenTurn).toMatchObject({
+      kind: 'counter_proposal'
+    });
+    expect(chenTurn?.message).toContain('Chen interview material sync');
+    expect(chenTurn?.message).toContain('23:00');
+
+    const actionId = result.sessions[0].proposedActionRequestIds[0];
+    const request = result.state.actionRequests.find((candidate) => candidate.id === actionId);
+    expect(request?.input.calendarPatch).toMatchObject({
+      oldStartsAt: '2026-05-05T20:30:00+08:00',
+      newStartsAt: '2026-05-06T23:00:00+08:00'
+    });
+    expect(result.state.calendar.find((item) => item.id === 'cal-review')?.startsAt).toBe('2026-05-05T20:30:00+08:00');
+  });
+
   it('runs multiple explicitly mentioned authorized agents in one A2A turn', async () => {
     const state = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
     const trigger: Message = {

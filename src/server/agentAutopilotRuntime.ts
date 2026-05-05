@@ -1,7 +1,9 @@
 import { sortMessagesChronologically } from '../domain/messages';
 import type {
   A2ASession,
+  A2ATurnKind,
   AgentActionLog,
+  AgentActionRequest,
   AgentAutopilotPolicy,
   AgentRunIntent,
   AgentRunResult,
@@ -19,6 +21,28 @@ interface AgentAutopilotInput {
   aiProvider?: AiProvider;
   webSearchProvider?: WebSearchProvider;
   sendMessage?: (state: DemoState, message: Message) => Promise<Message>;
+}
+
+interface CalendarPatch {
+  itemId: string;
+  oldStartsAt: string;
+  newStartsAt: string;
+  title: string;
+}
+
+interface NegotiationConstraint {
+  agentId: string;
+  ownerId: string;
+  status: 'accepted' | 'counter_proposal';
+  message: string;
+  conflictCalendarId?: string;
+  conflictTitle?: string;
+  counterProposalStartsAt?: string;
+}
+
+interface ScheduleNegotiation {
+  finalStartsAt: string;
+  constraints: NegotiationConstraint[];
 }
 
 export interface AgentAutopilotResult {
@@ -74,9 +98,12 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
       { webSearchProvider: input.webSearchProvider }
     );
     state = runtime.state;
+    const negotiated = applyScheduleNegotiation(state, input.triggerMessage, candidate.agentId, runtime.response);
+    state = negotiated.state;
+    const response = negotiated.response;
 
     const outboundMessage =
-      runtime.response.message ?? createAutopilotTextMessage(state, candidate.agentId, input.triggerMessage, runtime.response);
+      response.message ?? createAutopilotTextMessage(state, candidate.agentId, input.triggerMessage, response);
     const deliveredMessage = outboundMessage
       ? await deliverAutopilotMessage(state, outboundMessage, input.sendMessage)
       : undefined;
@@ -95,13 +122,13 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
       state,
       triggerMessage: input.triggerMessage,
       targetAgentId: candidate.agentId,
-      response: runtime.response,
+      response,
       deliveredMessage
     });
-    const sessionLog = createA2ASessionLog(session, runtime.response.log);
+    const sessionLog = createA2ASessionLog(session, response.log);
     sessions.push(session);
     logs.push(sessionLog);
-    responses.push(runtime.response);
+    responses.push(response);
     state = {
       ...state,
       a2aSessions: [session, ...(state.a2aSessions ?? [])],
@@ -318,6 +345,178 @@ function createAutopilotTextMessage(
   };
 }
 
+function applyScheduleNegotiation(
+  state: DemoState,
+  triggerMessage: Message,
+  primaryAgentId: string,
+  response: AgentRunResult
+): { state: DemoState; response: AgentRunResult } {
+  if (response.intent !== 'coordinate' || !response.requiresHuman || !response.actionRequest) {
+    return { state, response };
+  }
+  const patch = parseCalendarPatch(response.actionRequest.input.calendarPatch);
+  if (!patch) {
+    return { state, response };
+  }
+
+  const targetAgentIds = selectA2ATargetAgentIds(state, triggerMessage, primaryAgentId, response);
+  const constraints = targetAgentIds.map((agentId) => buildScheduleConstraint(state, agentId, patch));
+  const counterProposal = constraints.find((constraint) => constraint.counterProposalStartsAt);
+  if (!counterProposal?.counterProposalStartsAt) {
+    const negotiation: ScheduleNegotiation = {
+      finalStartsAt: patch.newStartsAt,
+      constraints
+    };
+    return updateNegotiatedActionRequest(state, response, patch, negotiation);
+  }
+
+  const negotiatedPatch = {
+    ...patch,
+    newStartsAt: counterProposal.counterProposalStartsAt
+  };
+  const negotiation: ScheduleNegotiation = {
+    finalStartsAt: negotiatedPatch.newStartsAt,
+    constraints
+  };
+  return updateNegotiatedActionRequest(state, response, negotiatedPatch, negotiation);
+}
+
+function updateNegotiatedActionRequest(
+  state: DemoState,
+  response: AgentRunResult,
+  patch: CalendarPatch,
+  negotiation: ScheduleNegotiation
+): { state: DemoState; response: AgentRunResult } {
+  if (!response.actionRequest) {
+    return { state, response };
+  }
+  const actionRequest: AgentActionRequest = {
+    ...response.actionRequest,
+    input: {
+      ...response.actionRequest.input,
+      calendarPatch: patch,
+      negotiation
+    }
+  };
+  const nextState = {
+    ...state,
+    actionRequests: state.actionRequests.map((request) =>
+      request.id === actionRequest.id ? actionRequest : request
+    )
+  };
+  const result = response.result && 'proposedPlan' in response.result
+    ? {
+        ...response.result,
+        proposedPlan:
+          negotiation.finalStartsAt === patch.newStartsAt
+            ? `${response.result.proposedPlan}\nNegotiated target time: ${patch.newStartsAt}.`
+            : response.result.proposedPlan
+      }
+    : response.result;
+  return {
+    state: nextState,
+    response: {
+      ...response,
+      result,
+      actionRequest
+    }
+  };
+}
+
+function buildScheduleConstraint(state: DemoState, agentId: string, patch: CalendarPatch): NegotiationConstraint {
+  const agent = state.agents.find((candidate) => candidate.id === agentId);
+  const ownerId = agent?.ownerId ?? agentId;
+  const conflict = state.calendar.find(
+    (item) => item.startsAt === patch.newStartsAt && item.attendees.includes(ownerId)
+  );
+  if (conflict) {
+    const counterProposalStartsAt = suggestCounterProposalStartsAt(patch.newStartsAt);
+    return {
+      agentId,
+      ownerId,
+      status: 'counter_proposal',
+      conflictCalendarId: conflict.id,
+      conflictTitle: conflict.title,
+      counterProposalStartsAt,
+      message: `${agent?.displayName ?? agentId} found a conflict with "${conflict.title}" at ${formatIsoTime(patch.newStartsAt)} and counter-proposes ${formatIsoTime(counterProposalStartsAt)}.`
+    };
+  }
+
+  return {
+    agentId,
+    ownerId,
+    status: 'accepted',
+    message: `${agent?.displayName ?? agentId} checked authorized calendar context and accepts ${formatIsoTime(patch.newStartsAt)} pending human confirmation.`
+  };
+}
+
+function parseCalendarPatch(value: unknown): CalendarPatch | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const patch = value as Record<string, unknown>;
+  if (
+    typeof patch.itemId !== 'string' ||
+    typeof patch.oldStartsAt !== 'string' ||
+    typeof patch.newStartsAt !== 'string' ||
+    typeof patch.title !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    itemId: patch.itemId,
+    oldStartsAt: patch.oldStartsAt,
+    newStartsAt: patch.newStartsAt,
+    title: patch.title
+  };
+}
+
+function parseScheduleNegotiation(value: unknown): ScheduleNegotiation | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const negotiation = value as Record<string, unknown>;
+  if (typeof negotiation.finalStartsAt !== 'string' || !Array.isArray(negotiation.constraints)) {
+    return undefined;
+  }
+  return {
+    finalStartsAt: negotiation.finalStartsAt,
+    constraints: negotiation.constraints.filter(isNegotiationConstraint)
+  };
+}
+
+function isNegotiationConstraint(value: unknown): value is NegotiationConstraint {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const constraint = value as Record<string, unknown>;
+  return (
+    typeof constraint.agentId === 'string' &&
+    typeof constraint.ownerId === 'string' &&
+    (constraint.status === 'accepted' || constraint.status === 'counter_proposal') &&
+    typeof constraint.message === 'string'
+  );
+}
+
+function suggestCounterProposalStartsAt(startsAt: string): string {
+  const match = startsAt.match(/^(.*T)(\d{2}):(\d{2})(:\d{2}(?:[+-]\d{2}:\d{2}|Z))$/);
+  if (!match) {
+    return startsAt;
+  }
+  const hour = Number(match[2]);
+  const minute = match[3];
+  if (hour < 23) {
+    return `${match[1]}23:00${match[4]}`;
+  }
+  const nextHour = String(Math.min(hour + 1, 23)).padStart(2, '0');
+  return `${match[1]}${nextHour}:${minute}${match[4]}`;
+}
+
+function formatIsoTime(startsAt: string): string {
+  const match = startsAt.match(/T(\d{2}:\d{2})/);
+  return match?.[1] ?? startsAt;
+}
+
 function createA2ASession(input: {
   state: DemoState;
   triggerMessage: Message;
@@ -367,6 +566,7 @@ function createA2ATurns(input: {
   createdAt: string;
 }): A2ASession['turns'] {
   if (input.response.intent === 'coordinate' && input.response.requiresHuman && input.targetAgentIds.length > 1) {
+    const negotiation = parseScheduleNegotiation(input.response.actionRequest?.input.negotiation);
     return [
       {
         id: `a2a-turn-${Date.now()}-0`,
@@ -384,22 +584,34 @@ function createA2ATurns(input: {
         toolCalls: ['agent.coordinate', 'calendar.inspect'],
         createdAt: input.createdAt
       },
-      ...input.targetAgentIds.map((agentId, index) => ({
-        id: `a2a-turn-${Date.now()}-${index + 2}`,
-        agentId,
-        kind: 'response' as const,
-        message:
-          index === 0
-            ? summarizeAgentRunResponse(input.response, input.deliveredMessage)
-            : 'Reviewed authorized room tasks and calendar context; no automatic calendar mutation before human approval.',
-        toolCalls: index === 0 ? input.response.log.toolCalls : ['agent.calendar_constraints.inspect'],
-        createdAt: input.createdAt
-      })),
+      ...input.targetAgentIds.map((agentId, index) => {
+        const constraint = negotiation?.constraints.find((candidate) => candidate.agentId === agentId);
+        const kind: A2ATurnKind = constraint?.status === 'counter_proposal' ? 'counter_proposal' : 'response';
+        return {
+          id: `a2a-turn-${Date.now()}-${index + 2}`,
+          agentId,
+          kind,
+          message:
+            constraint?.message ??
+            (index === 0
+              ? summarizeAgentRunResponse(input.response, input.deliveredMessage)
+              : 'Reviewed authorized room tasks and calendar context; no automatic calendar mutation before human approval.'),
+          toolCalls:
+            kind === 'counter_proposal'
+              ? ['agent.calendar_constraints.inspect', 'calendar.conflict.detect', 'agent.counter_proposal']
+              : index === 0
+                ? input.response.log.toolCalls
+                : ['agent.calendar_constraints.inspect'],
+          createdAt: input.createdAt
+        };
+      }),
       {
         id: `a2a-turn-${Date.now()}-${input.targetAgentIds.length + 2}`,
         agentId: input.targetAgentIds[0] ?? input.initiatorAgentId,
         kind: 'proposal',
-        message: 'Negotiation produced a schedule-change proposal and is waiting for human confirmation.',
+        message: negotiation
+          ? `Negotiation produced ${formatIsoTime(negotiation.finalStartsAt)} as the final proposed time and is waiting for human confirmation.`
+          : 'Negotiation produced a schedule-change proposal and is waiting for human confirmation.',
         toolCalls: ['risk.gate', 'action_request.create'],
         createdAt: input.createdAt
       }
