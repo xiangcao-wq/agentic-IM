@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 export interface DemoAsset {
   name: string;
   contentType: string;
@@ -108,6 +111,134 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
       ],
       'Searchable image-generation prompt pack for creating richer Image-2 demo visuals.',
       ['image-2', 'prompt', 'poster', 'design', 'ai-seed']
+    ),
+    textAsset(
+      'demo-scene-lin-asleep-file-handoff.md',
+      [
+        '# Demo Scene: Lin is asleep, her Agent handles the file handoff',
+        '',
+        'Trigger message: Chen asks whether Lin Agent can send the image generated last night.',
+        'Expected behavior: Lin Agent searches authorized room files, matches the latest Image-2 poster or research board, checks that the file is downloadable, and sends it only when risk is low.',
+        'Evidence to show: the outgoing chat message contains a real file chip and the file download endpoint returns bytes.',
+        'Boundary: if a file is metadata-only or not authorized, the Agent must not claim that it sent the file.'
+      ],
+      'Runbook for the offline file handoff demo scene.',
+      ['a2a', 'handoff', 'file', 'runbook', 'ai-seed']
+    ),
+    textAsset(
+      'demo-scene-a2a-calendar-negotiation.md',
+      [
+        '# Demo Scene: Agents coordinate a schedule change',
+        '',
+        'Trigger message: Zhao asks Lin Agent to negotiate with Chen Agent and move the final review from Tuesday 20:30 to Wednesday 23:00.',
+        'Expected behavior: the runtime creates an A2A session with multiple turns, proposes a calendarPatch, and places the change in the confirmation queue.',
+        'Human confirmation: before approval, internal calendar data must not change. After approval, calendar.startsAt is updated and an audit log is written.',
+        'Presenter line: Agents can negotiate and prepare a patch, but they do not bypass human control for high-impact changes.'
+      ],
+      'Runbook for the A2A schedule negotiation demo scene.',
+      ['a2a', 'calendar', 'confirmation', 'runbook', 'ai-seed']
+    ),
+    textAsset(
+      'campus-service-interview-quotes-v2.txt',
+      [
+        'Campus Service Research - Interview Quotes v2',
+        '',
+        'Student A: I do not know where to report a broken classroom projector, so I usually ask classmates first.',
+        'Student B: Repair progress is unclear. I want a simple timeline and a notification when the status changes.',
+        'Student volunteer: Duplicate requests happen because students cannot see whether someone already reported the same issue.',
+        'Service desk staff: The most useful improvement would be one intake form with location, photo, category, and contact method.',
+        'Agent demo note: Chen owns interview material and citation consistency. This text should be searchable by Agent when users ask about interview evidence or pain points.'
+      ],
+      'Searchable interview quote pack for the campus service research project.',
+      ['interview', 'quotes', 'evidence', 'research', 'ai-seed']
+    ),
+    textAsset(
+      'agent-autopilot-permission-table.txt',
+      [
+        'Agent Autopilot Permission Table',
+        '',
+        'Action | Auto-execute? | Required evidence',
+        'Answer context question | yes, low risk | authorized room messages and tasks',
+        'Search files | yes, low risk | room-visible file metadata and indexed text chunks',
+        'Share downloadable authorized file | yes when risk is low | requester is in room, file has localPath or mxcUri, agentCanShare=true',
+        'Change calendar | no, needs confirmation | clear calendarPatch with oldStartsAt and newStartsAt',
+        'Change task status | no, needs confirmation | clear taskPatch with oldStatus and newStatus',
+        'Read private chat | never | not in authorized context'
+      ],
+      'Permission table for explaining what the Agent can and cannot do.',
+      ['policy', 'permission', 'risk', 'autopilot', 'ai-seed']
+    ),
+    textAsset(
+      'presenter-script-agent-im-2min.md',
+      [
+        '# Agent IM two-minute presenter script',
+        '',
+        '1. Show LLM connected and explain that every member has a personal Agent.',
+        '2. Ask: Who owns interview material and what should I do first today?',
+        '3. Trigger: Chen asks Lin Agent to send the Image-2 research board while Lin is offline.',
+        '4. Show that the Agent sends a real downloadable file only after matching authorization and risk.',
+        '5. Trigger: Zhao asks Lin Agent and Chen Agent to coordinate a final review time.',
+        '6. Show the A2A session, confirmation queue, and audit-backed calendar update after approval.',
+        'Close: The product is not only chat. It lets personal Agents represent people in real collaboration while keeping humans in control.'
+      ],
+      'Short presenter script for a two-minute real-machine demo.',
+      ['script', 'demo', 'a2a', 'presentation', 'ai-seed']
+    ),
+    {
+      name: 'agent-im-a2a-investor-demo-onepager.pdf',
+      contentType: 'application/pdf',
+      bytes: createMinimalPdf('Agent IM A2A Investor Demo Onepager', [
+        'Core promise: personal agents represent people in collaboration.',
+        'Demo moment 1: answer from authorized context.',
+        'Demo moment 2: send a real downloadable file while the owner is offline.',
+        'Demo moment 3: coordinate schedule changes with confirmation gates.',
+        'Why it matters: work continues without losing permission, accountability, or auditability.'
+      ]),
+      summary: 'One-page PDF explaining the Agent IM A2A product story.',
+      tags: ['pdf', 'onepager', 'product', 'a2a', 'ai-seed']
+    },
+    {
+      name: 'campus-service-research-evidence-pack.pdf',
+      contentType: 'application/pdf',
+      bytes: createMinimalPdf('Campus Service Research Evidence Pack', [
+        'Interview owner: Chen.',
+        'Slides owner: Lin.',
+        'Final report owner: Zhao.',
+        'Pain points: unclear repair progress, duplicate requests, fragmented service entry points.',
+        'Deadline: 2026-05-12 23:59.'
+      ]),
+      summary: 'PDF evidence pack for the campus service research demo.',
+      tags: ['pdf', 'research', 'evidence', 'campus-service', 'ai-seed']
+    },
+    {
+      name: 'agent-risk-permission-policy.pdf',
+      contentType: 'application/pdf',
+      bytes: createMinimalPdf('Agent Risk and Permission Policy', [
+        'Low risk: read context, search files, answer questions, share low-risk authorized files.',
+        'Medium risk: request confirmation when file availability, audience, or sensitivity is unclear.',
+        'High risk: calendar and task changes require confirmation before state mutation.',
+        'Forbidden: private chat access, unauthorized files, and fake file availability.'
+      ]),
+      summary: 'PDF policy sheet for Agent risk gates and permissions.',
+      tags: ['pdf', 'risk', 'permission', 'policy', 'ai-seed']
+    },
+    binaryAsset(
+      'image2-agent-im-a2a-poster.png',
+      'image/png',
+      'Openable Image-2 generated poster for Agent IM A2A collaboration.',
+      ['image-2', 'png', 'poster', 'a2a', 'ai-seed']
+    ),
+    binaryAsset(
+      'image2-campus-service-research-board.png',
+      'image/png',
+      'Openable Image-2 generated research board for the campus service project.',
+      ['image-2', 'png', 'research', 'campus-service', 'ai-seed']
+    ),
+    binaryAsset(
+      'image2-a2a-schedule-coordination.png',
+      'image/png',
+      'Openable Image-2 generated schedule coordination board for A2A negotiation.',
+      ['image-2', 'png', 'calendar', 'a2a', 'ai-seed']
     )
   ];
 }
@@ -124,6 +255,24 @@ function textAsset(name: string, lines: string[], summary: string, tags: string[
 
 function textBytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
+}
+
+function binaryAsset(name: string, contentType: string, summary: string, tags: string[]): DemoAsset {
+  return {
+    name,
+    contentType,
+    bytes: readWorkspaceAsset(name),
+    summary,
+    tags
+  };
+}
+
+function readWorkspaceAsset(name: string): Uint8Array {
+  const filePath = join(process.cwd(), 'data', 'demo-assets', name);
+  if (!existsSync(filePath)) {
+    throw new Error(`missing demo asset file: ${filePath}`);
+  }
+  return new Uint8Array(readFileSync(filePath));
 }
 
 function createMinimalPdf(title: string, lines: string[]): Uint8Array {

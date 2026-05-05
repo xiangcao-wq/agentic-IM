@@ -9,3 +9,5 @@ synapse-data/
 tmp/
 *.tsbuildinfo
 *.log
+agent-im-ui*.png
+demo-output/

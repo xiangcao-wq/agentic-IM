@@ -873,7 +873,7 @@ describe('real local agent IM server', () => {
       })
     });
 
-    expect(generated.files).toHaveLength(8);
+    expect(generated.files.length).toBeGreaterThanOrEqual(19);
     expect(generated.files.every((file: { localPath?: string; mxcUri?: string }) => file.localPath && !file.mxcUri)).toBe(true);
 
     const poster = generated.files.find((file: { name: string; id: string }) => file.name.endsWith('.svg'));
@@ -882,6 +882,13 @@ describe('real local agent IM server', () => {
     expect(posterResponse.ok).toBe(true);
     expect(posterResponse.headers.get('content-type')).toContain('image/svg+xml');
     expect(await posterResponse.text()).toContain('<svg');
+
+    const image2 = generated.files.find((file: { name: string; id: string }) => file.name === 'image2-agent-im-a2a-poster.png');
+    expect(image2?.id).toBeTruthy();
+    const image2Response = await fetch(`${app.url}/api/files/${image2!.id}/download`);
+    expect(image2Response.ok).toBe(true);
+    expect(image2Response.headers.get('content-type')).toContain('image/png');
+    expect((await image2Response.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
   });
 
   it('indexes uploaded text files but skips binary document uploads', async () => {
