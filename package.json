@@ -8,6 +8,7 @@
     "matrix:up": "docker compose -f docker-compose.matrix.yml up -d synapse && npm run matrix:bootstrap",
     "matrix:bootstrap": "tsx src/server/matrixBootstrap.ts",
     "ai:seed": "tsx src/server/aiDemoSeed.ts",
+    "demo:prepare": "tsx scripts/prepare-demo-db.mjs",
     "infra:up": "npm run matrix:up",
     "infra:reset": "tsx scripts/reset-demo.mjs",
     "infra:smoke": "node scripts/smoke.mjs",

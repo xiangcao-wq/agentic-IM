@@ -6,6 +6,7 @@
 
 ```bash
 npm install
+npm run demo:prepare
 npm run dev:full
 ```
 
@@ -21,6 +22,13 @@ npm run dev:full
 npm run api
 npm run dev
 ```
+
+`npm run demo:prepare` creates a clean deployable demo database plus local media files from committed assets. It writes:
+
+- `data/agent-im-db.json`
+- `data/media/*`
+
+These runtime files are intentionally ignored for normal commits. The repository contains the source assets and seed scripts, so a server can recreate the complete demo state without committing local chat history or machine-specific Matrix media ids.
 
 ## Verified Flow
 
@@ -51,6 +59,12 @@ Reset local product state back to the clean demo seed:
 
 ```bash
 npm run infra:reset
+```
+
+Prepare the richer deployable demo with real downloadable Image-2 PNG, PDF, Markdown, and text assets:
+
+```bash
+npm run demo:prepare
 ```
 
 Run a smoke check against running API and web servers:
