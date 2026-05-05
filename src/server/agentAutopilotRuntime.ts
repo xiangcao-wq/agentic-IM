@@ -223,9 +223,13 @@ function selectAutopilotCandidates(
     });
 }
 
-function selectRunnableCandidates<T extends { explicitlyMentioned: boolean }>(candidates: T[]): T[] {
+function selectRunnableCandidates<T extends { explicitlyMentioned: boolean; intent: AgentRunIntent }>(candidates: T[]): T[] {
   const explicit = candidates.filter((candidate) => candidate.explicitlyMentioned);
   if (explicit.length > 0) {
+    const coordinate = explicit.find((candidate) => candidate.intent === 'coordinate');
+    if (coordinate) {
+      return [coordinate];
+    }
     return explicit.slice(0, 3);
   }
   return candidates.slice(0, 1);
@@ -233,16 +237,35 @@ function selectRunnableCandidates<T extends { explicitlyMentioned: boolean }>(ca
 
 function inferAutopilotIntent(text: string): AgentRunIntent | undefined {
   const lowered = text.toLowerCase();
-  if (includesAny(lowered, ['coordinate', 'reschedule', 'move the final review', 'move the meeting', 'negotiate'])) {
+  const asksNotToSend =
+    includesAny(text, ['不要发', '先不发', '别发', '不要发送', '先不要发']) ||
+    includesAny(lowered, ['do not send', "don't send"]);
+  const mentionsFileLike =
+    includesAny(text, ['文件', '图片', '图像', '照片', '海报', '素材', '演示稿', '幻灯', '课件', '报告', '行动计划', '文档']) ||
+    includesAny(lowered, ['file', 'image', 'picture', 'photo', 'poster', 'asset', 'slides', 'deck', 'plan', 'pdf']);
+  const asksToSend =
+    includesAny(text, ['发', '发送', '代发', '转发', '分享', '传一下', '发给', '发一下']) ||
+    includesAny(lowered, ['send', 'share', 'forward']);
+  const asksScheduleCoordination =
+    includesAny(lowered, ['coordinate', 'reschedule', 'move the final review', 'move the meeting', 'negotiate']) ||
+    includesAny(text, ['改到', '改成', '改为', '调整日程', '调整时间', '安排会议', '开会时间', '会面时间']) ||
+    (includesAny(text, ['协调', '协商', '确认']) &&
+      includesAny(text, ['时间', '日程', '会议', '开会', '会面', '合稿', '检查', '明天', '下午', '晚上']));
+
+  if (asksScheduleCoordination) {
     return 'coordinate';
   }
   if (
-    includesAny(lowered, ['send latest', 'send the latest', 'share latest', 'send file', 'share file', 'latest slides']) ||
-    (includesAny(lowered, ['send', 'share']) && includesAny(lowered, ['file', 'slides', 'deck', 'plan']))
+    !asksNotToSend &&
+    (includesAny(lowered, ['send latest', 'send the latest', 'share latest', 'send file', 'share file', 'latest slides']) ||
+      (asksToSend && mentionsFileLike))
   ) {
     return 'share_file';
   }
-  if (includesAny(lowered, ['deadline', 'due date', 'when is this due'])) {
+  if (
+    includesAny(text, ['截止', '到期', '什么时候交', 'ddl', 'DDL', '还有几天']) ||
+    includesAny(lowered, ['deadline', 'due date', 'when is this due'])
+  ) {
     return 'deadline';
   }
   return undefined;

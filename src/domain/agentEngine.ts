@@ -557,8 +557,19 @@ function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined
     };
   }
 
-  const asksLatestSharedFile = includesAny(requestText, ['最新', '发一下', '演示稿', '行动计划']) ||
-    includesAny(requestText.toLowerCase(), ['action plan', 'slides', 'send', 'plan']);
+  const asksLatestSharedFile = includesAny(requestText, [
+    '最新',
+    '发一下',
+    '演示稿',
+    '行动计划',
+    '图片',
+    '图像',
+    '照片',
+    '海报',
+    '素材',
+    '昨晚生成'
+  ]) ||
+    includesAny(requestText.toLowerCase(), ['action plan', 'slides', 'send', 'plan', 'image', 'picture', 'poster']);
   return {
     level: asksLatestSharedFile ? 'low' : 'medium',
     score: asksLatestSharedFile ? 0.18 : 0.48,
@@ -581,6 +592,12 @@ function buildFileSearchTerms(requestText: string): string[] {
   }
   if (includesAny(requestText, ['演示稿', 'ppt', 'PPT']) || lowered.includes('slides')) {
     terms.push('演示稿', 'pptx', 'slides');
+  }
+  if (
+    includesAny(requestText, ['图片', '图像', '照片', '海报', '素材', '昨晚生成']) ||
+    includesAny(lowered, ['image', 'picture', 'photo', 'poster', 'visual', 'asset', 'svg'])
+  ) {
+    terms.push('图片', '图像', '照片', '海报', '素材', 'image', 'picture', 'poster', 'svg');
   }
   if (includesAny(requestText, ['访谈', '纪要']) || lowered.includes('interview')) {
     terms.push('访谈', '纪要', 'interview');

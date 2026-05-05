@@ -45,6 +45,45 @@ describe('agent autopilot runtime', () => {
     expect(result.state.actionLogs[0].toolCalls).toContain('a2a.session');
   });
 
+  it('executes a Chinese delegated image handoff when the image is real and authorized', async () => {
+    const state = withDownloadableImage(createDemoState());
+    const trigger: Message = {
+      id: 'msg-autopilot-image-cn',
+      roomId: 'room-team',
+      senderId: 'user-chen',
+      senderName: 'Chen Chen',
+      body: '林雯现在睡觉了，能让 Lin Agent 把昨晚生成的图片发给陈晨吗？',
+      sentAt: '2026-05-05T08:10:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger,
+      sendMessage: async (_sendState, message) => ({
+        ...message,
+        id: `sent-${message.id}`,
+        sentAt: '2026-05-05T08:10:02.000Z'
+      })
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toMatchObject({
+      targetAgentIds: ['agent-lin'],
+      status: 'completed'
+    });
+    expect(result.responses[0]).toMatchObject({
+      intent: 'share_file',
+      requiresHuman: false
+    });
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({
+      type: 'file',
+      sourceAgentId: 'agent-lin',
+      fileId: 'file-lin-night-image'
+    });
+  });
+
   it('queues high-risk schedule coordination instead of mutating calendar during autopilot', async () => {
     const state = createDemoState();
     const originalCalendar = state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }));
@@ -113,6 +152,35 @@ describe('agent autopilot runtime', () => {
       newStartsAt: expect.stringContaining('23:00')
     });
     expect(result.state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }))).toEqual(originalCalendar);
+  });
+
+  it('starts one Chinese A2A meeting negotiation even when multiple Agents are mentioned', async () => {
+    const state = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
+    const trigger: Message = {
+      id: 'msg-autopilot-meeting-cn',
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      senderName: 'Zhao Yiming',
+      body: 'Lin Agent 和 Chen Agent，协商一下明天下午开会时间。',
+      sentAt: '2026-05-04T20:36:30.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toMatchObject({
+      status: 'needs_confirmation',
+      targetAgentIds: ['agent-lin', 'agent-chen']
+    });
+    expect(result.responses[0]).toMatchObject({
+      intent: 'coordinate',
+      requiresHuman: true
+    });
+    expect(result.state.actionRequests.filter((request) => request.kind === 'coordinate')).toHaveLength(1);
   });
 
   it('counter-proposes a later time when a target Agent owner has a calendar conflict', async () => {
@@ -281,6 +349,30 @@ function withDownloadableSlides(state: DemoState): DemoState {
           }
         : file
     )
+  };
+}
+
+function withDownloadableImage(state: DemoState): DemoState {
+  return {
+    ...state,
+    files: [
+      ...state.files,
+      {
+        id: 'file-lin-night-image',
+        name: 'agent-im-a2a-demo-poster.svg',
+        uploaderId: 'user-lin',
+        version: 1,
+        roomId: 'room-team',
+        updatedAt: '2026-05-04T22:18:00+08:00',
+        visibility: 'room',
+        agentCanShare: true,
+        tags: ['image', 'poster', '昨晚生成', '演示物料'],
+        summary: '林雯昨晚生成的 A2A 演示海报图片，已授权 Agent 在本组范围内代发。',
+        contentType: 'image/svg+xml',
+        size: 4096,
+        mxcUri: 'mxc://localhost/lin-night-image'
+      }
+    ]
   };
 }
 

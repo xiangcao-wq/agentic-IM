@@ -718,8 +718,19 @@ function inferIntentFromText(text: string): AgentRunIntent {
   const asksNotToSend = includesAny(text, ['不要发', '先不发', '别发', '不要发送', '先不要发']) ||
     lowered.includes('do not send') ||
     lowered.includes("don't send");
-  const mentionsFile = includesAny(text, ['文件', '演示稿', '访谈', '纪要', '行动计划']) ||
-    includesAny(lowered, ['file', 'slides', 'ppt', 'deck', 'interview', 'plan']);
+  const mentionsFile = includesAny(text, [
+    '文件',
+    '图片',
+    '图像',
+    '照片',
+    '海报',
+    '素材',
+    '演示稿',
+    '访谈',
+    '纪要',
+    '行动计划'
+  ]) ||
+    includesAny(lowered, ['file', 'image', 'picture', 'photo', 'poster', 'asset', 'slides', 'ppt', 'deck', 'interview', 'plan']);
   const asksResponsibility = includesAny(text, ['谁在负责', '谁负责', '负责人', '负责谁']) ||
     includesAny(text, ['归谁管', '谁管', '谁来管']) ||
     (lowered.includes('who') && lowered.includes('responsib'));
@@ -747,15 +758,15 @@ function inferIntentFromText(text: string): AgentRunIntent {
   if (
     !asksNotToSend &&
     mentionsFile &&
-    (includesAny(text, ['发文件', '代发', '分享文件', '发一下', '发给', '发送']) ||
-      includesAny(lowered, ['send file', 'share file', 'send the', 'send latest']))
+    (includesAny(text, ['发', '发文件', '代发', '转发', '分享', '分享文件', '发一下', '发给', '发送', '传一下']) ||
+      includesAny(lowered, ['send', 'share', 'forward']))
   ) {
     return 'share_file';
   }
   if (includesAny(text, ['找文件', '搜索文件', '哪个文件', '哪份文件']) || lowered.includes('find file') || mentionsFile) {
     return asksNotToSend ? 'chat' : 'find_file';
   }
-  if (includesAny(text, ['协调', '改到', '日程', '会议']) || lowered.includes('coordinate')) {
+  if (looksLikeCoordinationRequest(text)) {
     return 'coordinate';
   }
   return 'chat';
@@ -804,13 +815,19 @@ function looksLikeCoordinationRequest(text: string): boolean {
 
   const asksForChange = includesAny(text, [
     '协调',
+    '协商',
     '改到',
     '改成',
     '改为',
     '调整',
+    '调整日程',
+    '调整时间',
     '推迟',
     '提前',
     '安排',
+    '安排会议',
+    '开会时间',
+    '会面时间',
     '约一下',
     '确认大家',
     '和陈晨确认',
@@ -818,7 +835,23 @@ function looksLikeCoordinationRequest(text: string): boolean {
     '和赵一鸣确认',
     '跟赵一鸣确认'
   ]);
-  const hasScheduleOrAgentTarget = includesAny(text, ['日程', '会议', '合稿', '检查', '截止', 'Agent', '大家', '陈晨', '赵一鸣']);
+  const hasScheduleOrAgentTarget = includesAny(text, [
+    '时间',
+    '日程',
+    '会议',
+    '开会',
+    '会面',
+    '合稿',
+    '检查',
+    '截止',
+    '明天',
+    '下午',
+    '晚上',
+    'Agent',
+    '大家',
+    '陈晨',
+    '赵一鸣'
+  ]);
   return asksForChange && hasScheduleOrAgentTarget;
 }
 
@@ -921,6 +954,12 @@ function buildFileQueryTerms(query: string): string[] {
   }
   if (includesAny(query, ['报告']) || lowered.includes('report')) {
     terms.push('报告', 'report', 'pdf');
+  }
+  if (
+    includesAny(query, ['图片', '图像', '照片', '海报', '素材', '昨晚生成']) ||
+    includesAny(lowered, ['image', 'picture', 'photo', 'poster', 'visual', 'asset', 'svg'])
+  ) {
+    terms.push('图片', '图像', '照片', '海报', '素材', 'image', 'picture', 'poster', 'visual', 'asset', 'svg');
   }
   if (includesAny(query, ['流程图']) || includesAny(lowered, ['flow', 'diagram'])) {
     terms.push('流程图', 'flow', 'diagram');
