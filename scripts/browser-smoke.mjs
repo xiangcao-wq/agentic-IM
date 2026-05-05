@@ -107,6 +107,25 @@ try {
     throw new Error('Expected explicit Agent mention to return an autopilot chat message.');
   }
 
+  const a2aNegotiationResponse = await page.request.post(`${baseUrl}/api/messages`, {
+    data: {
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
+    }
+  });
+  if (!a2aNegotiationResponse.ok()) {
+    throw new Error(`A2A schedule negotiation failed with HTTP ${a2aNegotiationResponse.status()}`);
+  }
+  const a2aNegotiationPayload = await a2aNegotiationResponse.json();
+  const negotiationSession = a2aNegotiationPayload.autopilotSessions?.[0];
+  if (!negotiationSession || negotiationSession.status !== 'needs_confirmation') {
+    throw new Error('Expected schedule negotiation to create a needs_confirmation A2A session.');
+  }
+  if (!negotiationSession.targetAgentIds?.includes('agent-lin') || !negotiationSession.targetAgentIds?.includes('agent-chen')) {
+    throw new Error('Expected schedule negotiation to include both Lin and Chen agents.');
+  }
+
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
   await page.locator('[data-testid="a2a-session-panel"]').waitFor({ timeout: 120_000 });
@@ -120,6 +139,7 @@ try {
       agentIntent: agentRunPayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
       a2aChatMessages: a2aChatPayload.autopilotMessages.length,
+      a2aNegotiationTurns: negotiationSession.turns?.length ?? 0,
       autopilotToggle: 'ok',
       autopilotSweep: {
         processed: sweepPayload.processedMessageIds?.length ?? 0,

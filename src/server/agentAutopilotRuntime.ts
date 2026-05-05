@@ -56,6 +56,10 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
   const responses: AgentRunResult[] = [];
 
   for (const candidate of selectRunnableCandidates(candidates)) {
+    const targetUserId =
+      candidate.intent === 'coordinate'
+        ? inferMentionedTargetUserId(state, input.triggerMessage.body, candidate.agentId) ?? input.triggerMessage.senderId
+        : input.triggerMessage.senderId;
     const runtime = await runAgentIntent(
       state,
       {
@@ -63,7 +67,7 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
         roomId: input.triggerMessage.roomId,
         intent: candidate.intent,
         userText: input.triggerMessage.body,
-        targetUserId: input.triggerMessage.senderId
+        targetUserId
       },
       input.aiProvider,
       undefined,
@@ -254,6 +258,24 @@ function mentionsAgentDirectly(text: string, agentName: string, ownerName: strin
   );
 }
 
+function inferMentionedTargetUserId(state: DemoState, text: string, actingAgentId: string): string | undefined {
+  const actingAgent = state.agents.find((agent) => agent.id === actingAgentId);
+  const lowered = text.toLowerCase();
+  return state.users.find((user) => {
+    if (user.id === actingAgent?.ownerId) {
+      return false;
+    }
+    const userAgent = state.agents.find((agent) => agent.id === user.agentId);
+    const ownerSlug = user.id.replace(/^user-/, '').toLowerCase();
+    return (
+      lowered.includes(user.name.toLowerCase()) ||
+      lowered.includes(ownerSlug) ||
+      Boolean(userAgent && lowered.includes(userAgent.displayName.toLowerCase())) ||
+      lowered.includes(`${ownerSlug} agent`)
+    );
+  })?.id;
+}
+
 async function deliverAutopilotMessage(
   state: DemoState,
   message: Message,
@@ -311,38 +333,117 @@ function createA2ASession(input: {
     : risk.level === 'high'
       ? 'blocked'
       : 'completed';
+  const targetAgentIds = selectA2ATargetAgentIds(input.state, input.triggerMessage, input.targetAgentId, input.response);
 
   return {
     id: `a2a-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: input.triggerMessage.roomId,
     initiatorAgentId,
-    targetAgentIds: [input.targetAgentId],
+    targetAgentIds,
     goal: input.triggerMessage.body,
     status,
-    turns: [
-      {
-        id: `a2a-turn-${Date.now()}-0`,
-        agentId: initiatorAgentId,
-        kind: 'observation',
-        message: input.triggerMessage.body,
-        toolCalls: ['message.observe'],
-        createdAt
-      },
-      {
-        id: `a2a-turn-${Date.now()}-1`,
-        agentId: input.targetAgentId,
-        kind: input.response.requiresHuman ? 'proposal' : 'tool_result',
-        message: summarizeAgentRunResponse(input.response, input.deliveredMessage),
-        toolCalls: input.response.log.toolCalls,
-        createdAt
-      }
-    ],
+    turns: createA2ATurns({
+      initiatorAgentId,
+      targetAgentIds,
+      triggerMessage: input.triggerMessage,
+      response: input.response,
+      deliveredMessage: input.deliveredMessage,
+      createdAt
+    }),
     proposedActionRequestIds: input.response.actionRequest ? [input.response.actionRequest.id] : [],
     contextIds: uniqueStrings([input.triggerMessage.id, ...input.response.log.contextIds]),
     risk,
     createdAt,
     updatedAt: createdAt
   };
+}
+
+function createA2ATurns(input: {
+  initiatorAgentId: string;
+  targetAgentIds: string[];
+  triggerMessage: Message;
+  response: AgentRunResult;
+  deliveredMessage?: Message;
+  createdAt: string;
+}): A2ASession['turns'] {
+  if (input.response.intent === 'coordinate' && input.response.requiresHuman && input.targetAgentIds.length > 1) {
+    return [
+      {
+        id: `a2a-turn-${Date.now()}-0`,
+        agentId: input.initiatorAgentId,
+        kind: 'observation',
+        message: input.triggerMessage.body,
+        toolCalls: ['message.observe'],
+        createdAt: input.createdAt
+      },
+      {
+        id: `a2a-turn-${Date.now()}-1`,
+        agentId: input.initiatorAgentId,
+        kind: 'proposal',
+        message: `Proposed schedule change: ${input.triggerMessage.body}`,
+        toolCalls: ['agent.coordinate', 'calendar.inspect'],
+        createdAt: input.createdAt
+      },
+      ...input.targetAgentIds.map((agentId, index) => ({
+        id: `a2a-turn-${Date.now()}-${index + 2}`,
+        agentId,
+        kind: 'response' as const,
+        message:
+          index === 0
+            ? summarizeAgentRunResponse(input.response, input.deliveredMessage)
+            : 'Reviewed authorized room tasks and calendar context; no automatic calendar mutation before human approval.',
+        toolCalls: index === 0 ? input.response.log.toolCalls : ['agent.calendar_constraints.inspect'],
+        createdAt: input.createdAt
+      })),
+      {
+        id: `a2a-turn-${Date.now()}-${input.targetAgentIds.length + 2}`,
+        agentId: input.targetAgentIds[0] ?? input.initiatorAgentId,
+        kind: 'proposal',
+        message: 'Negotiation produced a schedule-change proposal and is waiting for human confirmation.',
+        toolCalls: ['risk.gate', 'action_request.create'],
+        createdAt: input.createdAt
+      }
+    ];
+  }
+
+  return [
+    {
+      id: `a2a-turn-${Date.now()}-0`,
+      agentId: input.initiatorAgentId,
+      kind: 'observation',
+      message: input.triggerMessage.body,
+      toolCalls: ['message.observe'],
+      createdAt: input.createdAt
+    },
+    {
+      id: `a2a-turn-${Date.now()}-1`,
+      agentId: input.targetAgentIds[0] ?? input.initiatorAgentId,
+      kind: input.response.requiresHuman ? 'proposal' : 'tool_result',
+      message: summarizeAgentRunResponse(input.response, input.deliveredMessage),
+      toolCalls: input.response.log.toolCalls,
+      createdAt: input.createdAt
+    }
+  ];
+}
+
+function selectA2ATargetAgentIds(
+  state: DemoState,
+  triggerMessage: Message,
+  primaryAgentId: string,
+  response: AgentRunResult
+): string[] {
+  if (response.intent !== 'coordinate') {
+    return [primaryAgentId];
+  }
+  const mentionedAgentIds = state.agents
+    .filter((agent) => agent.allowedRoomIds.includes(triggerMessage.roomId))
+    .filter((agent) => {
+      const owner = state.users.find((candidate) => candidate.id === agent.ownerId);
+      return owner && mentionsAgentDirectly(triggerMessage.body, agent.displayName, owner.name, owner.id);
+    })
+    .map((agent) => agent.id);
+  const actionTarget = typeof response.actionRequest?.input.toAgentId === 'string' ? response.actionRequest.input.toAgentId : '';
+  return uniqueStrings([primaryAgentId, actionTarget, ...mentionedAgentIds]);
 }
 
 function createA2ASessionLog(session: A2ASession, sourceLog: AgentActionLog): AgentActionLog {

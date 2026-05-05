@@ -156,6 +156,70 @@ describe('real local agent IM server', () => {
     expect(state.messages.some((message: { id: string }) => message.id === sentMessage.autopilotMessages[0].id)).toBe(true);
   });
 
+  it('returns a negotiated A2A schedule session and queued calendar patch over HTTP', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          agentAutopilotPolicies: state.agentAutopilotPolicies.map((policy) => ({
+            ...policy,
+            enabled: ['agent-lin', 'agent-chen'].includes(policy.agentId)
+          }))
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-zhao',
+        body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
+      })
+    });
+
+    expect(sentMessage.autopilotSessions).toHaveLength(1);
+    expect(sentMessage.autopilotSessions[0]).toMatchObject({
+      status: 'needs_confirmation',
+      targetAgentIds: ['agent-lin', 'agent-chen']
+    });
+    expect(sentMessage.autopilotSessions[0].turns.map((turn: { kind: string }) => turn.kind)).toEqual([
+      'observation',
+      'proposal',
+      'response',
+      'response',
+      'proposal'
+    ]);
+
+    const currentState = await requestJson(`${app.url}/api/state`);
+    const actionId = sentMessage.autopilotSessions[0].proposedActionRequestIds[0];
+    const action = currentState.actionRequests.find((request: { id: string }) => request.id === actionId);
+    expect(action).toMatchObject({
+      kind: 'coordinate',
+      status: 'needs_confirmation',
+      input: {
+        toAgentId: 'agent-chen',
+        calendarPatch: {
+          itemId: 'cal-review',
+          newStartsAt: expect.stringContaining('23:00')
+        }
+      }
+    });
+    expect(currentState.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-05T20:30:00+08:00'
+    );
+  });
+
   it('updates an Agent autopilot policy and changes later message automation', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

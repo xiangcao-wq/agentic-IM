@@ -66,9 +66,52 @@ describe('agent autopilot runtime', () => {
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]).toMatchObject({
       status: 'needs_confirmation',
-      targetAgentIds: ['agent-lin']
+      targetAgentIds: ['agent-lin', 'agent-chen']
     });
     expect(result.state.actionRequests.some((request) => request.kind === 'coordinate')).toBe(true);
+    expect(result.state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }))).toEqual(originalCalendar);
+  });
+
+  it('records autonomous A2A schedule negotiation turns before asking for human confirmation', async () => {
+    const state = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
+    const originalCalendar = state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }));
+    const trigger: Message = {
+      id: 'msg-autopilot-negotiation',
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      senderName: 'Zhao Yiming',
+      body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.',
+      sentAt: '2026-05-04T20:36:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0].status).toBe('needs_confirmation');
+    expect(result.sessions[0].targetAgentIds).toEqual(['agent-lin', 'agent-chen']);
+    expect(result.sessions[0].turns.map((turn) => turn.kind)).toEqual([
+      'observation',
+      'proposal',
+      'response',
+      'response',
+      'proposal'
+    ]);
+    expect(result.sessions[0].turns.map((turn) => turn.agentId)).toContain('agent-chen');
+    expect(result.sessions[0].turns.at(-1)?.message).toContain('human confirmation');
+    expect(result.sessions[0].proposedActionRequestIds).toHaveLength(1);
+
+    const request = result.state.actionRequests.find((candidate) =>
+      result.sessions[0].proposedActionRequestIds.includes(candidate.id)
+    );
+    expect(request?.kind).toBe('coordinate');
+    expect(request?.input.calendarPatch).toMatchObject({
+      itemId: 'cal-review',
+      newStartsAt: expect.stringContaining('23:00')
+    });
     expect(result.state.calendar.map((item) => ({ id: item.id, startsAt: item.startsAt }))).toEqual(originalCalendar);
   });
 
