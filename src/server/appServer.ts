@@ -27,7 +27,7 @@ import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
 import { recordSkippedAiAutoreplies, runAiAutoreplies } from './aiAutoreply';
 import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
-import { runAgentAutopilotForMessage } from './agentAutopilotRuntime';
+import { runAgentAutopilotForMessage, runPendingAgentAutopilot } from './agentAutopilotRuntime';
 import { runAgentIntent } from './agentRunRuntime';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
@@ -117,6 +117,30 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     publish(eventClients, 'state', await readRuntimeState());
   }
 
+  async function sendAutopilotMessage(sendState: DemoState, outbound: Message): Promise<Message> {
+    return matrixStore
+      ? matrixStore.sendMessage(
+          sendState,
+          {
+            roomId: outbound.roomId,
+            senderId: outbound.senderId,
+            body: outbound.body
+          },
+          {
+            agentLabel: outbound.agentLabel,
+            sourceAgentId: outbound.sourceAgentId,
+            fileId: outbound.fileId,
+            fileName: outbound.fileId
+              ? sendState.files.find((file) => file.id === outbound.fileId)?.name
+              : undefined,
+            mxcUri: outbound.mxcUri,
+            mimeType: outbound.contentType,
+            size: outbound.size
+          }
+        )
+      : outbound;
+  }
+
   const server = createServer(async (request, response) => {
     try {
       if (!applyCorsHeaders(request, response, allowedOrigins)) {
@@ -156,6 +180,28 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         await db.write(updated.state);
         await publishRuntimeState();
         return sendJson(response, { policy: updated.policy });
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/agent/autopilot/run-pending') {
+        const body = await readJson<{ roomId?: string; limit?: number }>(request);
+        const state = await readRuntimeState();
+        const sweep = await runPendingAgentAutopilot({
+          state,
+          roomId: body.roomId,
+          limit: body.limit,
+          aiProvider,
+          webSearchProvider,
+          sendMessage: sendAutopilotMessage
+        });
+        await db.write(sweep.state);
+        await publishRuntimeState();
+        return sendJson(response, {
+          processedMessageIds: sweep.processedMessageIds,
+          skippedMessageIds: sweep.skippedMessageIds,
+          sessions: sweep.sessions,
+          messages: sweep.messages,
+          logs: sweep.logs
+        });
       }
 
       if (request.method === 'GET' && url.pathname === '/api/memories') {
@@ -348,28 +394,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           triggerMessage: message,
           aiProvider,
           webSearchProvider,
-          sendMessage: async (sendState, outbound) =>
-            matrixStore
-              ? matrixStore.sendMessage(
-                  sendState,
-                  {
-                    roomId: outbound.roomId,
-                    senderId: outbound.senderId,
-                    body: outbound.body
-                  },
-                  {
-                    agentLabel: outbound.agentLabel,
-                    sourceAgentId: outbound.sourceAgentId,
-                    fileId: outbound.fileId,
-                    fileName: outbound.fileId
-                      ? sendState.files.find((file) => file.id === outbound.fileId)?.name
-                      : undefined,
-                    mxcUri: outbound.mxcUri,
-                    mimeType: outbound.contentType,
-                    size: outbound.size
-                  }
-                )
-              : outbound
+          sendMessage: sendAutopilotMessage
         });
         nextState = autopilot.state;
         await db.write(nextState);

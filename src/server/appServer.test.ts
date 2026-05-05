@@ -446,6 +446,70 @@ describe('real local agent IM server', () => {
     expect(finalState.actionLogs.filter((log: { toolCalls: string[] }) => log.toolCalls.includes('a2a.session'))).toHaveLength(2);
   });
 
+  it('sweeps pending room messages through the HTTP autopilot runner', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: state.files.map((file) =>
+            file.id === 'file-slides-v3'
+              ? {
+                  ...file,
+                  localPath: 'seed-slides-v3.pptx',
+                  contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  size: 4096
+                }
+              : file
+          ),
+          messages: [
+            ...state.messages,
+            {
+              id: 'msg-http-autopilot-backlog',
+              roomId: 'room-team',
+              senderId: 'user-chen',
+              senderName: 'Chen Chen',
+              body: 'Lin is offline. Can her Agent send the latest slides to Chen?',
+              sentAt: '2026-05-04T21:00:00.000Z',
+              type: 'text'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const first = await requestJson(`${app.url}/api/agent/autopilot/run-pending`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        limit: 5
+      })
+    });
+
+    expect(first.processedMessageIds).toContain('msg-http-autopilot-backlog');
+    expect(first.sessions).toHaveLength(1);
+    expect(first.messages).toHaveLength(1);
+
+    const second = await requestJson(`${app.url}/api/agent/autopilot/run-pending`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        limit: 5
+      })
+    });
+    expect(second.processedMessageIds).not.toContain('msg-http-autopilot-backlog');
+    expect(second.sessions).toHaveLength(0);
+  });
+
   it('generates local demo assets that can be downloaded without Matrix', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

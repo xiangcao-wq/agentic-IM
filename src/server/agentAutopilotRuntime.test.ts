@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
 import type { DemoState, Message } from '../domain/types';
-import { runAgentAutopilotForMessage } from './agentAutopilotRuntime';
+import { runAgentAutopilotForMessage, runPendingAgentAutopilot } from './agentAutopilotRuntime';
 
 describe('agent autopilot runtime', () => {
   it('executes a low-risk delegated file handoff and records an A2A session', async () => {
@@ -97,6 +97,45 @@ describe('agent autopilot runtime', () => {
       'agent-lin'
     ]);
     expect(result.state.actionLogs.filter((log) => log.toolCalls.includes('a2a.session'))).toHaveLength(2);
+  });
+
+  it('sweeps pending room messages without duplicating completed A2A sessions', async () => {
+    const state = withDownloadableSlides(createDemoState());
+    const trigger: Message = {
+      id: 'msg-autopilot-backlog',
+      roomId: 'room-team',
+      senderId: 'user-chen',
+      senderName: 'Chen Chen',
+      body: 'Lin is offline. Can her Agent send the latest slides to Chen?',
+      sentAt: '2026-05-04T20:45:00.000Z',
+      type: 'text'
+    };
+
+    const first = await runPendingAgentAutopilot({
+      state: { ...state, messages: [...state.messages, trigger] },
+      roomId: 'room-team',
+      limit: 5,
+      sendMessage: async (_sendState, message) => ({
+        ...message,
+        id: `sent-${message.id}`,
+        sentAt: '2026-05-04T20:45:02.000Z'
+      })
+    });
+
+    expect(first.processedMessageIds).toContain('msg-autopilot-backlog');
+    expect(first.sessions).toHaveLength(1);
+    expect(first.messages).toHaveLength(1);
+    expect(first.state.a2aSessions[0].contextIds).toContain('msg-autopilot-backlog');
+
+    const second = await runPendingAgentAutopilot({
+      state: first.state,
+      roomId: 'room-team',
+      limit: 5
+    });
+
+    expect(second.processedMessageIds).not.toContain('msg-autopilot-backlog');
+    expect(second.sessions).toHaveLength(0);
+    expect(second.messages).toHaveLength(0);
   });
 });
 

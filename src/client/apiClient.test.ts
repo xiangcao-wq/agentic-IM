@@ -13,6 +13,7 @@ import {
   runAgent,
   sendMessage,
   shareFile,
+  runPendingAutopilot,
   syncMatrixOnce,
   updateAutopilotPolicy
 } from './apiClient';
@@ -148,6 +149,7 @@ describe('api client', () => {
       { agentId: 'agent-lin', roomId: 'room-team', roomEnabled: false },
       fetchMock
     );
+    await runPendingAutopilot('/api-root', { roomId: 'room-team', limit: 10 }, fetchMock);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -179,6 +181,11 @@ describe('api client', () => {
       7,
       '/api-root/api/agent/autopilot-policy',
       expect.objectContaining({ method: 'PATCH' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      8,
+      '/api-root/api/agent/autopilot/run-pending',
+      expect.objectContaining({ method: 'POST' })
     );
   });
 });

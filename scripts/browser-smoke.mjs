@@ -30,7 +30,7 @@ try {
       (response) => response.url().endsWith('/api/agent/autopilot-policy') && response.request().method() === 'PATCH',
       { timeout: 120_000 }
     ),
-    page.locator('.autopilot-policy button').click()
+    page.getByRole('button', { name: /开启托管|关闭托管/ }).click()
   ]);
   if (!policyPatchResponse.ok()) {
     throw new Error(`Autopilot policy toggle failed with HTTP ${policyPatchResponse.status()}`);
@@ -48,6 +48,18 @@ try {
   }
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
+
+  const [sweepResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/autopilot/run-pending') && response.request().method() === 'POST',
+      { timeout: 120_000 }
+    ),
+    page.locator('.autopilot-sweep-button').click()
+  ]);
+  if (!sweepResponse.ok()) {
+    throw new Error(`Autopilot pending sweep failed with HTTP ${sweepResponse.status()}`);
+  }
+  const sweepPayload = await sweepResponse.json();
 
   const [agentRunResponse] = await Promise.all([
     page.waitForResponse(
@@ -93,6 +105,10 @@ try {
       agentIntent: agentRunPayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
       autopilotToggle: 'ok',
+      autopilotSweep: {
+        processed: sweepPayload.processedMessageIds?.length ?? 0,
+        skipped: sweepPayload.skippedMessageIds?.length ?? 0
+      },
       pageErrors,
       consoleErrors
     })

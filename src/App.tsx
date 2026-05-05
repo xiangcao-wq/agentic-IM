@@ -31,6 +31,7 @@ import {
   runAgent,
   sendMessage,
   rejectAgentAction,
+  runPendingAutopilot,
   updateAutopilotPolicy,
   uploadFile
 } from './client/apiClient';
@@ -365,6 +366,15 @@ function App() {
     });
   }
 
+  async function handleRunPendingAutopilot() {
+    await runAction('autopilot-sweep', async () => {
+      return runPendingAutopilot(apiBaseUrl, {
+        roomId: selectedRoom.id,
+        limit: 20
+      });
+    });
+  }
+
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
       <main className="app-shell">
@@ -420,6 +430,7 @@ function App() {
           onConfirmAction={handleConfirmAgentAction}
           onRejectAction={handleRejectAgentAction}
           onToggleAutopilot={handleToggleAutopilot}
+          onRunPendingAutopilot={handleRunPendingAutopilot}
         />
       </main>
     </Tooltip.Provider>
@@ -925,6 +936,7 @@ function AgentWorkbench(props: {
   onConfirmAction: (actionId: string) => void;
   onRejectAction: (actionId: string) => void;
   onToggleAutopilot: () => void;
+  onRunPendingAutopilot: () => void;
 }) {
   const pendingActions = props.actions.filter(
     (action) =>
@@ -1070,6 +1082,16 @@ function AgentWorkbench(props: {
             <button type="button" onClick={props.onToggleAutopilot} disabled={Boolean(props.busyAction)}>
               {autopilotRoomEnabled ? '关闭托管' : '开启托管'}
             </button>
+            {autopilotRoomEnabled ? (
+              <button
+                className="autopilot-sweep-button"
+                type="button"
+                onClick={props.onRunPendingAutopilot}
+                disabled={Boolean(props.busyAction)}
+              >
+                处理待托管
+              </button>
+            ) : null}
           </div>
         ) : null}
 

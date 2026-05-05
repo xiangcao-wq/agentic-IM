@@ -1574,10 +1574,10 @@ button:disabled {
 }
 
 .autopilot-policy {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 3px;
+  gap: 6px;
   border: 1px solid #d8e4e6;
   border-radius: 8px;
   padding: 9px 10px;

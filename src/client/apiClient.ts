@@ -81,6 +81,19 @@ export interface UpdateAutopilotPolicyInput {
   autoExecuteMaxRisk?: AgentAutopilotPolicy['autoExecuteMaxRisk'];
 }
 
+export interface RunPendingAutopilotInput {
+  roomId?: string;
+  limit?: number;
+}
+
+export interface RunPendingAutopilotResponse {
+  processedMessageIds: string[];
+  skippedMessageIds: string[];
+  sessions: DemoState['a2aSessions'];
+  messages: Message[];
+  logs: AgentActionLog[];
+}
+
 export function fetchState(baseUrl = '', fetcher: Fetcher = fetch): Promise<DemoState> {
   return requestJson<DemoState>(fetcher, endpoint(baseUrl, '/api/state'));
 }
@@ -167,6 +180,14 @@ export function updateAutopilotPolicy(
     headers: withApiToken({ 'content-type': 'application/json' }),
     body: JSON.stringify(input)
   });
+}
+
+export function runPendingAutopilot(
+  baseUrl: string,
+  input: RunPendingAutopilotInput,
+  fetcher: Fetcher = fetch
+): Promise<RunPendingAutopilotResponse> {
+  return requestJson(fetcher, endpoint(baseUrl, '/api/agent/autopilot/run-pending'), post(input));
 }
 
 export function listMemories(

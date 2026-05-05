@@ -22,6 +22,7 @@ const apiMocks = vi.hoisted(() => ({
   summarize: vi.fn(),
   syncMatrixOnce: vi.fn(),
   rejectAgentAction: vi.fn(),
+  runPendingAutopilot: vi.fn(),
   updateAutopilotPolicy: vi.fn(),
   uploadFile: vi.fn()
 }));
@@ -231,6 +232,59 @@ describe('App runtime upgrade controls', () => {
       roomEnabled: false
     });
     expect(host.querySelector('.autopilot-policy.disabled')).toBeTruthy();
+  });
+
+  it('runs the pending autopilot sweep from the workbench', async () => {
+    const initial = createDemoState();
+    const updated = {
+      ...initial,
+      a2aSessions: [
+        {
+          id: 'a2a-from-sweep',
+          roomId: 'room-team',
+          initiatorAgentId: 'agent-chen',
+          targetAgentIds: ['agent-lin'],
+          goal: 'Backlog handoff',
+          status: 'completed',
+          turns: [],
+          proposedActionRequestIds: [],
+          contextIds: ['msg-06'],
+          risk: {
+            level: 'low',
+            score: 0.1,
+            reason: 'Backlog sweep',
+            model: 'runtime-confirmation-gate-v1'
+          },
+          createdAt: '2026-05-04T09:00:00.000Z',
+          updatedAt: '2026-05-04T09:00:00.000Z'
+        }
+      ]
+    };
+    apiMocks.fetchState.mockResolvedValueOnce(initial).mockResolvedValueOnce(updated);
+    apiMocks.runPendingAutopilot.mockResolvedValue({
+      processedMessageIds: ['msg-06'],
+      skippedMessageIds: [],
+      sessions: updated.a2aSessions,
+      messages: [],
+      logs: []
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const sweep = host.querySelector<HTMLButtonElement>('.autopilot-sweep-button');
+    expect(sweep).toBeTruthy();
+
+    await act(async () => {
+      sweep!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.runPendingAutopilot).toHaveBeenCalledWith('', {
+      roomId: 'room-team',
+      limit: 20
+    });
+    expect(host.textContent).toContain('Backlog handoff');
   });
 
   it('marks the system event stream as disconnected when SSE fails', async () => {

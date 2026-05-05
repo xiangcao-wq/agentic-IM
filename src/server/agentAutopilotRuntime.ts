@@ -29,6 +29,16 @@ export interface AgentAutopilotResult {
   responses: AgentRunResult[];
 }
 
+export interface PendingAgentAutopilotInput extends Omit<AgentAutopilotInput, 'triggerMessage'> {
+  roomId?: string;
+  limit?: number;
+}
+
+export interface PendingAgentAutopilotResult extends AgentAutopilotResult {
+  processedMessageIds: string[];
+  skippedMessageIds: string[];
+}
+
 export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): Promise<AgentAutopilotResult> {
   if (input.triggerMessage.type === 'agent') {
     return emptyAutopilotResult(input.state);
@@ -94,6 +104,54 @@ export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): P
   }
 
   return { state, sessions, messages, logs, responses };
+}
+
+export async function runPendingAgentAutopilot(input: PendingAgentAutopilotInput): Promise<PendingAgentAutopilotResult> {
+  const limit = Math.max(1, Math.min(input.limit ?? 20, 50));
+  const alreadyProcessed = processedAutopilotMessageIds(input.state);
+  const candidates = sortMessagesChronologically(input.state.messages)
+    .filter((message) => message.type !== 'agent')
+    .filter((message) => !input.roomId || message.roomId === input.roomId)
+    .filter((message) => !alreadyProcessed.has(message.id))
+    .slice(-limit);
+
+  let state = input.state;
+  const sessions: A2ASession[] = [];
+  const messages: Message[] = [];
+  const logs: AgentActionLog[] = [];
+  const responses: AgentRunResult[] = [];
+  const processedMessageIds: string[] = [];
+  const skippedMessageIds: string[] = [];
+
+  for (const triggerMessage of candidates) {
+    const result = await runAgentAutopilotForMessage({
+      state,
+      triggerMessage,
+      aiProvider: input.aiProvider,
+      webSearchProvider: input.webSearchProvider,
+      sendMessage: input.sendMessage
+    });
+    state = result.state;
+    if (result.sessions.length > 0) {
+      processedMessageIds.push(triggerMessage.id);
+      sessions.push(...result.sessions);
+      messages.push(...result.messages);
+      logs.push(...result.logs);
+      responses.push(...result.responses);
+    } else {
+      skippedMessageIds.push(triggerMessage.id);
+    }
+  }
+
+  return { state, sessions, messages, logs, responses, processedMessageIds, skippedMessageIds };
+}
+
+function processedAutopilotMessageIds(state: DemoState): Set<string> {
+  return new Set(
+    (state.a2aSessions ?? [])
+      .flatMap((session) => session.contextIds)
+      .filter((contextId) => state.messages.some((message) => message.id === contextId))
+  );
 }
 
 function emptyAutopilotResult(state: DemoState): AgentAutopilotResult {
