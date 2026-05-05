@@ -27,7 +27,11 @@ import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
 import { recordSkippedAiAutoreplies, runAiAutoreplies } from './aiAutoreply';
 import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
-import { runAgentAutopilotForMessage, runPendingAgentAutopilot } from './agentAutopilotRuntime';
+import {
+  runAgentAutopilotForMessage,
+  runPendingAgentAutopilot,
+  type PendingAgentAutopilotResult
+} from './agentAutopilotRuntime';
 import { runAgentIntent } from './agentRunRuntime';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
@@ -49,11 +53,52 @@ interface ServerOptions {
   maxUploadBytes?: number;
   mediaDir?: string;
   webSearchProvider?: WebSearchProvider | null;
+  autopilotWorker?: AutopilotWorkerOptions;
 }
 
 interface RunningServer {
   url: string;
   close: () => Promise<void>;
+}
+
+interface AutopilotWorkerOptions {
+  enabled?: boolean;
+  intervalMs?: number;
+  roomIds?: string[];
+  limit?: number;
+  runOnStart?: boolean;
+}
+
+interface AutopilotWorkerConfig {
+  enabled: boolean;
+  intervalMs: number;
+  roomIds: string[];
+  limit: number;
+  runOnStart: boolean;
+}
+
+interface AutopilotWorkerStatus {
+  enabled: boolean;
+  running: boolean;
+  intervalMs: number;
+  roomIds: string[];
+  limit: number;
+  runCount: number;
+  lastProcessedCount: number;
+  lastSkippedCount: number;
+  lastStartedAt?: string;
+  lastFinishedAt?: string;
+  lastError?: string;
+}
+
+interface AutopilotWorkerRunPayload {
+  worker: AutopilotWorkerStatus;
+  processedMessageIds: string[];
+  skippedMessageIds: string[];
+  sessions: PendingAgentAutopilotResult['sessions'];
+  messages: PendingAgentAutopilotResult['messages'];
+  logs: PendingAgentAutopilotResult['logs'];
+  skippedReason?: 'disabled' | 'already_running';
 }
 
 type EventClient = ServerResponse<IncomingMessage>;
@@ -78,6 +123,7 @@ const defaultAllowedOrigins = [5175, 5176, 5177, 5178, 5179].flatMap((port) => [
   `http://localhost:${port}`
 ]);
 const defaultMaxUploadBytes = 10 * 1024 * 1024;
+const defaultAutopilotWorkerIntervalMs = 60_000;
 
 export async function createAppServer(options: ServerOptions): Promise<RunningServer> {
   const host = options.host ?? '127.0.0.1';
@@ -103,6 +149,19 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   const mediaDir = options.mediaDir ?? process.env.AGENT_IM_MEDIA_DIR ?? join(process.cwd(), 'data', 'media');
   const eventClients = new Set<EventClient>();
   let aiStatusProbe: Partial<AiRuntimeStatus> | undefined;
+  const autopilotWorkerConfig = normalizeAutopilotWorkerOptions(options.autopilotWorker);
+  let autopilotWorkerTimer: ReturnType<typeof setInterval> | undefined;
+  let activeAutopilotWorkerRun: Promise<AutopilotWorkerRunPayload> | undefined;
+  let autopilotWorkerStatus: AutopilotWorkerStatus = {
+    enabled: autopilotWorkerConfig.enabled,
+    running: false,
+    intervalMs: autopilotWorkerConfig.enabled ? autopilotWorkerConfig.intervalMs : 0,
+    roomIds: autopilotWorkerConfig.roomIds,
+    limit: autopilotWorkerConfig.limit,
+    runCount: 0,
+    lastProcessedCount: 0,
+    lastSkippedCount: 0
+  };
 
   async function readRuntimeState(): Promise<DemoState> {
     const state = await db.read();
@@ -139,6 +198,110 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           }
         )
       : outbound;
+  }
+
+  async function runAutopilotWorkerOnce(): Promise<AutopilotWorkerRunPayload> {
+    if (!autopilotWorkerConfig.enabled) {
+      return {
+        worker: { ...autopilotWorkerStatus },
+        processedMessageIds: [],
+        skippedMessageIds: [],
+        sessions: [],
+        messages: [],
+        logs: [],
+        skippedReason: 'disabled'
+      };
+    }
+    if (activeAutopilotWorkerRun) {
+      return {
+        worker: { ...autopilotWorkerStatus },
+        processedMessageIds: [],
+        skippedMessageIds: [],
+        sessions: [],
+        messages: [],
+        logs: [],
+        skippedReason: 'already_running'
+      };
+    }
+
+    activeAutopilotWorkerRun = runAutopilotWorkerOnceUnlocked().finally(() => {
+      activeAutopilotWorkerRun = undefined;
+    });
+    return activeAutopilotWorkerRun;
+  }
+
+  async function runAutopilotWorkerOnceUnlocked(): Promise<AutopilotWorkerRunPayload> {
+    autopilotWorkerStatus = {
+      ...autopilotWorkerStatus,
+      running: true,
+      lastStartedAt: new Date().toISOString(),
+      lastError: undefined
+    };
+
+    const processedMessageIds: string[] = [];
+    const skippedMessageIds: string[] = [];
+    const sessions: AutopilotWorkerRunPayload['sessions'] = [];
+    const messages: AutopilotWorkerRunPayload['messages'] = [];
+    const logs: AutopilotWorkerRunPayload['logs'] = [];
+
+    try {
+      let state = await readRuntimeState();
+      const roomIds = autopilotWorkerConfig.roomIds.length
+        ? autopilotWorkerConfig.roomIds
+        : selectAutopilotWorkerRoomIds(state);
+
+      for (const roomId of roomIds) {
+        const sweep = await runPendingAgentAutopilot({
+          state,
+          roomId,
+          limit: autopilotWorkerConfig.limit,
+          aiProvider,
+          webSearchProvider,
+          sendMessage: sendAutopilotMessage
+        });
+        state = sweep.state;
+        processedMessageIds.push(...sweep.processedMessageIds);
+        skippedMessageIds.push(...sweep.skippedMessageIds);
+        sessions.push(...sweep.sessions);
+        messages.push(...sweep.messages);
+        logs.push(...sweep.logs);
+      }
+
+      if (processedMessageIds.length > 0 || logs.length > 0 || messages.length > 0) {
+        await db.write(state);
+        await publishRuntimeState();
+      }
+
+      autopilotWorkerStatus = {
+        ...autopilotWorkerStatus,
+        running: false,
+        runCount: autopilotWorkerStatus.runCount + 1,
+        lastProcessedCount: processedMessageIds.length,
+        lastSkippedCount: skippedMessageIds.length,
+        lastFinishedAt: new Date().toISOString(),
+        lastError: undefined
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      autopilotWorkerStatus = {
+        ...autopilotWorkerStatus,
+        running: false,
+        runCount: autopilotWorkerStatus.runCount + 1,
+        lastProcessedCount: processedMessageIds.length,
+        lastSkippedCount: skippedMessageIds.length,
+        lastFinishedAt: new Date().toISOString(),
+        lastError: message
+      };
+    }
+
+    return {
+      worker: { ...autopilotWorkerStatus },
+      processedMessageIds,
+      skippedMessageIds,
+      sessions,
+      messages,
+      logs
+    };
   }
 
   const server = createServer(async (request, response) => {
@@ -202,6 +365,14 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           messages: sweep.messages,
           logs: sweep.logs
         });
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/agent/autopilot/worker') {
+        return sendJson(response, { worker: autopilotWorkerStatus });
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/agent/autopilot/worker/run') {
+        return sendJson(response, await runAutopilotWorkerOnce());
       }
 
       if (request.method === 'GET' && url.pathname === '/api/memories') {
@@ -746,12 +917,30 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     server.listen(options.port, host, resolve);
   });
 
+  if (autopilotWorkerConfig.enabled) {
+    autopilotWorkerTimer = setInterval(() => {
+      void runAutopilotWorkerOnce();
+    }, autopilotWorkerConfig.intervalMs);
+    autopilotWorkerTimer.unref?.();
+    if (autopilotWorkerConfig.runOnStart) {
+      void runAutopilotWorkerOnce();
+    }
+  }
+
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : options.port;
 
   return {
     url: `http://${host}:${port}`,
-    close: () => closeServer(server)
+    close: async () => {
+      if (autopilotWorkerTimer) {
+        clearInterval(autopilotWorkerTimer);
+      }
+      if (activeAutopilotWorkerRun) {
+        await activeAutopilotWorkerRun.catch(() => undefined);
+      }
+      await closeServer(server);
+    }
   };
 }
 
@@ -788,6 +977,47 @@ function createUploadedFile(
     contentType: input.contentType,
     size: input.size
   };
+}
+
+function normalizeAutopilotWorkerOptions(options: AutopilotWorkerOptions | undefined): AutopilotWorkerConfig {
+  const enabled = options?.enabled ?? false;
+  return {
+    enabled,
+    intervalMs: normalizePositiveInteger(
+      options?.intervalMs,
+      defaultAutopilotWorkerIntervalMs,
+      5_000,
+      15 * 60_000
+    ),
+    roomIds: uniqueStrings(options?.roomIds ?? []),
+    limit: normalizePositiveInteger(options?.limit, 20, 1, 50),
+    runOnStart: options?.runOnStart ?? false
+  };
+}
+
+function normalizePositiveInteger(
+  value: number | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number
+): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(minimum, Math.min(Math.trunc(value as number), maximum));
+}
+
+function selectAutopilotWorkerRoomIds(state: DemoState): string[] {
+  const allowedRoomIds = new Set(
+    (state.agentAutopilotPolicies ?? [])
+      .filter((policy) => policy.enabled)
+      .flatMap((policy) => policy.allowedRoomIds)
+  );
+  return state.rooms.filter((room) => allowedRoomIds.has(room.id)).map((room) => room.id);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 function createFileUploadMessage(state: DemoState, file: FileItem): Message {

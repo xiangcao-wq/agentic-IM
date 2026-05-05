@@ -6,11 +6,13 @@ import {
   generateDemoAssets,
   fetchState,
   fileDownloadUrl,
+  getAutopilotWorkerStatus,
   humanReply,
   listAgentActions,
   listMemories,
   rejectAgentAction,
   runAgent,
+  runAutopilotWorkerOnce,
   sendMessage,
   shareFile,
   runPendingAutopilot,
@@ -150,6 +152,8 @@ describe('api client', () => {
       fetchMock
     );
     await runPendingAutopilot('/api-root', { roomId: 'room-team', limit: 10 }, fetchMock);
+    await getAutopilotWorkerStatus('/api-root', fetchMock);
+    await runAutopilotWorkerOnce('/api-root', fetchMock);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -185,6 +189,12 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       8,
       '/api-root/api/agent/autopilot/run-pending',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(9, '/api-root/api/agent/autopilot/worker', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      10,
+      '/api-root/api/agent/autopilot/worker/run',
       expect.objectContaining({ method: 'POST' })
     );
   });

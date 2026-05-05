@@ -51,7 +51,7 @@ try {
 
   const [sweepResponse] = await Promise.all([
     page.waitForResponse(
-      (response) => response.url().endsWith('/api/agent/autopilot/run-pending') && response.request().method() === 'POST',
+      (response) => response.url().endsWith('/api/agent/autopilot/worker/run') && response.request().method() === 'POST',
       { timeout: 120_000 }
     ),
     page.locator('.autopilot-sweep-button').click()

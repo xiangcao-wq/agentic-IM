@@ -14,9 +14,11 @@ const apiMocks = vi.hoisted(() => ({
   createStateEventSource: vi.fn(),
   fetchState: vi.fn(),
   fileDownloadUrl: vi.fn(),
+  getAutopilotWorkerStatus: vi.fn(),
   generateDemoAssets: vi.fn(),
   humanReply: vi.fn(),
   runAgent: vi.fn(),
+  runAutopilotWorkerOnce: vi.fn(),
   sendMessage: vi.fn(),
   shareFile: vi.fn(),
   summarize: vi.fn(),
@@ -41,6 +43,15 @@ describe('App runtime upgrade controls', () => {
     eventListeners = {};
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.getAutopilotWorkerStatus.mockResolvedValue({ worker: createAutopilotWorkerStatus() });
+    apiMocks.runAutopilotWorkerOnce.mockResolvedValue({
+      worker: createAutopilotWorkerStatus({ runCount: 1 }),
+      processedMessageIds: [],
+      skippedMessageIds: [],
+      sessions: [],
+      messages: [],
+      logs: []
+    });
     apiMocks.fileDownloadUrl.mockReturnValue('/api/files/file/download');
     apiMocks.createStateEventSource.mockReturnValue({
       addEventListener: vi.fn((eventName: string, listener: (event: MessageEvent) => void) => {
@@ -234,7 +245,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.querySelector('.autopilot-policy.disabled')).toBeTruthy();
   });
 
-  it('runs the pending autopilot sweep from the workbench', async () => {
+  it('runs the autopilot worker from the workbench', async () => {
     const initial = createDemoState();
     const updated = {
       ...initial,
@@ -261,7 +272,8 @@ describe('App runtime upgrade controls', () => {
       ]
     };
     apiMocks.fetchState.mockResolvedValueOnce(initial).mockResolvedValueOnce(updated);
-    apiMocks.runPendingAutopilot.mockResolvedValue({
+    apiMocks.runAutopilotWorkerOnce.mockResolvedValue({
+      worker: createAutopilotWorkerStatus({ runCount: 1, lastProcessedCount: 1 }),
       processedMessageIds: ['msg-06'],
       skippedMessageIds: [],
       sessions: updated.a2aSessions,
@@ -280,10 +292,7 @@ describe('App runtime upgrade controls', () => {
       sweep!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(apiMocks.runPendingAutopilot).toHaveBeenCalledWith('', {
-      roomId: 'room-team',
-      limit: 20
-    });
+    expect(apiMocks.runAutopilotWorkerOnce).toHaveBeenCalledWith('');
     expect(host.textContent).toContain('Backlog handoff');
   });
 
@@ -602,6 +611,20 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('Answer from room context.');
   });
 });
+
+function createAutopilotWorkerStatus(overrides: Record<string, unknown> = {}) {
+  return {
+    enabled: true,
+    running: false,
+    intervalMs: 60_000,
+    roomIds: [],
+    limit: 20,
+    runCount: 0,
+    lastProcessedCount: 0,
+    lastSkippedCount: 0,
+    ...overrides
+  };
+}
 
 function setInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;

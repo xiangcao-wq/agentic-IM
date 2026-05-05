@@ -94,6 +94,25 @@ export interface RunPendingAutopilotResponse {
   logs: AgentActionLog[];
 }
 
+export interface AutopilotWorkerStatus {
+  enabled: boolean;
+  running: boolean;
+  intervalMs: number;
+  roomIds: string[];
+  limit: number;
+  runCount: number;
+  lastProcessedCount: number;
+  lastSkippedCount: number;
+  lastStartedAt?: string;
+  lastFinishedAt?: string;
+  lastError?: string;
+}
+
+export interface AutopilotWorkerRunResponse extends RunPendingAutopilotResponse {
+  worker: AutopilotWorkerStatus;
+  skippedReason?: 'disabled' | 'already_running';
+}
+
 export function fetchState(baseUrl = '', fetcher: Fetcher = fetch): Promise<DemoState> {
   return requestJson<DemoState>(fetcher, endpoint(baseUrl, '/api/state'));
 }
@@ -188,6 +207,20 @@ export function runPendingAutopilot(
   fetcher: Fetcher = fetch
 ): Promise<RunPendingAutopilotResponse> {
   return requestJson(fetcher, endpoint(baseUrl, '/api/agent/autopilot/run-pending'), post(input));
+}
+
+export function getAutopilotWorkerStatus(
+  baseUrl: string,
+  fetcher: Fetcher = fetch
+): Promise<{ worker: AutopilotWorkerStatus }> {
+  return requestJson(fetcher, endpoint(baseUrl, '/api/agent/autopilot/worker'));
+}
+
+export function runAutopilotWorkerOnce(
+  baseUrl: string,
+  fetcher: Fetcher = fetch
+): Promise<AutopilotWorkerRunResponse> {
+  return requestJson(fetcher, endpoint(baseUrl, '/api/agent/autopilot/worker/run'), post({}));
 }
 
 export function listMemories(

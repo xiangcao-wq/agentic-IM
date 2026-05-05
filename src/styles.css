@@ -1597,6 +1597,13 @@ button:disabled {
   font-size: 12px;
 }
 
+.autopilot-policy .autopilot-worker-status {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  color: #0f6970;
+  font-weight: 700;
+}
+
 .autopilot-policy button {
   flex: 0 0 auto;
   border: 1px solid #c8d7da;

@@ -510,6 +510,107 @@ describe('real local agent IM server', () => {
     expect(second.sessions).toHaveLength(0);
   });
 
+  it('reports the automatic autopilot worker as disabled by default', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const status = await requestJson(`${app.url}/api/agent/autopilot/worker`);
+
+    expect(status.worker).toMatchObject({
+      enabled: false,
+      running: false,
+      intervalMs: 0,
+      runCount: 0,
+      lastProcessedCount: 0,
+      lastSkippedCount: 0
+    });
+  });
+
+  it('runs the automatic autopilot worker once and dedupes processed backlog messages', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: state.files.map((file) =>
+            file.id === 'file-slides-v3'
+              ? {
+                  ...file,
+                  localPath: 'seed-slides-v3.pptx',
+                  contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  size: 4096
+                }
+              : file
+          ),
+          messages: [
+            ...state.messages,
+            {
+              id: 'msg-worker-autopilot-backlog',
+              roomId: 'room-team',
+              senderId: 'user-chen',
+              senderName: 'Chen Chen',
+              body: 'Lin is offline. Can her Agent send the latest slides to Chen?',
+              sentAt: '2026-05-04T22:00:00.000Z',
+              type: 'text'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      autopilotWorker: {
+        enabled: true,
+        intervalMs: 60_000,
+        roomIds: ['room-team'],
+        limit: 5,
+        runOnStart: false
+      }
+    });
+    servers.push(app);
+
+    const first = await requestJson(`${app.url}/api/agent/autopilot/worker/run`, { method: 'POST' });
+
+    expect(first.worker).toMatchObject({
+      enabled: true,
+      running: false,
+      intervalMs: 60_000,
+      runCount: 1,
+      lastProcessedCount: 1
+    });
+    expect(first.processedMessageIds).toContain('msg-worker-autopilot-backlog');
+    expect(first.sessions).toHaveLength(1);
+
+    const persisted = await requestJson(`${app.url}/api/state`);
+    expect(
+      persisted.a2aSessions.some((session: { contextIds: string[] }) =>
+        session.contextIds.includes('msg-worker-autopilot-backlog')
+      )
+    ).toBe(true);
+
+    const second = await requestJson(`${app.url}/api/agent/autopilot/worker/run`, { method: 'POST' });
+    expect(second.worker).toMatchObject({
+      runCount: 2,
+      lastProcessedCount: 0
+    });
+    expect(second.processedMessageIds).not.toContain('msg-worker-autopilot-backlog');
+    expect(second.sessions).toHaveLength(0);
+  });
+
   it('generates local demo assets that can be downloaded without Matrix', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

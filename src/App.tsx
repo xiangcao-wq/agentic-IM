@@ -27,13 +27,15 @@ import {
   createStateEventSource,
   fetchState,
   fileDownloadUrl,
+  getAutopilotWorkerStatus,
   humanReply,
   runAgent,
+  runAutopilotWorkerOnce,
   sendMessage,
   rejectAgentAction,
-  runPendingAutopilot,
   updateAutopilotPolicy,
-  uploadFile
+  uploadFile,
+  type AutopilotWorkerStatus
 } from './client/apiClient';
 import type {
   AgentActionLog,
@@ -93,11 +95,25 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [eventStreamStatus, setEventStreamStatus] = useState<EventStreamStatus>('connecting');
+  const [autopilotWorker, setAutopilotWorker] = useState<AutopilotWorkerStatus | null>(null);
 
   async function refreshState() {
-    const nextState = await fetchState(apiBaseUrl);
+    const [nextState, workerStatus] = await Promise.all([
+      fetchState(apiBaseUrl),
+      getAutopilotWorkerStatus(apiBaseUrl).catch(() => null)
+    ]);
     setState(nextState);
+    if (workerStatus) {
+      setAutopilotWorker(workerStatus.worker);
+    }
     return nextState;
+  }
+
+  async function refreshAutopilotWorkerStatus() {
+    const workerStatus = await getAutopilotWorkerStatus(apiBaseUrl).catch(() => null);
+    if (workerStatus) {
+      setAutopilotWorker(workerStatus.worker);
+    }
   }
 
   useEffect(() => {
@@ -135,8 +151,13 @@ function App() {
       }
     };
 
+    const workerStatusTimer = window.setInterval(() => {
+      void refreshAutopilotWorkerStatus();
+    }, 15_000);
+
     return () => {
       disposed = true;
+      window.clearInterval(workerStatusTimer);
       events.close();
     };
   }, []);
@@ -366,12 +387,11 @@ function App() {
     });
   }
 
-  async function handleRunPendingAutopilot() {
-    await runAction('autopilot-sweep', async () => {
-      return runPendingAutopilot(apiBaseUrl, {
-        roomId: selectedRoom.id,
-        limit: 20
-      });
+  async function handleRunAutopilotWorker() {
+    await runAction('autopilot-worker', async () => {
+      const response = await runAutopilotWorkerOnce(apiBaseUrl);
+      setAutopilotWorker(response.worker);
+      return response;
     });
   }
 
@@ -417,6 +437,7 @@ function App() {
           actions={state.actionRequests}
           a2aSessions={state.a2aSessions}
           autopilotPolicies={state.agentAutopilotPolicies}
+          autopilotWorker={autopilotWorker}
           selectedRoomId={selectedRoom.id}
           sourceMessages={state.messages}
           sourceFiles={state.files}
@@ -430,7 +451,7 @@ function App() {
           onConfirmAction={handleConfirmAgentAction}
           onRejectAction={handleRejectAgentAction}
           onToggleAutopilot={handleToggleAutopilot}
-          onRunPendingAutopilot={handleRunPendingAutopilot}
+          onRunAutopilotWorker={handleRunAutopilotWorker}
         />
       </main>
     </Tooltip.Provider>
@@ -923,6 +944,7 @@ function AgentWorkbench(props: {
   actions: AgentActionRequest[];
   a2aSessions: DemoState['a2aSessions'];
   autopilotPolicies: DemoState['agentAutopilotPolicies'];
+  autopilotWorker: AutopilotWorkerStatus | null;
   selectedRoomId: string;
   sourceMessages: Message[];
   sourceFiles: FileItem[];
@@ -936,7 +958,7 @@ function AgentWorkbench(props: {
   onConfirmAction: (actionId: string) => void;
   onRejectAction: (actionId: string) => void;
   onToggleAutopilot: () => void;
-  onRunPendingAutopilot: () => void;
+  onRunAutopilotWorker: () => void;
 }) {
   const pendingActions = props.actions.filter(
     (action) =>
@@ -1079,6 +1101,12 @@ function AgentWorkbench(props: {
                   : '当前房间未授权'}
               </small>
             </div>
+            {props.autopilotWorker ? (
+              <small className="autopilot-worker-status">
+                后台巡检：{autopilotWorkerLabel(props.autopilotWorker)} · 上次处理{' '}
+                {props.autopilotWorker.lastProcessedCount} 条
+              </small>
+            ) : null}
             <button type="button" onClick={props.onToggleAutopilot} disabled={Boolean(props.busyAction)}>
               {autopilotRoomEnabled ? '关闭托管' : '开启托管'}
             </button>
@@ -1086,10 +1114,10 @@ function AgentWorkbench(props: {
               <button
                 className="autopilot-sweep-button"
                 type="button"
-                onClick={props.onRunPendingAutopilot}
+                onClick={props.onRunAutopilotWorker}
                 disabled={Boolean(props.busyAction)}
               >
-                处理待托管
+                立即巡检
               </button>
             ) : null}
           </div>
@@ -1805,6 +1833,19 @@ function formatLogStatus(log: AgentActionLog): string {
     blocked: '已阻止'
   };
   return `${statusLabels[log.status]} · ${log.risk.level}`;
+}
+
+function autopilotWorkerLabel(worker: AutopilotWorkerStatus): string {
+  if (!worker.enabled) {
+    return '未启用';
+  }
+  if (worker.running) {
+    return '运行中';
+  }
+  if (worker.lastError) {
+    return '失败';
+  }
+  return '已启用';
 }
 
 function agentProgressPhaseLabel(phase: AgentProgressEvent['phase']): string {
