@@ -30,7 +30,9 @@ import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
 import {
   runAgentAutopilotForMessage,
   runPendingAgentAutopilot,
-  type PendingAgentAutopilotResult
+  runPendingTaskFollowUps,
+  type PendingAgentAutopilotResult,
+  type PendingTaskFollowUpResult
 } from './agentAutopilotRuntime';
 import { runAgentIntent } from './agentRunRuntime';
 import { runFileShareAction } from './agentRuntime';
@@ -86,6 +88,8 @@ interface AutopilotWorkerStatus {
   runCount: number;
   lastProcessedCount: number;
   lastSkippedCount: number;
+  lastProcessedTaskCount: number;
+  lastSkippedTaskCount: number;
   lastStartedAt?: string;
   lastFinishedAt?: string;
   lastError?: string;
@@ -95,9 +99,12 @@ interface AutopilotWorkerRunPayload {
   worker: AutopilotWorkerStatus;
   processedMessageIds: string[];
   skippedMessageIds: string[];
+  processedTaskIds: string[];
+  skippedTaskIds: string[];
   sessions: PendingAgentAutopilotResult['sessions'];
   messages: PendingAgentAutopilotResult['messages'];
   logs: PendingAgentAutopilotResult['logs'];
+  actionRequests: PendingTaskFollowUpResult['actionRequests'];
   skippedReason?: 'disabled' | 'already_running';
 }
 
@@ -160,7 +167,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     limit: autopilotWorkerConfig.limit,
     runCount: 0,
     lastProcessedCount: 0,
-    lastSkippedCount: 0
+    lastSkippedCount: 0,
+    lastProcessedTaskCount: 0,
+    lastSkippedTaskCount: 0
   };
 
   async function readRuntimeState(): Promise<DemoState> {
@@ -206,9 +215,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         worker: { ...autopilotWorkerStatus },
         processedMessageIds: [],
         skippedMessageIds: [],
+        processedTaskIds: [],
+        skippedTaskIds: [],
         sessions: [],
         messages: [],
         logs: [],
+        actionRequests: [],
         skippedReason: 'disabled'
       };
     }
@@ -217,9 +229,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         worker: { ...autopilotWorkerStatus },
         processedMessageIds: [],
         skippedMessageIds: [],
+        processedTaskIds: [],
+        skippedTaskIds: [],
         sessions: [],
         messages: [],
         logs: [],
+        actionRequests: [],
         skippedReason: 'already_running'
       };
     }
@@ -240,9 +255,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
     const processedMessageIds: string[] = [];
     const skippedMessageIds: string[] = [];
+    const processedTaskIds: string[] = [];
+    const skippedTaskIds: string[] = [];
     const sessions: AutopilotWorkerRunPayload['sessions'] = [];
     const messages: AutopilotWorkerRunPayload['messages'] = [];
     const logs: AutopilotWorkerRunPayload['logs'] = [];
+    const actionRequests: AutopilotWorkerRunPayload['actionRequests'] = [];
 
     try {
       let state = await readRuntimeState();
@@ -265,9 +283,21 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         sessions.push(...sweep.sessions);
         messages.push(...sweep.messages);
         logs.push(...sweep.logs);
+
+        const followUps = runPendingTaskFollowUps({
+          state,
+          roomId,
+          limit: autopilotWorkerConfig.limit
+        });
+        state = followUps.state;
+        processedTaskIds.push(...followUps.processedTaskIds);
+        skippedTaskIds.push(...followUps.skippedTaskIds);
+        sessions.push(...followUps.sessions);
+        logs.push(...followUps.logs);
+        actionRequests.push(...followUps.actionRequests);
       }
 
-      if (processedMessageIds.length > 0 || logs.length > 0 || messages.length > 0) {
+      if (processedMessageIds.length > 0 || processedTaskIds.length > 0 || logs.length > 0 || messages.length > 0) {
         await db.write(state);
         await publishRuntimeState();
       }
@@ -276,8 +306,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         ...autopilotWorkerStatus,
         running: false,
         runCount: autopilotWorkerStatus.runCount + 1,
-        lastProcessedCount: processedMessageIds.length,
+        lastProcessedCount: processedMessageIds.length + processedTaskIds.length,
         lastSkippedCount: skippedMessageIds.length,
+        lastProcessedTaskCount: processedTaskIds.length,
+        lastSkippedTaskCount: skippedTaskIds.length,
         lastFinishedAt: new Date().toISOString(),
         lastError: undefined
       };
@@ -287,8 +319,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         ...autopilotWorkerStatus,
         running: false,
         runCount: autopilotWorkerStatus.runCount + 1,
-        lastProcessedCount: processedMessageIds.length,
+        lastProcessedCount: processedMessageIds.length + processedTaskIds.length,
         lastSkippedCount: skippedMessageIds.length,
+        lastProcessedTaskCount: processedTaskIds.length,
+        lastSkippedTaskCount: skippedTaskIds.length,
         lastFinishedAt: new Date().toISOString(),
         lastError: message
       };
@@ -298,9 +332,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       worker: { ...autopilotWorkerStatus },
       processedMessageIds,
       skippedMessageIds,
+      processedTaskIds,
+      skippedTaskIds,
       sessions,
       messages,
-      logs
+      logs,
+      actionRequests
     };
   }
 

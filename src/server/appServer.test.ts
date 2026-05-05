@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
+import type { AgentAutopilotAction } from '../domain/types';
 import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
 
@@ -765,6 +766,96 @@ describe('real local agent IM server', () => {
     });
     expect(second.processedMessageIds).not.toContain('msg-worker-autopilot-backlog');
     expect(second.sessions).toHaveLength(0);
+  });
+
+  it('runs autonomous task follow-ups through the automatic autopilot worker', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    const owner = state.users.find((user: { id: string }) => user.id === 'user-chen');
+    const sourceMessage = {
+      id: 'msg-worker-task-follow-up-source',
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      senderName: 'Zhao Yiming',
+      body: 'Chen should start the interview appendix before tomorrow evening.',
+      sentAt: '2026-05-05T09:00:00+08:00',
+      type: 'text'
+    };
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          messages: [...state.messages, sourceMessage],
+          tasks: [
+            ...state.tasks.map((task) => ({ ...task, status: 'done' as const })),
+            {
+              id: 'task-worker-follow-up',
+              title: 'Interview appendix screenshots',
+              deadline: '5月6日 18:00',
+              owners: [owner?.name ?? 'Chen Chen'],
+              status: 'pending',
+              sourceMessageId: sourceMessage.id
+            }
+          ],
+          agentAutopilotPolicies: state.agentAutopilotPolicies.map((policy) =>
+            policy.agentId === 'agent-chen'
+              ? {
+                  ...policy,
+                  enabled: true,
+                  allowedRoomIds: ['room-team'],
+                  allowedActions: [...new Set([...policy.allowedActions, 'suggest_task_updates'])] as AgentAutopilotAction[]
+                }
+              : policy
+          )
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      autopilotWorker: {
+        enabled: true,
+        intervalMs: 60_000,
+        roomIds: ['room-team'],
+        limit: 5,
+        runOnStart: false
+      }
+    });
+    servers.push(app);
+
+    const first = await requestJson(`${app.url}/api/agent/autopilot/worker/run`, { method: 'POST' });
+
+    expect(first.processedTaskIds).toContain('task-worker-follow-up');
+    expect(first.worker).toMatchObject({
+      runCount: 1,
+      lastProcessedCount: 1
+    });
+    expect(first.sessions.some((session: { contextIds: string[] }) =>
+      session.contextIds.includes('task-worker-follow-up')
+    )).toBe(true);
+
+    const persisted = await requestJson(`${app.url}/api/state`);
+    const task = persisted.tasks.find((candidate: { id: string }) => candidate.id === 'task-worker-follow-up');
+    expect(task.status).toBe('pending');
+    expect(
+      persisted.actionRequests.some(
+        (request: { kind: string; status: string; input: { taskId?: string } }) =>
+          request.kind === 'task_update_suggest' &&
+          request.status === 'needs_confirmation' &&
+          request.input.taskId === 'task-worker-follow-up'
+      )
+    ).toBe(true);
+
+    const second = await requestJson(`${app.url}/api/agent/autopilot/worker/run`, { method: 'POST' });
+    expect(second.processedTaskIds).not.toContain('task-worker-follow-up');
   });
 
   it('generates local demo assets that can be downloaded without Matrix', async () => {

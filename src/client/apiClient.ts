@@ -89,9 +89,12 @@ export interface RunPendingAutopilotInput {
 export interface RunPendingAutopilotResponse {
   processedMessageIds: string[];
   skippedMessageIds: string[];
+  processedTaskIds?: string[];
+  skippedTaskIds?: string[];
   sessions: DemoState['a2aSessions'];
   messages: Message[];
   logs: AgentActionLog[];
+  actionRequests?: DemoState['actionRequests'];
 }
 
 export interface AutopilotWorkerStatus {
@@ -103,6 +106,8 @@ export interface AutopilotWorkerStatus {
   runCount: number;
   lastProcessedCount: number;
   lastSkippedCount: number;
+  lastProcessedTaskCount?: number;
+  lastSkippedTaskCount?: number;
   lastStartedAt?: string;
   lastFinishedAt?: string;
   lastError?: string;

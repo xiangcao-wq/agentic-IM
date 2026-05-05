@@ -63,6 +63,22 @@ export interface PendingAgentAutopilotResult extends AgentAutopilotResult {
   skippedMessageIds: string[];
 }
 
+export interface PendingTaskFollowUpInput {
+  state: DemoState;
+  roomId?: string;
+  now?: string;
+  limit?: number;
+}
+
+export interface PendingTaskFollowUpResult {
+  state: DemoState;
+  sessions: A2ASession[];
+  logs: AgentActionLog[];
+  actionRequests: AgentActionRequest[];
+  processedTaskIds: string[];
+  skippedTaskIds: string[];
+}
+
 export async function runAgentAutopilotForMessage(input: AgentAutopilotInput): Promise<AgentAutopilotResult> {
   if (input.triggerMessage.type === 'agent') {
     return emptyAutopilotResult(input.state);
@@ -179,6 +195,93 @@ export async function runPendingAgentAutopilot(input: PendingAgentAutopilotInput
   return { state, sessions, messages, logs, responses, processedMessageIds, skippedMessageIds };
 }
 
+export function runPendingTaskFollowUps(input: PendingTaskFollowUpInput): PendingTaskFollowUpResult {
+  const now = input.now ? new Date(input.now) : new Date();
+  const limit = Math.max(1, Math.min(input.limit ?? 10, 50));
+  const alreadyProcessed = processedTaskFollowUpIds(input.state);
+  const candidates = input.state.tasks
+    .filter((task) => task.status === 'pending')
+    .filter((task) => !alreadyProcessed.has(task.id))
+    .map((task) => ({ task, roomId: roomIdForTask(input.state, task.id, task.sourceMessageId) }))
+    .filter((candidate): candidate is { task: DemoState['tasks'][number]; roomId: string } =>
+      Boolean(candidate.roomId && (!input.roomId || candidate.roomId === input.roomId))
+    )
+    .filter(({ task }) => isTaskDueForFollowUp(task.deadline, now))
+    .slice(0, limit);
+
+  let state = input.state;
+  const sessions: A2ASession[] = [];
+  const logs: AgentActionLog[] = [];
+  const actionRequests: AgentActionRequest[] = [];
+  const processedTaskIds: string[] = [];
+  const skippedTaskIds: string[] = [];
+
+  for (const { task, roomId } of candidates) {
+    const assignee = findTaskFollowUpAssignee(state, task, roomId);
+    if (!assignee) {
+      skippedTaskIds.push(task.id);
+      continue;
+    }
+    const createdAt = new Date().toISOString();
+    const risk = taskFollowUpRisk(task);
+    const sourceIds = uniqueStrings([task.id, task.sourceMessageId]);
+    const actionRequest: AgentActionRequest = {
+      id: `action-task-follow-up-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      agentId: assignee.agentId,
+      roomId,
+      kind: 'task_update_suggest',
+      status: 'needs_confirmation',
+      input: {
+        taskId: task.id,
+        requestText: `Autopilot follow-up: ${task.title}`,
+        plan: `The task "${task.title}" is still pending and due ${task.deadline}. Suggest marking it in progress after human confirmation.`,
+        taskPatch: {
+          taskId: task.id,
+          oldStatus: task.status,
+          newStatus: 'in_progress'
+        }
+      },
+      risk,
+      createdAt,
+      updatedAt: createdAt,
+      requiresHuman: true
+    };
+    const log: AgentActionLog = {
+      id: `log-task-follow-up-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      agentId: assignee.agentId,
+      roomId,
+      action: `autopilot_task_follow_up:${task.id}`,
+      status: 'needs_confirmation',
+      risk,
+      contextIds: sourceIds,
+      toolCalls: ['autopilot.task_follow_up', 'task.inspect', 'task.suggest_update', 'action_request.create'],
+      createdAt
+    };
+    const session = createTaskFollowUpSession({
+      roomId,
+      agentId: assignee.agentId,
+      task,
+      sourceIds,
+      actionRequestId: actionRequest.id,
+      risk,
+      createdAt
+    });
+
+    actionRequests.push(actionRequest);
+    sessions.push(session);
+    logs.push(log);
+    processedTaskIds.push(task.id);
+    state = {
+      ...state,
+      actionRequests: [actionRequest, ...state.actionRequests],
+      a2aSessions: [session, ...(state.a2aSessions ?? [])],
+      actionLogs: [log, ...state.actionLogs]
+    };
+  }
+
+  return { state, sessions, logs, actionRequests, processedTaskIds, skippedTaskIds };
+}
+
 function processedAutopilotMessageIds(state: DemoState): Set<string> {
   return new Set(
     (state.a2aSessions ?? [])
@@ -187,8 +290,126 @@ function processedAutopilotMessageIds(state: DemoState): Set<string> {
   );
 }
 
+function processedTaskFollowUpIds(state: DemoState): Set<string> {
+  return new Set([
+    ...(state.a2aSessions ?? [])
+      .filter((session) => session.goal.startsWith('autopilot_task_follow_up:'))
+      .flatMap((session) => session.contextIds)
+      .filter((contextId) => state.tasks.some((task) => task.id === contextId)),
+    ...state.actionRequests
+      .filter((request) => request.kind === 'task_update_suggest' && request.status !== 'rejected')
+      .map((request) => request.input.taskId)
+      .filter((taskId): taskId is string => typeof taskId === 'string')
+  ]);
+}
+
 function emptyAutopilotResult(state: DemoState): AgentAutopilotResult {
   return { state, sessions: [], messages: [], logs: [], responses: [] };
+}
+
+function roomIdForTask(state: DemoState, taskId: string, sourceMessageId: string): string | undefined {
+  const sourceMessage = state.messages.find((message) => message.id === sourceMessageId);
+  if (sourceMessage) {
+    return sourceMessage.roomId;
+  }
+  return state.calendar.find((item) => item.sourceTaskId === taskId)?.roomId;
+}
+
+function isTaskDueForFollowUp(deadline: string, now: Date): boolean {
+  const dueAt = parseTaskDeadline(deadline, now);
+  if (!dueAt) {
+    return false;
+  }
+  const deltaMs = dueAt.getTime() - now.getTime();
+  return deltaMs <= 48 * 60 * 60 * 1000;
+}
+
+function parseTaskDeadline(deadline: string, now: Date): Date | undefined {
+  const explicit = deadline.match(/(\d{1,2})月(\d{1,2})日\s*(\d{1,2})[:：](\d{2})/);
+  if (explicit) {
+    const month = explicit[1].padStart(2, '0');
+    const day = explicit[2].padStart(2, '0');
+    const hour = explicit[3].padStart(2, '0');
+    const minute = explicit[4];
+    return new Date(`${now.getFullYear()}-${month}-${day}T${hour}:${minute}:00+08:00`);
+  }
+  const iso = Date.parse(deadline);
+  return Number.isNaN(iso) ? undefined : new Date(iso);
+}
+
+function findTaskFollowUpAssignee(
+  state: DemoState,
+  task: DemoState['tasks'][number],
+  roomId: string
+): { agentId: string; ownerId: string } | undefined {
+  const ownerNames = task.owners.map((owner) => owner.trim().toLowerCase());
+  for (const user of state.users) {
+    if (!ownerNames.includes(user.name.trim().toLowerCase())) {
+      continue;
+    }
+    const agent = state.agents.find((candidate) => candidate.id === user.agentId);
+    const policy = state.agentAutopilotPolicies.find((candidate) => candidate.agentId === user.agentId);
+    if (
+      agent?.allowedRoomIds.includes(roomId) &&
+      policy?.enabled &&
+      policy.allowedRoomIds.includes(roomId) &&
+      policy.allowedActions.includes('suggest_task_updates')
+    ) {
+      return { agentId: user.agentId, ownerId: user.id };
+    }
+  }
+  return undefined;
+}
+
+function taskFollowUpRisk(task: DemoState['tasks'][number]): RiskAssessment {
+  return {
+    level: 'medium',
+    score: 0.52,
+    reason: `Autopilot found pending task "${task.title}" near its deadline; status changes require human confirmation.`,
+    model: 'autopilot-task-follow-up-v1'
+  };
+}
+
+function createTaskFollowUpSession(input: {
+  roomId: string;
+  agentId: string;
+  task: DemoState['tasks'][number];
+  sourceIds: string[];
+  actionRequestId: string;
+  risk: RiskAssessment;
+  createdAt: string;
+}): A2ASession {
+  return {
+    id: `a2a-task-follow-up-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: input.roomId,
+    initiatorAgentId: input.agentId,
+    targetAgentIds: [input.agentId],
+    goal: `autopilot_task_follow_up:${input.task.id}`,
+    status: 'needs_confirmation',
+    turns: [
+      {
+        id: `a2a-task-turn-${Date.now()}-0`,
+        agentId: input.agentId,
+        kind: 'observation',
+        message: `Autopilot found pending task "${input.task.title}" due ${input.task.deadline}.`,
+        toolCalls: ['task.inspect'],
+        createdAt: input.createdAt
+      },
+      {
+        id: `a2a-task-turn-${Date.now()}-1`,
+        agentId: input.agentId,
+        kind: 'proposal',
+        message: 'Suggest marking this task as in progress after human confirmation; no task data changed yet.',
+        toolCalls: ['task.suggest_update', 'risk.gate', 'action_request.create'],
+        createdAt: input.createdAt
+      }
+    ],
+    proposedActionRequestIds: [input.actionRequestId],
+    contextIds: input.sourceIds,
+    risk: input.risk,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt
+  };
 }
 
 function selectAutopilotCandidates(

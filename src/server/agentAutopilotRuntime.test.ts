@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
-import type { DemoState, Message } from '../domain/types';
-import { runAgentAutopilotForMessage, runPendingAgentAutopilot } from './agentAutopilotRuntime';
+import type { AgentAutopilotAction, DemoState, Message } from '../domain/types';
+import { runAgentAutopilotForMessage, runPendingAgentAutopilot, runPendingTaskFollowUps } from './agentAutopilotRuntime';
 
 describe('agent autopilot runtime', () => {
   it('executes a low-risk delegated file handoff and records an A2A session', async () => {
@@ -333,6 +333,82 @@ describe('agent autopilot runtime', () => {
     expect(second.processedMessageIds).not.toContain('msg-autopilot-backlog');
     expect(second.sessions).toHaveLength(0);
     expect(second.messages).toHaveLength(0);
+  });
+
+  it('creates a pending task follow-up session and confirmation request without mutating tasks', async () => {
+    const base = enableAutopilot(createDemoState(), ['agent-chen']);
+    const owner = base.users.find((user) => user.id === 'user-chen')!;
+    const trigger: Message = {
+      id: 'msg-task-follow-up-source',
+      roomId: 'room-team',
+      senderId: 'user-zhao',
+      senderName: 'Zhao Yiming',
+      body: 'Chen owns the interview appendix and should start before tomorrow evening.',
+      sentAt: '2026-05-05T09:00:00+08:00',
+      type: 'text'
+    };
+    const state: DemoState = {
+      ...base,
+      messages: [...base.messages, trigger],
+      tasks: [
+        ...base.tasks.map((task) => ({ ...task, status: 'done' as const })),
+        {
+          id: 'task-follow-up-interview-appendix',
+          title: 'Interview appendix screenshots',
+          deadline: '5月6日 18:00',
+          owners: [owner.name],
+          status: 'pending',
+          sourceMessageId: trigger.id
+        }
+      ],
+      agentAutopilotPolicies: base.agentAutopilotPolicies.map((policy) =>
+        policy.agentId === 'agent-chen'
+          ? {
+              ...policy,
+              enabled: true,
+              allowedRoomIds: ['room-team'],
+              allowedActions: [...new Set([...policy.allowedActions, 'suggest_task_updates'])] as AgentAutopilotAction[]
+            }
+          : policy
+      )
+    };
+
+    const first = runPendingTaskFollowUps({
+      state,
+      roomId: 'room-team',
+      now: '2026-05-05T12:00:00+08:00'
+    });
+
+    expect(first.processedTaskIds).toContain('task-follow-up-interview-appendix');
+    expect(first.sessions).toHaveLength(1);
+    expect(first.sessions[0]).toMatchObject({
+      status: 'needs_confirmation',
+      targetAgentIds: ['agent-chen'],
+      contextIds: expect.arrayContaining(['task-follow-up-interview-appendix', trigger.id])
+    });
+    expect(first.actionRequests).toHaveLength(1);
+    expect(first.actionRequests[0]).toMatchObject({
+      kind: 'task_update_suggest',
+      agentId: 'agent-chen',
+      input: {
+        taskId: 'task-follow-up-interview-appendix',
+        taskPatch: {
+          taskId: 'task-follow-up-interview-appendix',
+          oldStatus: 'pending',
+          newStatus: 'in_progress'
+        }
+      }
+    });
+    expect(first.state.tasks.find((task) => task.id === 'task-follow-up-interview-appendix')?.status).toBe('pending');
+
+    const second = runPendingTaskFollowUps({
+      state: first.state,
+      roomId: 'room-team',
+      now: '2026-05-05T12:05:00+08:00'
+    });
+    expect(second.processedTaskIds).not.toContain('task-follow-up-interview-appendix');
+    expect(second.sessions).toHaveLength(0);
+    expect(second.actionRequests).toHaveLength(0);
   });
 });
 
