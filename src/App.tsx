@@ -31,6 +31,7 @@ import {
   runAgent,
   sendMessage,
   rejectAgentAction,
+  updateAutopilotPolicy,
   uploadFile
 } from './client/apiClient';
 import type {
@@ -345,6 +346,25 @@ function App() {
     });
   }
 
+  async function handleToggleAutopilot() {
+    const currentState = state;
+    if (!currentState) {
+      return;
+    }
+    const policy = currentState.agentAutopilotPolicies.find((candidate) => candidate.agentId === currentAgentId);
+    const roomEnabled = Boolean(policy?.enabled && policy.allowedRoomIds.includes(selectedRoom.id));
+    const nextRoomEnabled = !roomEnabled;
+    const remainingRoomCount = policy?.allowedRoomIds.filter((roomId) => roomId !== selectedRoom.id).length ?? 0;
+    await runAction('autopilot-policy', async () => {
+      return updateAutopilotPolicy(apiBaseUrl, {
+        agentId: currentAgentId,
+        enabled: nextRoomEnabled ? true : remainingRoomCount > 0 ? policy?.enabled ?? false : false,
+        roomId: selectedRoom.id,
+        roomEnabled: nextRoomEnabled
+      });
+    });
+  }
+
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
       <main className="app-shell">
@@ -399,6 +419,7 @@ function App() {
           onCoordinate={handleCoordinate}
           onConfirmAction={handleConfirmAgentAction}
           onRejectAction={handleRejectAgentAction}
+          onToggleAutopilot={handleToggleAutopilot}
         />
       </main>
     </Tooltip.Provider>
@@ -903,6 +924,7 @@ function AgentWorkbench(props: {
   onCoordinate: () => void;
   onConfirmAction: (actionId: string) => void;
   onRejectAction: (actionId: string) => void;
+  onToggleAutopilot: () => void;
 }) {
   const pendingActions = props.actions.filter(
     (action) =>
@@ -920,6 +942,7 @@ function AgentWorkbench(props: {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 3);
   const autopilotPolicy = props.autopilotPolicies.find((policy) => policy.agentId === props.agent.id);
+  const autopilotRoomEnabled = Boolean(autopilotPolicy?.enabled && autopilotPolicy.allowedRoomIds.includes(props.selectedRoomId));
 
   return (
     <aside className="agent-workbench">
@@ -1035,13 +1058,18 @@ function AgentWorkbench(props: {
         </div>
 
         {autopilotPolicy ? (
-          <div className={`autopilot-policy ${autopilotPolicy.enabled ? 'enabled' : 'disabled'}`}>
-            <span>{autopilotPolicy.enabled ? '托管模式已开启' : '托管模式未开启'}</span>
-            <small>
-              {autopilotPolicy.allowedRoomIds.includes(props.selectedRoomId)
-                ? `当前房间可用 · ${autopilotPolicy.allowedActions.length} 项授权`
-                : '当前房间未授权'}
-            </small>
+          <div className={`autopilot-policy ${autopilotRoomEnabled ? 'enabled' : 'disabled'}`}>
+            <div>
+              <span>{autopilotRoomEnabled ? '托管模式已开启' : '托管模式未开启'}</span>
+              <small>
+                {autopilotRoomEnabled
+                  ? `当前房间可用 · ${autopilotPolicy.allowedActions.length} 项授权`
+                  : '当前房间未授权'}
+              </small>
+            </div>
+            <button type="button" onClick={props.onToggleAutopilot} disabled={Boolean(props.busyAction)}>
+              {autopilotRoomEnabled ? '关闭托管' : '开启托管'}
+            </button>
           </div>
         ) : null}
 

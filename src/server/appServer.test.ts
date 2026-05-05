@@ -122,6 +122,67 @@ describe('real local agent IM server', () => {
     }
   });
 
+  it('updates an Agent autopilot policy and changes later message automation', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createStateWithMatrixBackedSlides();
+    await writeFile(dbPath, JSON.stringify(state, null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const disabled = await requestJson(`${app.url}/api/agent/autopilot-policy`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        enabled: false,
+        roomId: 'room-team',
+        roomEnabled: false
+      })
+    });
+
+    expect(disabled.policy).toMatchObject({
+      agentId: 'agent-lin',
+      enabled: false,
+      allowedRoomIds: []
+    });
+
+    const noAutomation = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-chen',
+        body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
+      })
+    });
+    expect(noAutomation.autopilotSessions).toHaveLength(0);
+
+    const enabled = await requestJson(`${app.url}/api/agent/autopilot-policy`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        enabled: true,
+        roomId: 'room-team',
+        roomEnabled: true
+      })
+    });
+    expect(enabled.policy).toMatchObject({
+      agentId: 'agent-lin',
+      enabled: true,
+      allowedRoomIds: ['room-team']
+    });
+
+    const automated = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-chen',
+        body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
+      })
+    });
+    expect(automated.autopilotSessions).toHaveLength(1);
+  });
+
   it('automatically replies as an offline AI user after a real Matrix chat message', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);

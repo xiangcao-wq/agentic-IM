@@ -13,12 +13,15 @@ import { buildShortTermContext, listAgentMemories } from '../domain/memory';
 import type {
   AgentActionLog,
   AgentActionRequest,
+  AgentAutopilotAction,
+  AgentAutopilotPolicy,
   AgentProgressEvent,
   AgentRunRequest,
   AiRuntimeStatus,
   DemoState,
   FileItem,
-  Message
+  Message,
+  RiskLevel
 } from '../domain/types';
 import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
@@ -54,6 +57,15 @@ interface RunningServer {
 }
 
 type EventClient = ServerResponse<IncomingMessage>;
+
+interface AutopilotPolicyPatchInput {
+  agentId: string;
+  enabled?: boolean;
+  roomId?: string;
+  roomEnabled?: boolean;
+  allowedActions?: AgentAutopilotAction[];
+  autoExecuteMaxRisk?: RiskLevel;
+}
 
 const jsonHeaders = {
   'access-control-allow-methods': 'GET,POST,OPTIONS',
@@ -135,6 +147,15 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       if (request.method === 'GET' && url.pathname === '/api/agent/actions') {
         const state = await db.read();
         return sendJson(response, { actions: state.actionRequests });
+      }
+
+      if (request.method === 'PATCH' && url.pathname === '/api/agent/autopilot-policy') {
+        const body = await readJson<AutopilotPolicyPatchInput>(request);
+        const state = await db.read();
+        const updated = updateAutopilotPolicy(state, body);
+        await db.write(updated.state);
+        await publishRuntimeState();
+        return sendJson(response, { policy: updated.policy });
       }
 
       if (request.method === 'GET' && url.pathname === '/api/memories') {
@@ -1038,6 +1059,75 @@ function normalizeMatrixBootstrapPath(value: string | undefined): string | null 
     return value;
   }
   return 'data/matrix-bootstrap.json';
+}
+
+function updateAutopilotPolicy(
+  state: DemoState,
+  input: AutopilotPolicyPatchInput
+): { state: DemoState; policy: AgentAutopilotPolicy } {
+  if (!input.agentId) {
+    throw new HttpError(400, 'agentId is required');
+  }
+  const agent = state.agents.find((candidate) => candidate.id === input.agentId);
+  if (!agent) {
+    throw new HttpError(400, `unknown agent: ${input.agentId}`);
+  }
+  if (input.roomId && !agent.allowedRoomIds.includes(input.roomId)) {
+    throw new HttpError(403, `${agent.displayName} cannot be delegated in ${input.roomId}`);
+  }
+
+  const existing = state.agentAutopilotPolicies.find((policy) => policy.agentId === input.agentId);
+  const base: AgentAutopilotPolicy = existing ?? {
+    agentId: input.agentId,
+    enabled: false,
+    allowedRoomIds: [],
+    autoExecuteMaxRisk: 'low',
+    allowedActions: ['reply', 'search_files'],
+    updatedAt: new Date().toISOString()
+  };
+
+  let allowedRoomIds = base.allowedRoomIds;
+  if (input.roomId) {
+    allowedRoomIds = input.roomEnabled === false
+      ? allowedRoomIds.filter((roomId) => roomId !== input.roomId)
+      : uniqueStringList([...allowedRoomIds, input.roomId]);
+  }
+
+  const policy: AgentAutopilotPolicy = {
+    ...base,
+    enabled: input.enabled ?? (input.roomEnabled === false && allowedRoomIds.length === 0 ? false : base.enabled),
+    allowedRoomIds,
+    allowedActions: input.allowedActions ? normalizeAutopilotActions(input.allowedActions) : base.allowedActions,
+    autoExecuteMaxRisk: input.autoExecuteMaxRisk ?? base.autoExecuteMaxRisk,
+    updatedAt: new Date().toISOString()
+  };
+
+  return {
+    state: {
+      ...state,
+      agentAutopilotPolicies: [
+        policy,
+        ...state.agentAutopilotPolicies.filter((candidate) => candidate.agentId !== input.agentId)
+      ]
+    },
+    policy
+  };
+}
+
+function normalizeAutopilotActions(actions: AgentAutopilotAction[]): AgentAutopilotAction[] {
+  const allowed = new Set<AgentAutopilotAction>([
+    'reply',
+    'search_files',
+    'share_low_risk_files',
+    'suggest_task_updates',
+    'coordinate_schedule',
+    'a2a_negotiate'
+  ]);
+  return uniqueStringList(actions.filter((action) => allowed.has(action))) as AgentAutopilotAction[];
+}
+
+function uniqueStringList(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }
 
 async function resolveAgentActionReview(

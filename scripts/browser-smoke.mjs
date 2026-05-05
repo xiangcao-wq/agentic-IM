@@ -25,6 +25,30 @@ try {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
 
+  const [policyPatchResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/autopilot-policy') && response.request().method() === 'PATCH',
+      { timeout: 120_000 }
+    ),
+    page.locator('.autopilot-policy button').click()
+  ]);
+  if (!policyPatchResponse.ok()) {
+    throw new Error(`Autopilot policy toggle failed with HTTP ${policyPatchResponse.status()}`);
+  }
+  const restorePolicy = await page.request.patch(`${baseUrl}/api/agent/autopilot-policy`, {
+    data: {
+      agentId: 'agent-lin',
+      enabled: true,
+      roomId: 'room-team',
+      roomEnabled: true
+    }
+  });
+  if (!restorePolicy.ok()) {
+    throw new Error(`Autopilot policy restore failed with HTTP ${restorePolicy.status()}`);
+  }
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await waitForWorkbenchReady();
+
   const [agentRunResponse] = await Promise.all([
     page.waitForResponse(
       (response) => response.url().endsWith('/api/agent/run') && response.request().method() === 'POST',
@@ -68,6 +92,7 @@ try {
       screenshot: 'tmp/agent-im-browser-smoke.png',
       agentIntent: agentRunPayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
+      autopilotToggle: 'ok',
       pageErrors,
       consoleErrors
     })

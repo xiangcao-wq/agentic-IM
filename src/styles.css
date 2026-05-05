@@ -1574,7 +1574,9 @@ button:disabled {
 }
 
 .autopilot-policy {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 3px;
   border: 1px solid #d8e4e6;
   border-radius: 8px;
@@ -1589,8 +1591,25 @@ button:disabled {
 }
 
 .autopilot-policy small {
+  display: block;
+  margin-top: 3px;
   color: #617276;
   font-size: 12px;
+}
+
+.autopilot-policy button {
+  flex: 0 0 auto;
+  border: 1px solid #c8d7da;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: #0f6970;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.autopilot-policy button:hover {
+  border-color: #0f6970;
 }
 
 .autopilot-policy.enabled {

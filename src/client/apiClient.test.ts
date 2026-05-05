@@ -13,7 +13,8 @@ import {
   runAgent,
   sendMessage,
   shareFile,
-  syncMatrixOnce
+  syncMatrixOnce,
+  updateAutopilotPolicy
 } from './apiClient';
 
 describe('api client', () => {
@@ -142,6 +143,11 @@ describe('api client', () => {
     await generateDemoAssets('/api-root', { roomId: 'room-team', senderId: 'user-lin' }, fetchMock);
     await syncMatrixOnce('/api-root', fetchMock);
     await checkAiStatus('/api-root', fetchMock);
+    await updateAutopilotPolicy(
+      '/api-root',
+      { agentId: 'agent-lin', roomId: 'room-team', roomEnabled: false },
+      fetchMock
+    );
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -168,6 +174,11 @@ describe('api client', () => {
       6,
       '/api-root/api/ai/status/check',
       expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      '/api-root/api/agent/autopilot-policy',
+      expect.objectContaining({ method: 'PATCH' })
     );
   });
 });

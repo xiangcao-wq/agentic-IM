@@ -1,6 +1,7 @@
 import type {
   AgentActionLog,
   AgentActionRequest,
+  AgentAutopilotPolicy,
   AgentRunRequest,
   AgentRunResult,
   AiRuntimeStatus,
@@ -69,6 +70,15 @@ export interface HumanReplyInput {
 export interface GenerateDemoAssetsInput {
   roomId: string;
   senderId: string;
+}
+
+export interface UpdateAutopilotPolicyInput {
+  agentId: string;
+  enabled?: boolean;
+  roomId?: string;
+  roomEnabled?: boolean;
+  allowedActions?: AgentAutopilotPolicy['allowedActions'];
+  autoExecuteMaxRisk?: AgentAutopilotPolicy['autoExecuteMaxRisk'];
 }
 
 export function fetchState(baseUrl = '', fetcher: Fetcher = fetch): Promise<DemoState> {
@@ -145,6 +155,18 @@ export function runAgent(
   fetcher: Fetcher = fetch
 ): Promise<AgentRunResult> {
   return requestJson(fetcher, endpoint(baseUrl, '/api/agent/run'), post(input));
+}
+
+export function updateAutopilotPolicy(
+  baseUrl: string,
+  input: UpdateAutopilotPolicyInput,
+  fetcher: Fetcher = fetch
+): Promise<{ policy: AgentAutopilotPolicy }> {
+  return requestJson(fetcher, endpoint(baseUrl, '/api/agent/autopilot-policy'), {
+    method: 'PATCH',
+    headers: withApiToken({ 'content-type': 'application/json' }),
+    body: JSON.stringify(input)
+  });
 }
 
 export function listMemories(

@@ -22,6 +22,7 @@ const apiMocks = vi.hoisted(() => ({
   summarize: vi.fn(),
   syncMatrixOnce: vi.fn(),
   rejectAgentAction: vi.fn(),
+  updateAutopilotPolicy: vi.fn(),
   uploadFile: vi.fn()
 }));
 
@@ -191,6 +192,45 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('Chen asked Lin Agent to send the latest slides.');
     expect(host.textContent).toContain('Delivered file-slides-v3 to the room.');
     expect(host.textContent).toContain('low');
+  });
+
+  it('toggles current-room Agent autopilot from the workbench', async () => {
+    const initial = createDemoState();
+    const updated = {
+      ...initial,
+      agentAutopilotPolicies: initial.agentAutopilotPolicies.map((policy) =>
+        policy.agentId === 'agent-lin'
+          ? {
+              ...policy,
+              enabled: false,
+              allowedRoomIds: []
+            }
+          : policy
+      )
+    };
+    apiMocks.fetchState.mockResolvedValueOnce(initial).mockResolvedValueOnce(updated);
+    apiMocks.updateAutopilotPolicy.mockResolvedValue({
+      policy: updated.agentAutopilotPolicies.find((policy) => policy.agentId === 'agent-lin')
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const toggle = host.querySelector<HTMLButtonElement>('.autopilot-policy button');
+    expect(toggle).toBeTruthy();
+
+    await act(async () => {
+      toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.updateAutopilotPolicy).toHaveBeenCalledWith('', {
+      agentId: 'agent-lin',
+      enabled: false,
+      roomId: 'room-team',
+      roomEnabled: false
+    });
+    expect(host.querySelector('.autopilot-policy.disabled')).toBeTruthy();
   });
 
   it('marks the system event stream as disconnected when SSE fails', async () => {
