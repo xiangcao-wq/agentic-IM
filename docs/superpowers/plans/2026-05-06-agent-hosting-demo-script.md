@@ -15,6 +15,7 @@
 - Modify `src/domain/types.ts`: add optional `endsAt` to `CalendarItem` so 19:30-20:45 can be represented.
 - Modify `src/domain/demoState.ts`: update the base scenario date/time conflict, add the screenshot metadata, and align task/calendar copy with the script.
 - Modify `src/server/demoAssets.ts`: add a downloadable runtime asset named `访谈流程截图-服务入口分散.png`.
+- Modify `scripts/prepare-demo-db.mjs`: ensure the prepared runtime DB maps that asset onto the fixed `file-interview-flow-screenshot` id with real bytes and a `localPath`.
 - Create `src/server/demoScriptRuntime.ts`: deterministic script runner for four human turns and their state-backed Agent effects.
 - Create `src/server/demoScriptRuntime.test.ts`: tests for script turns, file handoff, safety block, and calendar confirmation request.
 - Modify `src/server/appServer.ts`: add `/api/demo/script/turn` endpoint and use existing state publish/write flow.
@@ -30,8 +31,10 @@
 - Modify: `src/domain/types.ts`
 - Modify: `src/domain/demoState.ts`
 - Modify: `src/server/demoAssets.ts`
+- Modify: `scripts/prepare-demo-db.mjs`
 - Test: `src/domain/demoState.test.ts`
 - Test: `src/server/demoAssets.test.ts`
+- Test: `src/server/demoAssets.test.ts` and `npm run demo:prepare` output/state checks
 
 - [ ] **Step 1: Write the failing demo state test**
 
@@ -49,6 +52,7 @@ expect(linFocus).toMatchObject({
 expect(state.calendar.find((item) => item.id === 'cal-review')).toMatchObject({
   title: '第 4 组最后一次合稿检查',
   startsAt: '2026-05-06T20:30:00+08:00',
+  endsAt: '2026-05-06T21:00:00+08:00',
   attendees: ['user-lin', 'user-chen', 'user-zhao']
 });
 
@@ -126,6 +130,7 @@ Use these calendar objects:
   id: 'cal-review',
   title: '第 4 组最后一次合稿检查',
   startsAt: '2026-05-06T20:30:00+08:00',
+  endsAt: '2026-05-06T21:00:00+08:00',
   roomId: 'room-team',
   attendees: ['user-lin', 'user-chen', 'user-zhao'],
   sourceTaskId: 'task-check'
@@ -154,6 +159,19 @@ const assetName = name === '访谈流程截图-服务入口分散.png'
 const filePath = join(process.cwd(), 'data', 'demo-assets', assetName);
 ```
 
+Update `scripts/prepare-demo-db.mjs` so this runtime asset reuses the fixed seed file id instead of a generated Chinese-name slug:
+
+```js
+function runtimeAssetFileId(assetName) {
+  if (assetName === '访谈流程截图-服务入口分散.png') {
+    return 'file-interview-flow-screenshot';
+  }
+  return `file-demo-runtime-${safeId(assetName)}`;
+}
+```
+
+Use `const fileId = runtimeAssetFileId(asset.name);` in the asset loop. Keep writing a real `localPath` and replacing any existing file with the same id so the generated DB contains `size > 0` and `localPath`.
+
 - [ ] **Step 6: Update demo asset tests**
 
 In `src/server/demoAssets.test.ts`, add:
@@ -167,16 +185,27 @@ expect(screenshot?.bytes.byteLength).toBeGreaterThan(0);
 expect(screenshot?.tags).toEqual(expect.arrayContaining(['服务入口分散', '证据图']));
 ```
 
+Add a prepare-state verification by running `npm run demo:prepare` in the task and checking the generated `data/agent-im-db.json` contains:
+
+```ts
+const screenshot = state.files.find((file) => file.id === 'file-interview-flow-screenshot');
+expect(screenshot?.name).toBe('访谈流程截图-服务入口分散.png');
+expect(screenshot?.size).toBeGreaterThan(0);
+expect(screenshot?.localPath ?? screenshot?.mxcUri).toBeTruthy();
+```
+
 - [ ] **Step 7: Run tests**
 
 Run: `npm run test -- src/domain/demoState.test.ts src/server/demoAssets.test.ts`
+
+Run: `npm run demo:prepare`
 
 Expected: PASS.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/domain/types.ts src/domain/demoState.ts src/domain/demoState.test.ts src/server/demoAssets.ts src/server/demoAssets.test.ts
+git add src/domain/types.ts src/domain/demoState.ts src/domain/demoState.test.ts src/server/demoAssets.ts src/server/demoAssets.test.ts scripts/prepare-demo-db.mjs
 git commit -m "feat: seed agent hosting demo story"
 ```
 
@@ -239,6 +268,16 @@ describe('demo script runtime', () => {
     expect(result.sessions[0].turns.at(-1)?.message).toContain('风险等级 low，可以自动代发');
   });
 
+  it('keeps script turns idempotent when a demo button is clicked twice', async () => {
+    const first = await runDemoScriptTurn(withDownloadableScreenshot(createDemoState()), {
+      turnId: 'chen-screenshot-request'
+    });
+    const second = await runDemoScriptTurn(first.state, { turnId: 'chen-screenshot-request' });
+
+    expect(second.state.messages.filter((message) => message.fileId === 'file-interview-flow-screenshot')).toHaveLength(1);
+    expect(second.state.a2aSessions.filter((session) => session.id === 'a2a-script-image')).toHaveLength(1);
+  });
+
   it('blocks the private note request without queueing a confirmation', async () => {
     const result = await runDemoScriptTurn(createDemoState(), { turnId: 'chen-private-note-request' });
 
@@ -267,7 +306,9 @@ describe('demo script runtime', () => {
         calendarPatch: {
           itemId: 'cal-review',
           oldStartsAt: '2026-05-06T20:30:00+08:00',
-          newStartsAt: '2026-05-06T21:20:00+08:00'
+          oldEndsAt: '2026-05-06T21:00:00+08:00',
+          newStartsAt: '2026-05-06T21:20:00+08:00',
+          newEndsAt: '2026-05-06T21:50:00+08:00'
         }
       }
     });
@@ -284,12 +325,12 @@ Expected: FAIL because `demoScriptRuntime.ts` does not exist.
 
 - [ ] **Step 3: Implement the script runtime**
 
-Create `src/server/demoScriptRuntime.ts` with these exports and helpers:
+Create `src/server/demoScriptRuntime.ts` with these exports and helpers. Keep imports tight; do not leave unused `blockAgentAction`/`RiskAssessment` imports if the final implementation does not use them.
 
 ```ts
-import { blockAgentAction, enqueueAgentAction, requireActionConfirmation } from '../domain/actionQueue';
+import { enqueueAgentAction, requireActionConfirmation } from '../domain/actionQueue';
 import { sortMessagesChronologically } from '../domain/messages';
-import type { A2ASession, AgentActionLog, AgentActionRequest, DemoState, Message, RiskAssessment } from '../domain/types';
+import type { A2ASession, AgentActionLog, AgentActionRequest, DemoState, Message } from '../domain/types';
 
 export type DemoScriptTurnId =
   | 'zhao-conflict-request'
@@ -309,23 +350,34 @@ export interface DemoScriptTurnResult {
   logs: AgentActionLog[];
 }
 
+export const DEMO_SCRIPT_TURNS = new Set<DemoScriptTurnId>([
+  'zhao-conflict-request',
+  'chen-screenshot-request',
+  'chen-private-note-request',
+  'zhao-2120-confirmation'
+]);
+
+export function isDemoScriptTurnId(value: unknown): value is DemoScriptTurnId {
+  return typeof value === 'string' && DEMO_SCRIPT_TURNS.has(value as DemoScriptTurnId);
+}
+
 export async function runDemoScriptTurn(state: DemoState, input: DemoScriptTurnInput): Promise<DemoScriptTurnResult> {
-  if (input.turnId === 'zhao-conflict-request') {
-    return appendScriptMessages(state, [
-      userMessage(state, 'msg-script-zhao-conflict', 'user-zhao', '@林雯 今晚能不能 20:30 做最后一次合稿检查？陈晨说她找不到那张“服务入口分散”截图的准确版本，你那边能不能顺手发一下？'),
-      agentMessage(state, 'msg-script-lin-conflict-reply', 'agent-lin', '我代表林雯回应：她 19:30 到 20:45 已锁定演示稿更新，20:30 与当前日程冲突。建议把合稿检查改到 21:20 到 21:50。截图请求我会单独检查授权；如果是本组可见且允许代发的文件，我可以先发给陈晨。')
-    ]);
+  switch (input.turnId) {
+    case 'zhao-conflict-request':
+      return appendScriptMessages(state, [
+        userMessage(state, 'msg-script-zhao-conflict', 'user-zhao', '@林雯 今晚能不能 20:30 做最后一次合稿检查？陈晨说她找不到那张“服务入口分散”截图的准确版本，你那边能不能顺手发一下？'),
+        agentMessage(state, 'msg-script-lin-conflict-reply', 'agent-lin', '我代表林雯回应：她 19:30 到 20:45 已锁定演示稿更新，20:30 与当前日程冲突。建议把合稿检查改到 21:20 到 21:50。截图请求我会单独检查授权；如果是本组可见且允许代发的文件，我可以先发给陈晨。')
+      ]);
+    case 'chen-screenshot-request':
+      return runScreenshotHandoff(state);
+    case 'chen-private-note-request':
+      return runPrivateNoteBlock(state);
+    case 'zhao-2120-confirmation':
+      return runScheduleConfirmation(state);
+    default:
+      const exhaustive: never = input.turnId;
+      throw new Error(`unknown demo script turn: ${exhaustive}`);
   }
-
-  if (input.turnId === 'chen-screenshot-request') {
-    return runScreenshotHandoff(state);
-  }
-
-  if (input.turnId === 'chen-private-note-request') {
-    return runPrivateNoteBlock(state);
-  }
-
-  return runScheduleConfirmation(state);
 }
 ```
 
@@ -337,6 +389,8 @@ The implementation must:
 - Create a completed screenshot A2A session with two turns and context IDs `['file-interview-flow-screenshot']`.
 - Create a blocked private-note `AgentActionLog` with `risk.level='high'`, `toolCalls=['file.search', 'risk.gate', 'file.share.blocked']`, and no `actionRequests`.
 - Create a `coordinate` action request by calling `enqueueAgentAction` and `requireActionConfirmation`, then create a `needs_confirmation` A2A session whose `proposedActionRequestIds` contains that action id.
+- Make every fixed-id turn idempotent. If a message/session/log/action request id already exists, do not append another copy. Repeated demo button clicks should return empty additions or the existing turn outputs without duplicating React keys or confirmation queue entries.
+- The 21:20 calendar patch must include `oldEndsAt` and `newEndsAt` as well as starts: `20:30-21:00` -> `21:20-21:50`.
 
 - [ ] **Step 4: Run the script runtime tests**
 
@@ -429,30 +483,57 @@ it('runs a deterministic demo script turn and persists state', async () => {
     await harness.close();
   }
 });
+
+it('rejects invalid demo script turn ids', async () => {
+  const harness = await createTestServer();
+  try {
+    const response = await harness.fetch('/api/demo/script/turn', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ turnId: 'bad-turn' })
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid demo script turnId' });
+  } finally {
+    await harness.close();
+  }
+});
 ```
 
 - [ ] **Step 4: Add the endpoint**
 
-In `src/server/appServer.ts`, import `runDemoScriptTurn` and add this route before the file upload routes:
+In `src/server/appServer.ts`, import `runDemoScriptTurn`, `isDemoScriptTurnId`, and `type DemoScriptTurnResult`; add this route before the file upload routes:
 
 ```ts
 if (request.method === 'POST' && url.pathname === '/api/demo/script/turn') {
-  const body = await readJson<{ turnId: DemoScriptTurnId }>(request);
-  const result = await updateStoredState(async (currentState) => {
-    const scripted = await runDemoScriptTurn(currentState, body);
+  const body = await readJson<{ turnId?: unknown }>(request);
+  if (!isDemoScriptTurnId(body.turnId)) {
+    return sendJson(response, { error: 'Invalid demo script turnId' }, 400);
+  }
+  const turnId = body.turnId;
+
+  let scripted: DemoScriptTurnResult | undefined;
+  await updateStoredState(async (currentState) => {
+    scripted = await runDemoScriptTurn(currentState, { turnId });
     return scripted.state;
   });
+
+  if (!scripted) {
+    return sendJson(response, { error: 'Script turn failed' }, 500);
+  }
+
   await publishRuntimeState();
   return sendJson(response, {
-    messages: result.messages,
-    sessions: result.sessions,
-    actionRequests: result.actionRequests,
-    logs: result.logs
+    messages: scripted.messages,
+    sessions: scripted.sessions,
+    actionRequests: scripted.actionRequests,
+    logs: scripted.logs
   });
 }
 ```
 
-If `updateStoredState` returns only state in the current implementation, store the script result in an outer `let scripted: DemoScriptTurnResult | undefined;` before returning the state, then use `scripted!` in the response.
+Do not use the return value of `updateStoredState` as the script result; in this server it returns the new `DemoState`, not the per-turn payload.
 
 - [ ] **Step 5: Run API tests**
 
@@ -558,6 +639,7 @@ it('renders readable A2A checks before technical details', async () => {
   expect(host.textContent).toContain('请求者是否同组');
   expect(host.textContent).toContain('是否定位到准确版本');
   expect(host.textContent).toContain('技术详情');
+  expect(host.textContent.indexOf('请求者是否同组')).toBeLessThan(host.textContent.indexOf('技术详情'));
 });
 ```
 
@@ -565,7 +647,11 @@ it('renders readable A2A checks before technical details', async () => {
 
 In `src/App.test.tsx`, add `runDemoScriptTurn: vi.fn()` to `apiMocks` and ensure `vi.mock('./client/apiClient', () => apiMocks);` exposes it.
 
-In `src/App.tsx`, import `runDemoScriptTurn` from `./client/apiClient`.
+In `src/App.tsx`, import both the function and its input type:
+
+```ts
+import { runDemoScriptTurn, type DemoScriptTurnInput } from './client/apiClient';
+```
 
 - [ ] **Step 3: Wire the controls**
 
@@ -611,8 +697,7 @@ Add helpers in `src/App.tsx`:
 
 ```ts
 function a2aDisplayChecks(session: DemoState['a2aSessions'][number]): Array<{ label: string; result: string }> {
-  const goal = session.goal;
-  if (goal.includes('访谈流程截图') || session.contextIds.includes('file-interview-flow-screenshot')) {
+  if (session.contextIds.includes('file-interview-flow-screenshot')) {
     return [
       { label: '请求者是否同组', result: '通过' },
       { label: '是否定位到准确版本', result: '通过' },
@@ -623,7 +708,7 @@ function a2aDisplayChecks(session: DemoState['a2aSessions'][number]): Array<{ la
       { label: '处理结果', result: '自动代发' }
     ];
   }
-  if (goal.includes('21:20') || session.proposedActionRequestIds.length > 0) {
+  if (session.proposedActionRequestIds.length > 0) {
     return [
       { label: '林雯 20:30 是否可用', result: '冲突，19:30-20:45 已锁定' },
       { label: '林雯 21:20 是否可用', result: '通过' },
@@ -664,6 +749,7 @@ Add to `src/styles.css`:
 ```css
 .demo-script-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   padding: 10px 24px;
@@ -738,6 +824,8 @@ git commit -m "feat: add scripted demo controls"
 **Files:**
 - Modify: `src/App.tsx`
 - Modify: `src/domain/agentEngine.ts`
+- Modify: `src/server/agentRuntime.ts`
+- Modify: `src/server/agentRunRuntime.ts`
 - Modify: `src/server/agentAutopilotRuntime.ts`
 - Test: `src/server/agentRuntime.test.ts`
 - Test: `src/server/agentAutopilotRuntime.test.ts`
@@ -785,6 +873,20 @@ it('blocks owner-only private notes instead of asking for confirmation', async (
 });
 ```
 
+Add a schedule parsing assertion in the existing coordinate/runtime test style:
+
+```ts
+expect(request?.input.calendarPatch).toMatchObject({
+  itemId: 'cal-review',
+  oldStartsAt: '2026-05-06T20:30:00+08:00',
+  oldEndsAt: '2026-05-06T21:00:00+08:00',
+  newStartsAt: '2026-05-06T21:20:00+08:00',
+  newEndsAt: '2026-05-06T21:50:00+08:00'
+});
+```
+
+Cover the ambiguous-time phrase explicitly: `把 20:30 改到 21:20` must resolve to `21:20`, not the first time in the sentence.
+
 - [ ] **Step 2: Update quick prompts**
 
 In `src/App.tsx`, replace the prompt constants:
@@ -816,11 +918,10 @@ function findSensitiveBlockedFile(state: DemoState, ownerId: string, roomId: str
 }
 ```
 
-In `createFileShareActionFallback`, before `assessFileShareRisk`, set:
+In `createFileShareActionFallback`, before `assessFileShareRisk`, block sensitive files even if the normal matcher already selected one. Extract a helper so the branch is reused:
 
 ```ts
-const blockedFile = file ? undefined : findSensitiveBlockedFile(state, agent.ownerId, input.roomId, input.requestText);
-if (blockedFile) {
+function blockFileShare(blockedFile: FileItem): FileShareAction {
   const risk: RiskAssessment = {
     level: 'high',
     score: 0.93,
@@ -837,6 +938,15 @@ if (blockedFile) {
     toolCalls: ['room_search', 'file_library.lookup_latest', 'risk.gate', 'file.share.blocked']
   });
   return { status: 'blocked', requiresHuman: false, risk, file: blockedFile, log };
+}
+
+if (file && (file.visibility !== 'room' || !file.agentCanShare)) {
+  return blockFileShare(file);
+}
+
+const blockedFile = findSensitiveBlockedFile(state, agent.ownerId, input.roomId, input.requestText);
+if (blockedFile) {
+  return blockFileShare(blockedFile);
 }
 ```
 
@@ -859,34 +969,88 @@ if (result.status === 'blocked') {
 
 - [ ] **Step 4: Improve 21:20 schedule parsing**
 
-In `src/server/agentRunRuntime.ts`, ensure `inferNewStartsAt` recognizes `21:20` in Chinese text and keeps the current date from `cal-review`:
+In `src/server/agentRunRuntime.ts`, expand calendar patch inference from start-only to start/end-aware:
 
 ```ts
+function replaceTime(iso: string, hour: string, minute: string): string {
+  return iso.replace(/T\d{2}:\d{2}:/, `T${hour.padStart(2, '0')}:${minute}:`);
+}
+
+const range = text.match(/(\d{1,2})[:：](\d{2})\s*(?:到|-|—|~)\s*(\d{1,2})[:：](\d{2})/);
+if (range) {
+  return {
+    startsAt: replaceTime(oldStartsAt, range[1], range[2]),
+    endsAt: replaceTime(oldEndsAt ?? oldStartsAt, range[3], range[4])
+  };
+}
+
+const changeTo = text.match(/(?:改到|调整到|改成|挪到)\s*(\d{1,2})[:：](\d{2})/);
+if (changeTo) {
+  return {
+    startsAt: replaceTime(oldStartsAt, changeTo[1], changeTo[2])
+  };
+}
+
 const explicitTime = text.match(/(\d{1,2})[:：](\d{2})/);
-if (explicitTime) {
-  const hour = explicitTime[1].padStart(2, '0');
-  const minute = explicitTime[2];
-  return oldStartsAt.replace(/T\d{2}:\d{2}:/, `T${hour}:${minute}:`);
+if (explicitTime && !text.match(/(?:改到|调整到|改成|挪到)/)) {
+  return {
+    startsAt: replaceTime(oldStartsAt, explicitTime[1], explicitTime[2])
+  };
 }
 ```
 
-Place this before broader weekday/day inference.
+Place the `range` and `changeTo` checks before broader weekday/day inference so `把 20:30 改到 21:20` picks `21:20`, not `20:30`.
+
+Update `createCalendarPatch` to include:
+
+```ts
+{
+  itemId: item.id,
+  title: item.title,
+  oldStartsAt: item.startsAt,
+  oldEndsAt: item.endsAt,
+  newStartsAt: inferred.startsAt,
+  newEndsAt: inferred.endsAt ?? inferShiftedEnd(item, inferred.startsAt)
+}
+```
+
+`inferShiftedEnd` should preserve the old event duration when no explicit end is provided. For `20:30-21:00` moved to `21:20`, it should produce `21:50`.
 
 - [ ] **Step 5: Make schedule conflict detection use `endsAt`**
 
 In `src/server/agentAutopilotRuntime.ts`, change `buildScheduleConstraint` conflict detection:
 
 ```ts
+interface CalendarPatch {
+  itemId: string;
+  oldStartsAt: string;
+  oldEndsAt?: string;
+  newStartsAt: string;
+  newEndsAt?: string;
+  title: string;
+}
+
 const proposedStart = Date.parse(patch.newStartsAt);
+const proposedEnd = Date.parse(patch.newEndsAt ?? patch.newStartsAt);
 const conflict = state.calendar.find((item) => {
+  if (item.id === patch.itemId) {
+    return false;
+  }
   if (!item.attendees.includes(ownerId)) {
     return false;
   }
   const startsAt = Date.parse(item.startsAt);
   const endsAt = Date.parse(item.endsAt ?? item.startsAt);
-  return item.startsAt === patch.newStartsAt || (Number.isFinite(proposedStart) && proposedStart >= startsAt && proposedStart < endsAt);
+  return Number.isFinite(proposedStart) &&
+    Number.isFinite(proposedEnd) &&
+    Number.isFinite(startsAt) &&
+    Number.isFinite(endsAt) &&
+    proposedStart < endsAt &&
+    proposedEnd > startsAt;
 });
 ```
+
+Update `parseCalendarPatch` to preserve optional `oldEndsAt` and `newEndsAt`.
 
 - [ ] **Step 6: Run runtime tests**
 
@@ -934,11 +1098,12 @@ In `scripts/browser-smoke.mjs`, add checks for:
 ```js
 await expectText(page, '剧本推进');
 await expectText(page, '赵一鸣：20:30 + 找截图');
+await clickText(page, '陈晨：找截图');
 await expectText(page, '请求者是否同组');
 await expectText(page, '技术详情');
 ```
 
-Use the local helper style already present in that script.
+Use the local helper style already present in that script. The A2A table assertions must run only after triggering `chen-screenshot-request`; otherwise a fresh page has no A2A session yet.
 
 - [ ] **Step 3: Run browser-related checks**
 
@@ -1001,7 +1166,7 @@ Expected visible results:
 - Screenshot handoff sends `访谈流程截图-服务入口分散.png`.
 - Private note request shows blocked/high-risk result.
 - A2A panel shows check tables before technical details.
-- Calendar confirmation updates `cal-review` to `2026-05-06T21:20:00+08:00`.
+- Calendar confirmation updates `cal-review` to `2026-05-06T21:20:00+08:00` through `2026-05-06T21:50:00+08:00`.
 - Worker creates a task update confirmation instead of mutating task state immediately.
 
 - [ ] **Step 5: Final status check**
