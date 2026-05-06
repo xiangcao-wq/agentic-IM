@@ -654,7 +654,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           actorId: body.userId,
           instructions: buildHumanReplyInstructions(state, profile),
           input: [body.prompt ?? '请自然回复当前聊天。', buildShortTermContext(state, body.roomId)].join('\n\n'),
-          maxOutputTokens: 160
+          maxOutputTokens: 120
         });
         const message = matrixStore
           ? await matrixStore.sendMessage(state, { roomId: body.roomId, senderId: body.userId, body: text })

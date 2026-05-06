@@ -76,6 +76,9 @@ const apiBaseUrl = import.meta.env.VITE_AGENT_API_BASE ?? '';
 const currentUserId = 'user-lin';
 const currentAgentId = 'agent-lin';
 const eventStreamDisconnectedError = '实时连接已断开；请确认本地 API 服务仍在运行。';
+const quickSummaryPrompt = '总结当前群聊：列出关键结论、已确认事项、待办、风险和下一步。';
+const quickDeadlinePrompt = '只根据当前聊天、任务和日程回答：这次作业什么时候截止？还有哪些临近时间点？';
+const quickFindFilePrompt = '在当前聊天可用文件里查找最新行动计划、演示稿、证据包或引用材料，列出文件名和用途。';
 const defaultFileSharePrompt = '把最新行动计划发一下';
 const defaultCoordinatePrompt = '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。';
 
@@ -229,7 +232,7 @@ function App() {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'summary',
-        userText: agentPrompt || '总结当前群聊'
+        userText: quickSummaryPrompt
       });
       setAgentResult({ kind: 'agent-run', value: response });
       return response;
@@ -242,7 +245,7 @@ function App() {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'deadline',
-        userText: agentPrompt
+        userText: quickDeadlinePrompt
       });
       setAgentResult({ kind: 'agent-run', value: response });
       return response;
@@ -283,7 +286,7 @@ function App() {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'find_file',
-        userText: agentPrompt || '最新行动计划'
+        userText: quickFindFilePrompt
       });
       setAgentResult({ kind: 'agent-run', value: response });
       return response;

@@ -499,7 +499,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('判断依据');
   });
 
-  it('uses action-specific default prompts for file share and coordination shortcuts', async () => {
+  it('uses action-specific prompts for all workbench shortcuts', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
     apiMocks.runAgent.mockResolvedValue(createAgentRunResult());
@@ -509,11 +509,26 @@ describe('App runtime upgrade controls', () => {
     });
 
     const actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')];
+    const summaryButton = actionButtons.find((button) => button.textContent?.includes('总结群聊'));
+    const deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
+    const findFileButton = actionButtons.find((button) => button.textContent?.includes('Agent 找文件'));
     const fileShareButton = actionButtons.find((button) => button.textContent?.includes('请求代发'));
     const coordinateButton = actionButtons.find((button) => button.textContent?.includes('Agent 协调'));
+    expect(summaryButton).toBeTruthy();
+    expect(deadlineButton).toBeTruthy();
+    expect(findFileButton).toBeTruthy();
     expect(fileShareButton).toBeTruthy();
     expect(coordinateButton).toBeTruthy();
 
+    await act(async () => {
+      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      deadlineButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      findFileButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     await act(async () => {
       fileShareButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -524,11 +539,29 @@ describe('App runtime upgrade controls', () => {
     expect(apiMocks.runAgent).toHaveBeenNthCalledWith(1, '', {
       agentId: 'agent-lin',
       roomId: 'room-team',
+      intent: 'summary',
+      userText: '总结当前群聊：列出关键结论、已确认事项、待办、风险和下一步。'
+    });
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(2, '', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      intent: 'deadline',
+      userText: '只根据当前聊天、任务和日程回答：这次作业什么时候截止？还有哪些临近时间点？'
+    });
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(3, '', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      intent: 'find_file',
+      userText: '在当前聊天可用文件里查找最新行动计划、演示稿、证据包或引用材料，列出文件名和用途。'
+    });
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(4, '', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
       intent: 'share_file',
       userText: '把最新行动计划发一下',
       targetUserId: 'user-chen'
     });
-    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(2, '', {
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(5, '', {
       agentId: 'agent-lin',
       roomId: 'room-team',
       intent: 'coordinate',

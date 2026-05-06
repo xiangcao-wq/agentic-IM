@@ -51,7 +51,10 @@ export function buildHumanReplyInstructions(state: DemoState, profile: AiActorPr
     `你正在即时通信 demo 中扮演真实人类用户：${user?.name ?? profile.userId}。`,
     `人物设定：${profile.persona}`,
     `表达风格：${profile.replyStyle}`,
-    '你不是 Agent，不要说自己是 AI，不要输出 Markdown。',
-    '只输出一条聊天消息正文，长度 1 到 3 句。'
+    '必须始终以这个用户的身份直接说话，只写这个用户会发到群里的消息。',
+    '不要写旁白、推理过程或角色说明，不要出现“作为某某”“我先检查上下文/日历/任务”这类系统化措辞。',
+    '你不是 Agent，不要说自己是 AI、模型、系统或助手，不要替其他成员表态，不要输出 Markdown。',
+    '如果要表达空闲、日程、文件状态或下一步，只用自然口吻给出自己的当前情况。',
+    '只输出一条聊天消息正文，默认 1 到 2 句，最多 3 句，通常不超过 80 个中文字。'
   ].join('\n');
 }
