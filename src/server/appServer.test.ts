@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
-import type { AgentAutopilotAction } from '../domain/types';
+import type { AgentAutopilotAction, DemoState } from '../domain/types';
 import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
+import type { StateStore } from './stateStore';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 const tempDirs: string[] = [];
@@ -155,6 +156,63 @@ describe('real local agent IM server', () => {
 
     const state = await requestJson(`${app.url}/api/state`);
     expect(state.messages.some((message: { id: string }) => message.id === sentMessage.autopilotMessages[0].id)).toBe(true);
+  });
+
+  it('adds a calendar event when a user explicitly confirms a schedule from recent room chat', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          messages: [
+            ...state.messages,
+            {
+              id: 'msg-schedule-context',
+              roomId: 'room-team',
+              senderId: 'user-chen',
+              senderName: '陈晨',
+              body: '我 5 月 13 日周三晚上有空，可以一起合稿检查。',
+              sentAt: '2026-05-06T12:48:00+08:00',
+              type: 'text'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: '好的，那么就加入日程吧'
+      })
+    });
+    const currentState = await requestJson(`${app.url}/api/state`);
+    const added = currentState.calendar.find((item: { sourceTaskId: string }) =>
+      item.sourceTaskId === sentMessage.id
+    );
+
+    expect(added).toMatchObject({
+      roomId: 'room-team',
+      startsAt: '2026-05-13T20:30:00+08:00',
+      attendees: expect.arrayContaining(['user-lin', 'user-chen'])
+    });
+    expect(added.title).toContain('合稿检查');
+    expect(
+      currentState.actionLogs.some((log: { contextIds: string[]; toolCalls: string[] }) =>
+        log.contextIds.includes(sentMessage.id) && log.toolCalls.includes('calendar.add_from_chat')
+      )
+    ).toBe(true);
   });
 
   it('returns a negotiated A2A schedule session and queued calendar patch over HTTP', async () => {
@@ -338,6 +396,112 @@ describe('real local agent IM server', () => {
       })
     });
     expect(automated.autopilotSessions).toHaveLength(1);
+  });
+
+  it('preserves logs and memories from concurrent Agent runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createBarrierFailingAiProvider(2)
+    });
+    servers.push(app);
+
+    const [summary, deadline] = await Promise.all([
+      requestJson(`${app.url}/api/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          intent: 'summary',
+          userText: '总结当前群聊'
+        })
+      }),
+      requestJson(`${app.url}/api/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          intent: 'deadline',
+          userText: 'deadline 是？'
+        })
+      })
+    ]);
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.memories.map((memory: { id: string }) => memory.id)).toEqual(
+      expect.arrayContaining([summary.memory.id, deadline.memory.id])
+    );
+    expect(state.actionLogs.map((log: { id: string }) => log.id)).toEqual(
+      expect.arrayContaining([summary.log.id, deadline.log.id])
+    );
+  });
+
+  it('preserves audit logs from concurrent Agent helper endpoints', async () => {
+    const store = createBarrierMemoryStateStore(createDemoState(), 2);
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      stateStore: store
+    });
+    servers.push(app);
+
+    const [summary, deadline] = await Promise.all([
+      requestJson(`${app.url}/api/agent/summary`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team'
+        })
+      }),
+      requestJson(`${app.url}/api/agent/deadline`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          question: 'deadline 是？'
+        })
+      })
+    ]);
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.actionLogs.map((log: { id: string }) => log.id)).toEqual(
+      expect.arrayContaining([summary.log.id, deadline.log.id])
+    );
+  });
+
+  it('does not send a legacy coordinate message when the proposal requires human confirmation', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const before = await requestJson(`${app.url}/api/state`);
+    const response = await requestJson(`${app.url}/api/agent/coordinate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        fromAgentId: 'agent-chen',
+        toAgentId: 'agent-lin',
+        roomId: 'room-team',
+        proposal: 'Move the final review to Wednesday 23:00 and assume everyone agrees.'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(response.result).toMatchObject({
+      status: 'needs_confirmation',
+      requiresHuman: true
+    });
+    expect(response.message).toBeUndefined();
+    expect(after.messages).toHaveLength(before.messages.length);
+    expect(after.actionLogs.map((log: { id: string }) => log.id)).toContain(response.result.log.id);
   });
 
   it('automatically replies as an offline AI user after a real Matrix chat message', async () => {
@@ -1045,7 +1209,7 @@ describe('real local agent IM server', () => {
     });
   });
 
-  it('requires the configured API token for state-changing requests while keeping reads available', async () => {
+  it('requires the configured API token for protected reads and writes', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
@@ -1057,7 +1221,11 @@ describe('real local agent IM server', () => {
     });
     servers.push(app);
 
-    const read = await fetch(`${app.url}/api/state`);
+    const deniedRead = await fetch(`${app.url}/api/state`);
+    const allowedRead = await fetch(`${app.url}/api/state`, {
+      headers: { 'x-agent-im-token': 'local-secret' }
+    });
+    const allowedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
     const denied = await fetch(`${app.url}/api/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1080,7 +1248,10 @@ describe('real local agent IM server', () => {
       })
     });
 
-    expect(read.ok).toBe(true);
+    expect(deniedRead.status).toBe(401);
+    expect(allowedRead.ok).toBe(true);
+    expect(allowedSse.ok).toBe(true);
+    await allowedSse.body?.cancel();
     expect(denied.status).toBe(401);
     expect(await denied.json()).toMatchObject({ error: 'unauthorized' });
     expect(allowed.status).toBe(201);
@@ -1137,6 +1308,30 @@ describe('real local agent IM server', () => {
 
     expect(allowed.status).toBe(201);
     expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5176');
+  });
+
+  it('advertises PATCH support in CORS preflight responses', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const preflight = await fetch(`${app.url}/api/agent/autopilot-policy`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://127.0.0.1:5175',
+        'access-control-request-method': 'PATCH'
+      }
+    });
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5175');
+    expect(preflight.headers.get('access-control-allow-methods')?.split(',')).toContain('PATCH');
   });
 
   it('rejects unsupported and oversized uploads before persisting state', async () => {
@@ -1535,6 +1730,67 @@ function createFakeAiProvider(text: string): AiProvider {
       return text;
     }
   };
+}
+
+function createBarrierFailingAiProvider(waitForCalls: number): AiProvider {
+  let callCount = 0;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  return {
+    async generateText() {
+      callCount += 1;
+      if (callCount >= waitForCalls) {
+        release?.();
+      }
+      if (callCount <= waitForCalls) {
+        await ready;
+      }
+      throw new Error('LLM unavailable');
+    }
+  };
+}
+
+function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number): StateStore {
+  let state = cloneState(initial);
+  let writeCount = 0;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let updateQueue: Promise<unknown> = Promise.resolve();
+
+  return {
+    async init() {},
+    async read() {
+      return cloneState(state);
+    },
+    async write(nextState) {
+      writeCount += 1;
+      if (writeCount >= waitForWrites) {
+        release?.();
+      }
+      if (writeCount <= waitForWrites) {
+        await ready;
+      }
+      state = cloneState(nextState);
+    },
+    update(updater) {
+      const pending = updateQueue.then(async () => {
+        const nextState = await updater(cloneState(state));
+        state = cloneState(nextState);
+        return cloneState(state);
+      });
+      updateQueue = pending.catch(() => undefined);
+      return pending;
+    }
+  };
+}
+
+function cloneState(state: DemoState): DemoState {
+  return JSON.parse(JSON.stringify(state)) as DemoState;
 }
 
 function createRecordingAiProvider(texts: string[]): AiProvider & { calls: Array<Record<string, unknown>> } {

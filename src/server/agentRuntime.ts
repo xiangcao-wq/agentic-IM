@@ -51,7 +51,24 @@ export async function runFileShareAction(
     };
   }
 
-  const confirmation = requireActionConfirmation(withLog, queued.request.id, result.risk, {
+  const confirmationState = result.file && hasDownloadableBacking(result.file)
+    ? {
+        ...withLog,
+        actionRequests: withLog.actionRequests.map((request) =>
+          request.id === queued.request.id
+            ? {
+                ...request,
+                input: {
+                  ...request.input,
+                  fileId: result.file?.id,
+                  fileVersion: result.file?.version
+                }
+              }
+            : request
+        )
+      }
+    : withLog;
+  const confirmation = requireActionConfirmation(confirmationState, queued.request.id, result.risk, {
     updatedAt: result.log.createdAt
   });
   return {
@@ -59,4 +76,8 @@ export async function runFileShareAction(
     result,
     actionRequest: confirmation.request
   };
+}
+
+function hasDownloadableBacking(file: NonNullable<FileShareAction['file']>): boolean {
+  return Boolean(file.mxcUri || file.localPath);
 }

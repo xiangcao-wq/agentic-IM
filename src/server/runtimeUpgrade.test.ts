@@ -8,6 +8,7 @@ import { createDemoState } from '../domain/demoState';
 import type { DemoState } from '../domain/types';
 import type { AiProvider } from './aiProvider';
 import { createAppServer } from './appServer';
+import { createRuntimeDemoAssets } from './demoAssets';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 const tempDirs: string[] = [];
@@ -505,17 +506,11 @@ describe('runtime upgrade APIs', () => {
       })
     });
 
-    expect(generated.files).toHaveLength(8);
-    expect(generated.files.map((file: { contentType: string }) => file.contentType)).toEqual([
-      'text/plain; charset=utf-8',
-      'text/plain; charset=utf-8',
-      'application/pdf',
-      'application/pdf',
-      'image/svg+xml',
-      'image/svg+xml',
-      'text/markdown; charset=utf-8',
-      'text/plain; charset=utf-8'
-    ]);
+    const runtimeAssets = createRuntimeDemoAssets();
+    expect(generated.files).toHaveLength(runtimeAssets.length);
+    expect(generated.files.map((file: { contentType: string }) => file.contentType)).toEqual(
+      runtimeAssets.map((asset) => asset.contentType)
+    );
     expect(generated.files.every((file: { mxcUri?: string }) => file.mxcUri?.startsWith('mxc://localhost/'))).toBe(true);
   });
 

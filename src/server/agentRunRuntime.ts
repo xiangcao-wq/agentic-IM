@@ -506,9 +506,12 @@ async function planAgentRun(
       buildAgentSystemPrompt(state, input.agentId),
       '',
       '## Agent Planner',
+      'Default internal context scope is the current room/chat only. Expand to all authorized rooms only when the user explicitly asks for global, all-room, all-chat, or cross-room context.',
       'For internal project facts, prefer messages, tasks, file metadata, and file excerpts. Agent memory is lower-confidence and must not be the only source for a concrete internal claim.',
+      'If the current-room context lacks the answer, do not silently use other rooms. Ask for global scope unless the request already explicitly asked for global/all-room context.',
       'You may handle general AI chat using the model’s broad capabilities. Do not restrict ordinary conversation to internal room context.',
-      'When the user explicitly asks for online, web, latest, news, search, or public external information, choose web_search and call web.search.',
+      'When the user explicitly asks for online, web, latest, news, DeepSeek search, or public external information, choose web_search and call web.search.',
+      'If authorized current/global context cannot answer and the user asks for external public facts or DeepSeek/web search, use web_search instead of inventing an internal answer.',
       'Do not invent internal project details that are not explicit in the authorized context. If an internal claim is only inferred, say it is an inference.',
       '你先判断用户真实意图，再输出一个可执行计划。此步骤只做规划，不发送消息、不改文件、不改日程。',
       '可选 intent：summary、deadline、find_file、share_file、coordinate、task_update_suggest、web_search、chat。',
@@ -524,7 +527,10 @@ async function planAgentRun(
       '请严格以 JSON 回复，不要包含其他文字。JSON 格式如下：',
       '{"mode":"answer","intent":"chat","userVisiblePlan":"一句话说明要如何处理","answer":"chat 时的直接回复","toolCalls":[{"tool":"chat.answer","args":{}}],"risk":{"level":"low","score":0.1,"reason":"只读回答","model":"llm-planner"},"citations":["消息或文件ID"],"needsConfirmationReason":null}'
     ].join('\n');
-    const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'chat' });
+    const context = buildStructuredContext(state, input.roomId, input.agentId, {
+      focus: 'chat',
+      userText: input.userText
+    });
     const requestTail = [
       '## Current User Request',
       `Frontend intent: ${input.intent ?? 'unspecified'}`,
@@ -792,10 +798,11 @@ function looksLikeWebSearchRequest(text: string): boolean {
   const lowered = text.toLowerCase();
   const explicitSearch = includesAny(text, ['网上', '联网', '搜索一下', '搜一下', '外部资料', '互联网']) ||
     includesAny(lowered, ['web search', 'search the web', 'online', 'google']);
+  const explicitDeepSeekSearch = /deepseek\s*(搜索|搜|search)|(?:搜索|搜)\s*deepseek/i.test(text);
   const currentPublicInfo = includesAny(text, ['查一下最新', '最新消息', '新闻']) ||
     ((lowered.includes('latest') || lowered.includes('current') || lowered.includes('news')) &&
       includesAny(lowered, ['search', 'web', 'online', 'news']));
-  return explicitSearch || currentPublicInfo;
+  return explicitSearch || explicitDeepSeekSearch || currentPublicInfo;
 }
 
 function looksLikeContextQuestion(text: string): boolean {
@@ -1039,7 +1046,7 @@ function getPlanStringArg(plan: AgentPlan, tool: string, key: string): string | 
 function createCalendarPatch(state: DemoState, roomId: string, text: string):
   | { itemId: string; oldStartsAt: string; newStartsAt: string; title: string }
   | undefined {
-  const item = state.calendar.find((candidate) => candidate.roomId === roomId);
+  const item = selectCalendarItemForPatch(state, roomId, text);
   if (!item) {
     return undefined;
   }
@@ -1053,6 +1060,64 @@ function createCalendarPatch(state: DemoState, roomId: string, text: string):
     oldStartsAt: item.startsAt,
     newStartsAt
   };
+}
+
+function selectCalendarItemForPatch(
+  state: DemoState,
+  roomId: string,
+  text: string
+): DemoState['calendar'][number] | undefined {
+  const candidates = state.calendar.filter((candidate) => candidate.roomId === roomId);
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  const terms = extractMatchingTerms(text);
+  const lowered = text.toLowerCase();
+  return candidates
+    .map((item) => ({
+      item,
+      score: scoreCalendarPatchCandidate(state, item, terms, lowered)
+    }))
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.item.attendees.length - left.item.attendees.length ||
+      left.item.startsAt.localeCompare(right.item.startsAt)
+    )[0]?.item;
+}
+
+function scoreCalendarPatchCandidate(
+  state: DemoState,
+  item: DemoState['calendar'][number],
+  terms: string[],
+  loweredText: string
+): number {
+  const sourceTask = state.tasks.find((task) => task.id === item.sourceTaskId);
+  const haystack = [
+    item.id,
+    item.title,
+    item.sourceTaskId ?? '',
+    sourceTask?.title ?? '',
+    sourceTask?.owners.join(' ') ?? ''
+  ].join(' ').toLowerCase();
+  let score = item.attendees.length;
+  if (item.sourceTaskId) {
+    score += 1;
+  }
+  for (const term of terms) {
+    if (haystack.includes(term)) {
+      score += Math.max(2, term.length);
+    }
+  }
+  if (
+    loweredText.includes('final review') &&
+    (item.sourceTaskId === 'task-check' || /review|\u5408\u7a3f|\u68c0\u67e5/.test(item.title.toLowerCase()))
+  ) {
+    score += 20;
+  }
+  if (loweredText.includes('meeting') && item.attendees.length > 1) {
+    score += 3;
+  }
+  return score;
 }
 
 function createTaskPatch(state: DemoState, roomId: string, text: string):
@@ -1347,7 +1412,10 @@ async function generateWebSearchAnswer(
   ].join('\n');
   const shouldUseRoomContext = includesAny(input.userText, ['结合当前', '结合群聊', '结合这个群', '结合任务', '结合文件', '我们组', '本组']);
   const context = shouldUseRoomContext
-    ? buildStructuredContext(state, input.roomId, input.agentId, { focus: 'chat' })
+    ? buildStructuredContext(state, input.roomId, input.agentId, {
+        focus: 'chat',
+        userText: input.userText
+      })
     : [
         '# Authorized Agent Context',
         buildAgentSystemPrompt(state, input.agentId),
@@ -1636,7 +1704,10 @@ async function generateChatReply(state: DemoState, input: AgentRunRequest, aiPro
     '请用自然的中文回答。'
   ].join('\n');
 
-  const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'chat' });
+  const context = buildStructuredContext(state, input.roomId, input.agentId, {
+    focus: 'chat',
+    userText: input.userText
+  });
   const requestTail = ['## Current User Request', `User input: ${input.userText}`].join('\n');
   const userPrompt = [context, '', requestTail].join('\n');
 

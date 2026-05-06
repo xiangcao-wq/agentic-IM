@@ -426,6 +426,14 @@ export function createDemoState(): DemoState {
     ],
     calendar: [
       {
+        id: 'cal-lin-focus-block',
+        title: '林雯演示稿更新专注时间',
+        startsAt: '2026-05-06T19:30:00+08:00',
+        roomId: 'room-team',
+        attendees: ['user-lin'],
+        sourceTaskId: 'task-slides'
+      },
+      {
         id: 'cal-review',
         title: '第 4 组最后一次合稿检查',
         startsAt: '2026-05-05T20:30:00+08:00',
@@ -440,6 +448,22 @@ export function createDemoState(): DemoState {
         roomId: 'room-team',
         attendees: ['user-chen', 'user-zhao'],
         sourceTaskId: 'task-interview-materials'
+      },
+      {
+        id: 'cal-zhao-report-review',
+        title: '赵一鸣报告结构复核',
+        startsAt: '2026-05-07T16:00:00+08:00',
+        roomId: 'room-team',
+        attendees: ['user-zhao'],
+        sourceTaskId: 'task-report'
+      },
+      {
+        id: 'cal-teacher-office-hour',
+        title: '王老师课程答疑',
+        startsAt: '2026-05-08T10:00:00+08:00',
+        roomId: 'room-class',
+        attendees: ['user-teacher'],
+        sourceTaskId: 'task-report'
       }
     ],
     fileTextChunks: [

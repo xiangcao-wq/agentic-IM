@@ -151,7 +151,7 @@ export function uploadFile(baseUrl: string, input: UploadFileInput, fetcher: Fet
 }
 
 export function fileDownloadUrl(baseUrl: string, fileId: string): string {
-  return endpoint(baseUrl, `/api/files/${encodeURIComponent(fileId)}/download`);
+  return withApiTokenQuery(endpoint(baseUrl, `/api/files/${encodeURIComponent(fileId)}/download`));
 }
 
 export function summarize(
@@ -301,7 +301,7 @@ export function rejectAgentAction(
 }
 
 export function createStateEventSource(baseUrl = ''): EventSource {
-  return new EventSource(endpoint(baseUrl, '/api/events'));
+  return new EventSource(withApiTokenQuery(endpoint(baseUrl, '/api/events')));
 }
 
 function post(body: unknown): RequestInit {
@@ -340,6 +340,19 @@ function endpoint(baseUrl: string, path: string): string {
 }
 
 function withApiToken(headers: Record<string, string>): Record<string, string> {
-  const token = import.meta.env.VITE_AGENT_API_TOKEN;
+  const token = getApiToken();
   return token ? { ...headers, 'x-agent-im-token': token } : headers;
+}
+
+function withApiTokenQuery(url: string): string {
+  const token = getApiToken();
+  if (!token) {
+    return url;
+  }
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}agent_im_token=${encodeURIComponent(token)}`;
+}
+
+function getApiToken(): string {
+  return import.meta.env.VITE_AGENT_API_TOKEN ?? '';
 }

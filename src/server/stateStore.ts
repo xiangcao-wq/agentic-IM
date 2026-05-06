@@ -8,9 +8,12 @@ export interface StateStore {
   init(): Promise<void>;
   read(): Promise<DemoState>;
   write(state: DemoState): Promise<void>;
+  update?(updater: (state: DemoState) => DemoState | Promise<DemoState>): Promise<DemoState>;
 }
 
 export class JsonStateStore implements StateStore {
+  private updateQueue: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly dbPath: string) {}
 
   async init(): Promise<void> {
@@ -29,5 +32,16 @@ export class JsonStateStore implements StateStore {
   async write(state: DemoState): Promise<void> {
     validateDemoStateShape(state);
     await writeFile(this.dbPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  }
+
+  update(updater: (state: DemoState) => DemoState | Promise<DemoState>): Promise<DemoState> {
+    const pending = this.updateQueue.then(async () => {
+      const current = await this.read();
+      const next = await updater(current);
+      await this.write(next);
+      return next;
+    });
+    this.updateQueue = pending.catch(() => undefined);
+    return pending;
   }
 }

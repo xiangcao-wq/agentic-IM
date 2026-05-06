@@ -62,6 +62,56 @@ describe('JsonStateStore', () => {
     expect(reloaded.actionLogs[0].toolCalls).toContain('state_store.write');
   });
 
+  it('serializes concurrent read-modify-write updates', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-store-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const store = new JsonStateStore(dbPath);
+
+    await store.init();
+
+    await Promise.all([
+      store.update(async (state) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          ...state,
+          messages: [
+            ...state.messages,
+            {
+              id: 'msg-concurrent-a',
+              type: 'text',
+              roomId: 'room-team',
+              senderId: 'user-lin',
+              senderName: 'Lin Wen',
+              body: 'first concurrent update',
+              sentAt: '2026-05-04T00:00:00.000Z'
+            }
+          ]
+        };
+      }),
+      store.update((state) => ({
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: 'msg-concurrent-b',
+            type: 'text',
+            roomId: 'room-team',
+            senderId: 'user-chen',
+            senderName: 'Chen Chen',
+            body: 'second concurrent update',
+            sentAt: '2026-05-04T00:00:01.000Z'
+          }
+        ]
+      }))
+    ]);
+
+    const reloaded = await store.read();
+    expect(reloaded.messages.map((message) => message.id)).toEqual(
+      expect.arrayContaining(['msg-concurrent-a', 'msg-concurrent-b'])
+    );
+  });
+
   it('rejects persisted files that do not match the DemoState shape', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-store-'));
     tempDirs.push(dir);

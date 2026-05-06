@@ -73,4 +73,35 @@ describe('state schema helpers', () => {
       })
     );
   });
+
+  it('seeds at least one calendar item for every demo user so Agents can inspect availability', () => {
+    const state = createDemoState();
+
+    for (const user of state.users) {
+      expect(
+        state.calendar.some((item) => item.attendees.includes(user.id)),
+        `${user.id} should have calendar availability`
+      ).toBe(true);
+    }
+  });
+
+  it('preserves explicit empty policy arrays while upgrading missing policy fields', () => {
+    const state = createDemoState();
+
+    const explicitEmptyPolicies = validateDemoStateShape({
+      ...state,
+      agentAutopilotPolicies: [],
+      aiAutoreplyPolicies: []
+    });
+    expect(explicitEmptyPolicies.agentAutopilotPolicies).toEqual([]);
+    expect(explicitEmptyPolicies.aiAutoreplyPolicies).toEqual([]);
+
+    const missingPolicies = { ...state };
+    delete (missingPolicies as Partial<typeof state>).agentAutopilotPolicies;
+    delete (missingPolicies as Partial<typeof state>).aiAutoreplyPolicies;
+
+    const upgraded = validateDemoStateShape(missingPolicies);
+    expect(upgraded.agentAutopilotPolicies.length).toBeGreaterThan(0);
+    expect(upgraded.aiAutoreplyPolicies.length).toBeGreaterThan(0);
+  });
 });

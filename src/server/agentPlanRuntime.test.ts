@@ -59,6 +59,8 @@ describe('agent plan runtime', () => {
       expect.objectContaining({ role: 'user', content: expect.stringContaining('# Authorized Agent Context') }),
       expect.objectContaining({ role: 'user', content: expect.stringContaining('## Current User Request') })
     ]);
+    expect(String(aiProvider.calls[0].instructions)).toContain('Default internal context scope is the current room/chat only');
+    expect(String(aiProvider.calls[0].instructions)).toContain('DeepSeek search');
     expect(String((aiProvider.calls[0].messages as Array<{ content: string }>)[1].content)).not.toContain('## Agent memory');
   });
 
@@ -174,6 +176,85 @@ describe('agent plan runtime', () => {
     expect(response.result.reply).toContain('browser-context-notes.txt');
     expect(response.result.reply).toContain('引用一致性');
     expect(response.log.contextIds).toContain('file-text-evidence-chunk-0');
+  });
+
+  it('includes request-matched file text excerpts in the LLM planner prompt', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    const file = {
+      id: 'file-many-chunks',
+      name: 'many-context-notes.txt',
+      uploaderId: 'user-lin',
+      version: 1,
+      roomId: 'room-team',
+      updatedAt: '2026-05-04T12:00:00+08:00',
+      visibility: 'room' as const,
+      agentCanShare: true,
+      tags: ['notes'],
+      summary: 'Long notes with one relevant excerpt.',
+      mxcUri: 'mxc://demo/many-context-notes.txt',
+      contentType: 'text/plain',
+      size: 512
+    };
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: [file, ...state.files],
+          fileTextChunks: [
+            ...Array.from({ length: 6 }, (_, index) => ({
+              id: `many-context-generic-${index}`,
+              fileId: file.id,
+              roomId: 'room-team',
+              uploaderId: 'user-lin',
+              index,
+              text: `generic context filler ${index}`,
+              createdAt: '2026-05-04T12:00:00+08:00'
+            })),
+            {
+              id: 'many-context-target',
+              fileId: file.id,
+              roomId: 'room-team',
+              uploaderId: 'user-lin',
+              index: 99,
+              text: 'rare retrieval marker: sodium-router migration owner is Lin.',
+              createdAt: '2026-05-04T12:00:00+08:00'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'answer',
+        intent: 'chat',
+        userVisiblePlan: 'Answer from the matched file excerpt.',
+        answer: 'Lin owns the sodium-router migration.',
+        toolCalls: [{ tool: 'chat.answer', args: {} }],
+        risk: { level: 'low', score: 0.1, reason: 'Read-only answer.', model: 'planner-test' },
+        citations: ['many-context-target']
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'Who owns the sodium-router migration?'
+      })
+    });
+
+    expect(String(aiProvider.calls[0].input)).toContain('many-context-target');
+    expect(String(aiProvider.calls[0].input)).toContain('sodium-router migration owner is Lin');
   });
 
   it('queues medium or high risk coordination instead of sending it directly', async () => {

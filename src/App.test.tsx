@@ -310,6 +310,62 @@ describe('App runtime upgrade controls', () => {
     expect(host.querySelector('.system-section')).toBeNull();
   });
 
+  it('clears only stale realtime disconnect errors when the SSE stream reconnects', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as {
+      onerror?: () => void;
+      onopen?: () => void;
+    };
+    await act(async () => {
+      eventSource.onerror?.();
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventSource.onopen?.();
+      await waitForMotionExit();
+    });
+    expect(host.textContent).not.toContain('实时连接已断开');
+
+    apiMocks.runAgent.mockRejectedValueOnce(new Error('operation failed'));
+    const deadlineButton = [...host.querySelectorAll('.action-grid button')].find((button) =>
+      button.textContent?.includes('问截止')
+    );
+    expect(deadlineButton).toBeTruthy();
+    await act(async () => {
+      deadlineButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.textContent).toContain('operation failed');
+
+    await act(async () => {
+      eventSource.onopen?.();
+    });
+    expect(host.textContent).toContain('operation failed');
+  });
+
+  it('clears stale realtime disconnect errors when a state SSE event arrives', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as { onerror?: () => void };
+    await act(async () => {
+      eventSource.onerror?.();
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventListeners.state?.({ data: JSON.stringify(state) } as MessageEvent);
+      await waitForMotionExit();
+    });
+    expect(host.textContent).not.toContain('实时连接已断开');
+  });
+
   it('keeps the AI connection state compact instead of exposing a status panel', async () => {
     const state = {
       ...createDemoState(),
@@ -443,6 +499,45 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('判断依据');
   });
 
+  it('uses action-specific default prompts for file share and coordination shortcuts', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')];
+    const fileShareButton = actionButtons.find((button) => button.textContent?.includes('请求代发'));
+    const coordinateButton = actionButtons.find((button) => button.textContent?.includes('Agent 协调'));
+    expect(fileShareButton).toBeTruthy();
+    expect(coordinateButton).toBeTruthy();
+
+    await act(async () => {
+      fileShareButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      coordinateButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(1, '', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      intent: 'share_file',
+      userText: '把最新行动计划发一下',
+      targetUserId: 'user-chen'
+    });
+    expect(apiMocks.runAgent).toHaveBeenNthCalledWith(2, '', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      intent: 'coordinate',
+      userText: '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。',
+      targetUserId: 'user-chen'
+    });
+    expect(apiMocks.runAgent.mock.calls.map(([, body]) => body.userText)).not.toContain('这次作业什么时候截止？');
+  });
+
   it('renders pending Agent actions and lets the current user confirm them', async () => {
     const state = createDemoState();
     state.actionRequests = [
@@ -509,6 +604,69 @@ describe('App runtime upgrade controls', () => {
       reviewerId: 'user-lin',
       reason: '用户在 Agent 工作台确认'
     });
+  });
+
+  it('renders only current Agent confirmation actions for the current room', async () => {
+    const state = createDemoState();
+    const baseAction = {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      kind: 'share_file' as const,
+      status: 'needs_confirmation' as const,
+      input: {},
+      risk: {
+        level: 'medium' as const,
+        score: 0.48,
+        reason: 'visible confirmation',
+        model: 'risk-mini-v1'
+      },
+      createdAt: '2026-05-04T08:00:00.000Z',
+      updatedAt: '2026-05-04T08:00:00.000Z',
+      requiresHuman: true
+    };
+    state.actionRequests = [
+      {
+        ...baseAction,
+        id: 'visible-action',
+        input: { requestText: 'visible action' }
+      },
+      {
+        ...baseAction,
+        id: 'pending-action',
+        status: 'pending',
+        input: { requestText: 'hidden pending action' }
+      },
+      {
+        ...baseAction,
+        id: 'other-agent-action',
+        agentId: 'agent-chen',
+        input: { requestText: 'hidden other agent action' }
+      },
+      {
+        ...baseAction,
+        id: 'other-room-action',
+        roomId: 'room-class',
+        input: { requestText: 'hidden other room action' }
+      },
+      {
+        ...baseAction,
+        id: 'no-human-action',
+        requiresHuman: false,
+        input: { requestText: 'hidden no human action' }
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(host.textContent).toContain('visible action');
+    expect(host.textContent).toContain('visible confirmation');
+    expect(host.textContent).not.toContain('hidden pending action');
+    expect(host.textContent).not.toContain('hidden other agent action');
+    expect(host.textContent).not.toContain('hidden other room action');
+    expect(host.textContent).not.toContain('hidden no human action');
   });
 
   it('renders Agent citations as readable source labels', async () => {
@@ -624,6 +782,36 @@ function createAutopilotWorkerStatus(overrides: Record<string, unknown> = {}) {
     lastSkippedCount: 0,
     ...overrides
   };
+}
+
+function createAgentRunResult() {
+  return {
+    intent: 'chat',
+    requiresHuman: false,
+    result: {
+      reply: 'ok'
+    },
+    log: {
+      id: `log-${Math.random()}`,
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      action: 'agent_run:test',
+      status: 'executed',
+      risk: {
+        level: 'low',
+        score: 0.12,
+        reason: 'test',
+        model: 'test'
+      },
+      contextIds: [],
+      toolCalls: [],
+      createdAt: '2026-05-04T08:03:00.000Z'
+    }
+  };
+}
+
+function waitForMotionExit(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 250));
 }
 
 function setInputValue(input: HTMLInputElement, value: string): void {

@@ -5,7 +5,6 @@ import { blockAgentAction, completeAgentAction, rejectAgentAction } from '../dom
 import {
   answerDeadlineQuestion,
   coordinateAgents,
-  createFileShareAction,
   summarizeRoom
 } from '../domain/agentEngine';
 import { createDemoState } from '../domain/demoState';
@@ -120,7 +119,7 @@ interface AutopilotPolicyPatchInput {
 }
 
 const jsonHeaders = {
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
+  'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
   'access-control-allow-headers': 'content-type,x-file-name,x-agent-im-token,authorization',
   'content-type': 'application/json; charset=utf-8'
 };
@@ -183,6 +182,18 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
   async function publishRuntimeState(): Promise<void> {
     publish(eventClients, 'state', await readRuntimeState());
+  }
+
+  async function updateStoredState(
+    updater: (state: DemoState) => DemoState | Promise<DemoState>
+  ): Promise<DemoState> {
+    if (db.update) {
+      return db.update(updater);
+    }
+    const current = await db.read();
+    const next = await updater(current);
+    await db.write(next);
+    return next;
   }
 
   async function sendAutopilotMessage(sendState: DemoState, outbound: Message): Promise<Message> {
@@ -298,7 +309,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       }
 
       if (processedMessageIds.length > 0 || processedTaskIds.length > 0 || logs.length > 0 || messages.length > 0) {
-        await db.write(state);
+        await updateStoredState((baseState) => mergePersistedRuntimeState(baseState, state));
         await publishRuntimeState();
       }
 
@@ -355,7 +366,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${options.port}`}`);
 
-      if (!authorizeRequest(request, apiToken)) {
+      if (!authorizeRequest(request, url, apiToken)) {
         return sendJson(response, { error: 'unauthorized' }, 401);
       }
 
@@ -375,11 +386,13 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       if (request.method === 'PATCH' && url.pathname === '/api/agent/autopilot-policy') {
         const body = await readJson<AutopilotPolicyPatchInput>(request);
-        const state = await db.read();
-        const updated = updateAutopilotPolicy(state, body);
-        await db.write(updated.state);
+        let updated: ReturnType<typeof updateAutopilotPolicy> | undefined;
+        await updateStoredState((state) => {
+          updated = updateAutopilotPolicy(state, body);
+          return updated.state;
+        });
         await publishRuntimeState();
-        return sendJson(response, { policy: updated.policy });
+        return sendJson(response, { policy: updated!.policy });
       }
 
       if (request.method === 'POST' && url.pathname === '/api/agent/autopilot/run-pending') {
@@ -393,7 +406,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           webSearchProvider,
           sendMessage: sendAutopilotMessage
         });
-        await db.write(sweep.state);
+        await updateStoredState((baseState) => mergePersistedRuntimeState(baseState, sweep.state));
         await publishRuntimeState();
         return sendJson(response, {
           processedMessageIds: sweep.processedMessageIds,
@@ -463,9 +476,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           riskLevel: action?.risk?.level
         });
 
-        let resolved: Awaited<ReturnType<typeof resolveAgentActionReview>>;
+        let resolved: Awaited<ReturnType<typeof resolveAgentActionReview>> | undefined;
         try {
-          resolved = await resolveAgentActionReview(state, actionId, decision, body, matrixStore);
+          await updateStoredState(async (currentState) => {
+            resolved = await resolveAgentActionReview(currentState, actionId, decision, body, matrixStore);
+            return resolved.state;
+          });
         } catch (error) {
           publishActionProgress({
             phase: 'failed',
@@ -476,6 +492,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           });
           throw error;
         }
+        if (!resolved) {
+          throw new Error('action review did not resolve');
+        }
 
         publishActionProgress({
           phase: 'executing',
@@ -484,7 +503,6 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           toolCalls: actionReviewMutationToolCalls(resolved.action, resolved.log, decision),
           riskLevel: resolved.log.risk.level
         });
-        await db.write(resolved.state);
         publishActionProgress({
           phase: 'executing',
           label: '写入审计日志',
@@ -557,12 +575,15 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         if (!matrixStore) {
           return sendJson(response, { messagesAdded: 0, checkpoints: baseState.matrixObserverCheckpoints });
         }
-        const synced = await matrixStore.syncStateOnce(baseState);
-        await db.write(synced.state);
+        let synced: Awaited<ReturnType<MatrixStore['syncStateOnce']>> | undefined;
+        await updateStoredState(async (currentState) => {
+          synced = await matrixStore.syncStateOnce(currentState);
+          return mergePersistedRuntimeState(currentState, synced.state);
+        });
         await publishRuntimeState();
         return sendJson(response, {
-          messagesAdded: synced.messagesAdded,
-          checkpoints: synced.state.matrixObserverCheckpoints
+          messagesAdded: synced!.messagesAdded,
+          checkpoints: synced!.state.matrixObserverCheckpoints
         });
       }
 
@@ -574,6 +595,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           : createUserMessage(state, body);
         const baseState = await db.read();
         let nextState = { ...baseState, messages: appendMessage(baseState.messages, message) };
+        const directCalendarAdd = addCalendarEventFromChatConfirmation(nextState, message);
+        if (directCalendarAdd) {
+          nextState = directCalendarAdd.state;
+        }
         let autoReplies: Message[] = [];
         let autoReplyJobs: DemoState['aiReplyJobs'] = [];
         if (aiProvider) {
@@ -605,10 +630,11 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           sendMessage: sendAutopilotMessage
         });
         nextState = autopilot.state;
-        await db.write(nextState);
+        await updateStoredState((baseState) => mergePersistedRuntimeState(baseState, nextState));
         await publishRuntimeState();
         return sendJson(response, {
           ...message,
+          calendarEvents: directCalendarAdd?.events ?? [],
           autoReplies,
           autoReplyJobs,
           autopilotSessions: autopilot.sessions,
@@ -647,13 +673,11 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           contextIds: [message.id],
           toolCalls: ['deepseek.flash.chat.completions', 'matrix.send_event']
         });
-        const baseState = await db.read();
-        const nextState = {
+        await updateStoredState((baseState) => ({
           ...baseState,
           messages: appendMessage(baseState.messages, message),
           actionLogs: [log, ...baseState.actionLogs]
-        };
-        await db.write(nextState);
+        }));
         await publishRuntimeState();
         return sendJson(response, { message, log }, 201);
       }
@@ -719,7 +743,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           messages: appendMessage(baseState.messages, message),
           actionLogs: [log, ...baseState.actionLogs]
         };
-        await db.write(nextState);
+        await updateStoredState((currentState) => mergePersistedRuntimeState(currentState, nextState));
         await publishRuntimeState();
         return sendJson(response, file, 201);
       }
@@ -742,7 +766,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           matrixStore,
           mediaDir
         });
-        await db.write(generated.state);
+        await updateStoredState((currentState) => mergePersistedRuntimeState(currentState, generated.state));
         await publishRuntimeState();
         return sendJson(response, { files: generated.files, messages: generated.messages }, 201);
       }
@@ -765,9 +789,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           contextIds: result.sources,
           toolCalls: ['room_search', 'task_extract']
         });
-        const baseState = await db.read();
-        const nextState = { ...baseState, actionLogs: [log, ...baseState.actionLogs] };
-        await db.write(nextState);
+        await updateStoredState((baseState) => ({ ...baseState, actionLogs: [log, ...baseState.actionLogs] }));
         await publishRuntimeState();
         return sendJson(response, { result, log });
       }
@@ -790,9 +812,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           contextIds: result.citations,
           toolCalls: ['room_search', 'file_library.search']
         });
-        const baseState = await db.read();
-        const nextState = { ...baseState, actionLogs: [log, ...baseState.actionLogs] };
-        await db.write(nextState);
+        await updateStoredState((baseState) => ({ ...baseState, actionLogs: [log, ...baseState.actionLogs] }));
         await publishRuntimeState();
         return sendJson(response, { result, log });
       }
@@ -828,14 +848,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           );
           result.message = message;
         }
-        const baseState = await db.read();
-        const nextState = {
-          ...baseState,
-          messages: appendMessage(baseState.messages, message),
-          actionLogs: runtime.state.actionLogs,
-          actionRequests: runtime.state.actionRequests
-        };
-        await db.write(nextState);
+        await updateStoredState((baseState) => mergeRuntimeState(baseState, runtime.state, message));
         await publishRuntimeState();
         return sendJson(response, { result });
       }
@@ -898,9 +911,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           );
           runtime.response.message = message;
         }
-        const baseState = await db.read();
-        const nextState = mergeRuntimeState(baseState, runtime.state, message);
-        await db.write(nextState);
+        await updateStoredState((baseState) => mergeRuntimeState(baseState, runtime.state, message));
         await publishRuntimeState();
         return sendJson(response, runtime.response);
       }
@@ -914,8 +925,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }>(request);
         const state = await readRuntimeState();
         const result = await coordinateAgents(state, body);
-        let message = createAgentCoordinationMessage(state, body.toAgentId, result.proposedPlan);
-        if (matrixStore) {
+        let message = result.requiresHuman
+          ? undefined
+          : createAgentCoordinationMessage(state, body.toAgentId, result.proposedPlan);
+        if (matrixStore && message) {
           message = await matrixStore.sendMessage(
             state,
             {
@@ -929,13 +942,11 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
             }
           );
         }
-        const baseState = await db.read();
-        const nextState = {
+        await updateStoredState((baseState) => ({
           ...baseState,
           messages: appendMessage(baseState.messages, message),
           actionLogs: [result.log, ...baseState.actionLogs]
-        };
-        await db.write(nextState);
+        }));
         await publishRuntimeState();
         return sendJson(response, { result, message });
       }
@@ -1194,15 +1205,76 @@ function mergeRuntimeState(
   runtimeState: DemoState,
   message: Message | undefined
 ): DemoState {
+  const merged = mergePersistedRuntimeState(baseState, runtimeState);
+  return {
+    ...merged,
+    messages: appendMessage(baseState.messages, message),
+  };
+}
+
+function mergePersistedRuntimeState(baseState: DemoState, runtimeState: DemoState): DemoState {
   return {
     ...baseState,
-    messages: appendMessage(baseState.messages, message),
-    fileTextChunks: runtimeState.fileTextChunks,
-    actionLogs: runtimeState.actionLogs,
-    actionRequests: runtimeState.actionRequests,
-    memories: runtimeState.memories,
-    matrixObserverCheckpoints: runtimeState.matrixObserverCheckpoints
+    messages: mergeMessages(runtimeState.messages, baseState.messages),
+    files: mergeUpdatedItems(runtimeState.files, baseState.files),
+    fileTextChunks: mergeByKey(runtimeState.fileTextChunks, baseState.fileTextChunks, (chunk) => chunk.id),
+    calendar: mergeByKey(runtimeState.calendar, baseState.calendar, (item) => item.id),
+    actionLogs: mergeByKey(runtimeState.actionLogs, baseState.actionLogs, (log) => log.id),
+    actionRequests: mergeActionRequests(runtimeState.actionRequests, baseState.actionRequests),
+    a2aSessions: mergeUpdatedItems(runtimeState.a2aSessions, baseState.a2aSessions),
+    memories: mergeByKey(runtimeState.memories, baseState.memories, (memory) => memory.id),
+    matrixObserverCheckpoints: mergeByKey(
+      runtimeState.matrixObserverCheckpoints,
+      baseState.matrixObserverCheckpoints,
+      (checkpoint) => checkpoint.roomId
+    ),
+    aiReplyJobs: mergeUpdatedItems(runtimeState.aiReplyJobs, baseState.aiReplyJobs)
   };
+}
+
+function mergeMessages(preferred: Message[], existing: Message[]): Message[] {
+  return sortMessagesChronologically(mergeByKey(preferred, existing, (message) => message.id));
+}
+
+function mergeByKey<T>(preferred: T[], existing: T[], keyFor: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const merged: T[] = [];
+  for (const item of [...preferred, ...existing]) {
+    const key = keyFor(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function mergeUpdatedItems<T extends { id: string; updatedAt: string }>(preferred: T[], existing: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of [...existing, ...preferred]) {
+    const current = byId.get(item.id);
+    if (!current || item.updatedAt >= current.updatedAt) {
+      byId.set(item.id, item);
+    }
+  }
+  const order = mergeByKey(preferred, existing, (item) => item.id).map((item) => item.id);
+  return order.map((id) => byId.get(id)).filter(Boolean) as T[];
+}
+
+function mergeActionRequests(
+  preferred: AgentActionRequest[],
+  existing: AgentActionRequest[]
+): AgentActionRequest[] {
+  const byId = new Map<string, AgentActionRequest>();
+  for (const request of [...existing, ...preferred]) {
+    const current = byId.get(request.id);
+    if (!current || request.updatedAt >= current.updatedAt) {
+      byId.set(request.id, request);
+    }
+  }
+  const order = mergeByKey(preferred, existing, (request) => request.id).map((request) => request.id);
+  return order.map((id) => byId.get(id)).filter(Boolean) as AgentActionRequest[];
 }
 
 function appendMessage(messages: Message[], message: Message | undefined): Message[] {
@@ -1436,6 +1508,10 @@ async function resolveAgentActionReview(
   if (!input.reviewerId) {
     throw new Error('reviewerId is required');
   }
+  if (action.status !== 'needs_confirmation' || !action.requiresHuman) {
+    throw new HttpError(409, `action request ${action.id} is not awaiting human confirmation`);
+  }
+  assertReviewerCanReviewAction(state, action, input.reviewerId);
 
   let nextState = state;
   let blockedRisk: AgentActionLog['risk'] | undefined;
@@ -1482,9 +1558,10 @@ async function resolveAgentActionReview(
           risk: log.risk,
           updatedAt: log.createdAt
         });
+  const resolvedState = updateLinkedA2ASessions(resolved.state, action.id, resolved.request.status, log.createdAt);
 
   return {
-    state: resolved.state,
+    state: resolvedState,
     action: resolved.request,
     log
   };
@@ -1537,22 +1614,12 @@ async function executeConfirmedAgentAction(
     return { state };
   }
 
-  const result = await createFileShareAction(
-    state,
-    {
-      agentId: action.agentId,
-      roomId: action.roomId,
-      requesterId: String(action.input.requesterId ?? ''),
-      requestText: String(action.input.requestText ?? '')
-    },
-    { forceExecute: true }
-  );
-
-  if (result.status !== 'executed' || !result.message) {
-    return { state };
+  const boundFile = getConfirmedFileBinding(state, action);
+  if (!boundFile.file) {
+    return { state, blockedRisk: boundFile.risk };
   }
 
-  let message = result.message;
+  let message = createConfirmedFileShareMessage(state, action, boundFile.file);
   if (matrixStore) {
     message = await matrixStore.sendMessage(
       state,
@@ -1565,10 +1632,10 @@ async function executeConfirmedAgentAction(
         agentLabel: message.agentLabel,
         sourceAgentId: message.sourceAgentId,
         fileId: message.fileId,
-        fileName: result.file?.name,
-        mxcUri: result.file?.mxcUri,
-        mimeType: result.file?.contentType,
-        size: result.file?.size
+        fileName: boundFile.file.name,
+        mxcUri: boundFile.file.mxcUri,
+        mimeType: boundFile.file.contentType,
+        size: boundFile.file.size
       }
     );
   }
@@ -1576,10 +1643,101 @@ async function executeConfirmedAgentAction(
   return {
     state: {
       ...state,
-      messages: appendMessage(state.messages, message),
-      actionLogs: [...state.actionLogs, result.log]
+      messages: appendMessage(state.messages, message)
     }
   };
+}
+
+function assertReviewerCanReviewAction(state: DemoState, action: AgentActionRequest, reviewerId: string): void {
+  const reviewer = state.users.find((user) => user.id === reviewerId);
+  if (!reviewer) {
+    throw new HttpError(403, `reviewer ${reviewerId} cannot review action ${action.id}`);
+  }
+  const room = state.rooms.find((candidate) => candidate.id === action.roomId);
+  if (!room) {
+    throw new HttpError(400, `unknown room: ${action.roomId}`);
+  }
+  if (!room.memberIds.includes(reviewer.id)) {
+    throw new HttpError(403, `reviewer ${reviewerId} cannot review actions in ${action.roomId}`);
+  }
+}
+
+function updateLinkedA2ASessions(
+  state: DemoState,
+  actionId: string,
+  actionStatus: AgentActionRequest['status'],
+  updatedAt: string
+): DemoState {
+  const sessionStatus: DemoState['a2aSessions'][number]['status'] =
+    actionStatus === 'executed' ? 'completed' : 'blocked';
+  let changed = false;
+  const a2aSessions = (state.a2aSessions ?? []).map((session) => {
+    if (!session.proposedActionRequestIds.includes(actionId)) {
+      return session;
+    }
+    changed = true;
+    return {
+      ...session,
+      status: sessionStatus,
+      updatedAt
+    };
+  });
+
+  return changed
+    ? {
+        ...state,
+        a2aSessions
+      }
+    : state;
+}
+
+function getConfirmedFileBinding(
+  state: DemoState,
+  action: AgentActionRequest
+): { file?: FileItem; risk?: AgentActionLog['risk'] } {
+  const fileId = typeof action.input.fileId === 'string' ? action.input.fileId : undefined;
+  const fileVersion = typeof action.input.fileVersion === 'number' ? action.input.fileVersion : undefined;
+  if (!fileId || fileVersion === undefined) {
+    return { risk: fileShareBoundaryRisk('missing a downloadable file binding') };
+  }
+
+  const file = state.files.find((candidate) => candidate.id === fileId);
+  if (!file || file.version !== fileVersion || !hasDownloadableBacking(file)) {
+    return { risk: fileShareBoundaryRisk('the bound file id/version is no longer downloadable') };
+  }
+  if (file.roomId !== action.roomId || !file.agentCanShare || file.visibility !== 'room') {
+    return { risk: fileShareBoundaryRisk('the bound file is no longer authorized for room sharing') };
+  }
+
+  return { file };
+}
+
+function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRequest, file: FileItem): Message {
+  const agent = state.agents.find((candidate) => candidate.id === action.agentId);
+  const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  if (!agent || !owner) {
+    throw new Error(`unknown agent: ${action.agentId}`);
+  }
+
+  return {
+    id: `msg-agent-share-${file.id}`,
+    roomId: action.roomId,
+    senderId: agent.ownerId,
+    senderName: agent.displayName,
+    body: `我代表${owner.name}发送最新文件：${file.name}`,
+    sentAt: '2026-05-04T14:06:12+08:00',
+    type: 'file',
+    agentLabel: `${owner.name}的 Agent 代发`,
+    sourceAgentId: agent.id,
+    fileId: file.id,
+    mxcUri: file.mxcUri,
+    contentType: file.contentType,
+    size: file.size
+  };
+}
+
+function hasDownloadableBacking(file: FileItem | undefined): boolean {
+  return Boolean(file?.mxcUri || file?.localPath);
 }
 
 function confirmedActionToolCalls(kind: AgentActionRequest['kind'], blockedRisk?: AgentActionLog['risk']): string[] {
@@ -1724,6 +1882,15 @@ function stalePatchRisk(label: string): AgentActionLog['risk'] {
   };
 }
 
+function fileShareBoundaryRisk(reason: string): AgentActionLog['risk'] {
+  return {
+    level: 'high',
+    score: 0.9,
+    reason: `Cannot confirm file share: ${reason}; no file message was sent.`,
+    model: 'runtime-confirmation-gate-v1'
+  };
+}
+
 class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -1773,12 +1940,16 @@ function applyCorsHeaders(
   return true;
 }
 
-function authorizeRequest(request: IncomingMessage, apiToken: string | null | undefined): boolean {
-  if (!apiToken || request.method === 'GET' || request.method === 'OPTIONS') {
+function authorizeRequest(request: IncomingMessage, url: URL, apiToken: string | null | undefined): boolean {
+  if (!apiToken || request.method === 'OPTIONS') {
     return true;
   }
 
-  const token = getHeaderValue(request.headers['x-agent-im-token']) ?? parseBearerToken(request);
+  const token =
+    getHeaderValue(request.headers['x-agent-im-token']) ??
+    parseBearerToken(request) ??
+    url.searchParams.get('agent_im_token') ??
+    undefined;
   return token === apiToken;
 }
 
@@ -1885,6 +2056,186 @@ function createUserMessage(state: DemoState, input: { roomId: string; senderId: 
     sentAt: new Date().toISOString(),
     type: 'text'
   };
+}
+
+function addCalendarEventFromChatConfirmation(
+  state: DemoState,
+  message: Message
+): { state: DemoState; events: DemoState['calendar'] } | undefined {
+  if (!looksLikeCalendarAddConfirmation(message.body)) {
+    return undefined;
+  }
+  const room = state.rooms.find((candidate) => candidate.id === message.roomId);
+  const sender = state.users.find((candidate) => candidate.id === message.senderId);
+  if (!room || !sender) {
+    return undefined;
+  }
+
+  const recentMessages = sortMessagesChronologically(
+    state.messages
+      .filter((candidate) => candidate.roomId === message.roomId && candidate.id !== message.id)
+      .slice(-10)
+  );
+  const startsAt = inferCalendarStartFromChat([...recentMessages, message], message.sentAt);
+  if (!startsAt) {
+    return undefined;
+  }
+
+  const attendees = inferCalendarAttendees(state, room.memberIds, sender.id, [...recentMessages, message]);
+  const event: DemoState['calendar'][number] = {
+    id: createRuntimeId('cal-chat'),
+    title: inferCalendarTitleFromChat([...recentMessages, message]),
+    startsAt,
+    roomId: room.id,
+    attendees,
+    sourceTaskId: message.id
+  };
+  const log = createRuntimeLog({
+    agentId: sender.agentId,
+    roomId: room.id,
+    action: `calendar_add_from_chat:${event.title}`,
+    status: 'executed',
+    risk: {
+      level: 'low',
+      score: 0.16,
+      reason: 'The sender explicitly confirmed adding the recently discussed schedule to the internal calendar.',
+      model: 'chat-calendar-confirmation-v1'
+    },
+    contextIds: [message.id, ...recentMessages.slice(-4).map((candidate) => candidate.id), event.id],
+    toolCalls: ['calendar.add_from_chat', 'calendar.availability.inspect']
+  });
+
+  return {
+    state: {
+      ...state,
+      calendar: [event, ...state.calendar],
+      actionLogs: [log, ...state.actionLogs]
+    },
+    events: [event]
+  };
+}
+
+function looksLikeCalendarAddConfirmation(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return (
+    /加入日程|加到日程|添加日程|加进日程|记到日程|写进日程|放进日程|加入到日程|加日历|加入日历/.test(text) ||
+    (/(记一下|记下来|安排上|就这么定|就这样定)/.test(text) && /日程|日历|时间|周|星期|晚上|下午|上午/.test(text)) ||
+    lowered.includes('add to calendar') ||
+    lowered.includes('put it on the calendar')
+  );
+}
+
+function inferCalendarStartFromChat(messages: Message[], fallbackSentAt: string): string | undefined {
+  const base = new Date(fallbackSentAt);
+  const fallbackBase = Number.isNaN(base.getTime()) ? new Date() : base;
+  for (const message of [...messages].reverse()) {
+    const startsAt = inferCalendarStartFromText(message.body, fallbackBase);
+    if (startsAt) {
+      return startsAt;
+    }
+  }
+  return undefined;
+}
+
+function inferCalendarStartFromText(text: string, baseDate: Date): string | undefined {
+  const explicitDate = text.match(/(?:(20\d{2})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?/);
+  const weekday = inferCalendarWeekday(text);
+  const time = inferCalendarTime(text);
+  if (!explicitDate && weekday === undefined) {
+    return undefined;
+  }
+
+  const target = explicitDate
+    ? new Date(Date.UTC(Number(explicitDate[1] ?? baseDate.getFullYear()), Number(explicitDate[2]) - 1, Number(explicitDate[3]), 12))
+    : nextWeekdayDate(baseDate, weekday!, time);
+  const month = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(target.getUTCDate()).padStart(2, '0');
+  return `${target.getUTCFullYear()}-${month}-${day}T${time.hour}:${time.minute}:00+08:00`;
+}
+
+function inferCalendarTime(text: string): { hour: string; minute: string } {
+  const numeric = text.match(/(\d{1,2})\s*[:：点]\s*(\d{0,2})/);
+  if (numeric) {
+    return {
+      hour: String(Number(numeric[1])).padStart(2, '0'),
+      minute: (numeric[2] || '00').padEnd(2, '0').slice(0, 2)
+    };
+  }
+  if (/晚上|晚间|夜里/.test(text)) {
+    return { hour: '20', minute: '30' };
+  }
+  if (/下午/.test(text)) {
+    return { hour: '15', minute: '00' };
+  }
+  if (/上午|早上/.test(text)) {
+    return { hour: '10', minute: '00' };
+  }
+  if (/中午/.test(text)) {
+    return { hour: '12', minute: '00' };
+  }
+  return { hour: '09', minute: '00' };
+}
+
+function inferCalendarWeekday(text: string): number | undefined {
+  const aliases: Array<[number, RegExp]> = [
+    [1, /周一|星期一|monday/i],
+    [2, /周二|星期二|tuesday/i],
+    [3, /周三|星期三|wednesday/i],
+    [4, /周四|星期四|thursday/i],
+    [5, /周五|星期五|friday/i],
+    [6, /周六|星期六|saturday/i],
+    [0, /周日|周天|星期日|星期天|sunday/i]
+  ];
+  return aliases.find(([, pattern]) => pattern.test(text))?.[0];
+}
+
+function nextWeekdayDate(baseDate: Date, weekday: number, time: { hour: string; minute: string }): Date {
+  const currentWeekday = baseDate.getDay();
+  let deltaDays = (weekday - currentWeekday + 7) % 7;
+  const targetMinutes = Number(time.hour) * 60 + Number(time.minute);
+  const baseMinutes = baseDate.getHours() * 60 + baseDate.getMinutes();
+  if (deltaDays === 0 && targetMinutes <= baseMinutes) {
+    deltaDays = 7;
+  }
+  return new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + deltaDays, 12));
+}
+
+function inferCalendarAttendees(
+  state: DemoState,
+  roomMemberIds: string[],
+  senderId: string,
+  messages: Message[]
+): string[] {
+  const text = messages.map((message) => `${message.senderName} ${message.body}`).join('\n');
+  if (/大家|全员|所有人|全组/.test(text)) {
+    return [...roomMemberIds];
+  }
+  const attendees = new Set<string>([senderId]);
+  for (const message of messages) {
+    if (roomMemberIds.includes(message.senderId)) {
+      attendees.add(message.senderId);
+    }
+  }
+  for (const user of state.users) {
+    if (roomMemberIds.includes(user.id) && text.includes(user.name)) {
+      attendees.add(user.id);
+    }
+  }
+  return [...attendees];
+}
+
+function inferCalendarTitleFromChat(messages: Message[]): string {
+  const text = messages.map((message) => message.body).join('\n');
+  if (/合稿|检查/.test(text)) {
+    return '合稿检查';
+  }
+  if (/访谈/.test(text)) {
+    return '访谈材料同步';
+  }
+  if (/答疑|课程/.test(text)) {
+    return '课程答疑';
+  }
+  return '协作日程';
 }
 
 function createAgentCoordinationMessage(state: DemoState, agentId: string, body: string): Message {

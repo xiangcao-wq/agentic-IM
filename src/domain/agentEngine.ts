@@ -150,7 +150,10 @@ export async function answerDeadlineQuestion(
       '{"answer":"你的回答","sources":["引用的消息或文件ID"],"confidence":0.95}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'deadline' });
+    const context = buildStructuredContext(state, input.roomId, input.agentId, {
+      focus: 'deadline',
+      userText: input.question
+    });
     const userPrompt = [
       context,
       '',
@@ -239,7 +242,10 @@ export async function createFileShareAction(
       '{"matchedFileId":"文件ID或null","risk":{"level":"low","score":0.18,"reason":"风险说明"},"reasoning":"决策理由"}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'file_share' });
+    const context = buildStructuredContext(state, input.roomId, input.agentId, {
+      focus: 'file_share',
+      userText: input.requestText
+    });
     const userPrompt = [
       context,
       '',
@@ -268,7 +274,8 @@ export async function createFileShareAction(
     const owner = state.users.find((user) => user.id === agent.ownerId);
 
     const file = parsed.matchedFileId
-      ? state.files.find((f) => f.id === parsed.matchedFileId)
+      ? findAuthorizedShareableFileById(state, agent.ownerId, input.roomId, parsed.matchedFileId) ??
+        findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText)
       : findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText);
 
     const risk: RiskAssessment = {
@@ -387,7 +394,10 @@ export async function coordinateAgents(
       '{"hasScheduleChange":true,"risk":{"level":"high","score":0.82,"reason":"风险说明"},"suggestion":"建议方案","reasoning":"分析过程"}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.toAgentId, { focus: 'coordinate' });
+    const context = buildStructuredContext(state, input.roomId, input.toAgentId, {
+      focus: 'coordinate',
+      userText: input.proposal
+    });
     const userPrompt = [
       context,
       '',
@@ -527,6 +537,22 @@ function findNewestShareableFile(state: DemoState, ownerId: string, roomId: stri
     }
     return b.file.version - a.file.version || b.file.updatedAt.localeCompare(a.file.updatedAt);
   })[0]?.file;
+}
+
+function findAuthorizedShareableFileById(
+  state: DemoState,
+  ownerId: string,
+  roomId: string,
+  fileId: string
+): FileItem | undefined {
+  return state.files.find(
+    (file) =>
+      file.id === fileId &&
+      file.uploaderId === ownerId &&
+      file.roomId === roomId &&
+      file.visibility === 'room' &&
+      file.agentCanShare
+  );
 }
 
 function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined, requestText: string): RiskAssessment {

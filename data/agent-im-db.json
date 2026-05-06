@@ -106,8 +106,7 @@
         "user-teacher"
       ],
       "unreadCount": 12,
-      "matrixAlias": "#is-class-2:demo.local",
-      "matrixRoomId": "!sJUTjsUTZXKyCtdUuj:localhost"
+      "matrixAlias": "#is-class-2:demo.local"
     },
     {
       "id": "room-team",
@@ -119,8 +118,7 @@
         "user-zhao"
       ],
       "unreadCount": 10,
-      "matrixAlias": "#research-team-4:demo.local",
-      "matrixRoomId": "!vFPnJovHNXPlFZPBRb:localhost"
+      "matrixAlias": "#research-team-4:demo.local"
     },
     {
       "id": "room-agent",
@@ -131,8 +129,7 @@
         "user-chen"
       ],
       "unreadCount": 3,
-      "matrixAlias": "#agent-handshake:demo.local",
-      "matrixRoomId": "!ZRVIFcVXkMjoHXfFCw:localhost"
+      "matrixAlias": "#agent-handshake:demo.local"
     }
   ],
   "messages": [
@@ -311,151 +308,628 @@
       "sourceAgentId": "agent-zhao"
     },
     {
-      "id": "msg-1777913548454-45fa904fcd4028",
+      "id": "msg-demo-runtime-campus-service-interview-notes-ai-seed",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "browser quality check",
-      "sentAt": "2026-05-04T16:52:28.454Z",
-      "type": "text"
+      "body": "campus-service-interview-notes-ai-seed.txt",
+      "sentAt": "2026-05-04T08:00:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-campus-service-interview-notes-ai-seed",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 487
     },
     {
-      "id": "msg-1777913549887-c710f26000db78",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯你在线了吗？我刚把访谈纪要 v1 放进文件库了，你那边能打开看看吗？引用一致性的部分我标了备注，想确认一下跟演示稿对得上。",
-      "sentAt": "2026-05-04T16:52:29.887Z",
-      "type": "text"
-    },
-    {
-      "id": "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
+      "id": "msg-demo-runtime-a2a-autopilot-demo-runbook",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "算了",
-      "sentAt": "2026-05-04T18:10:38.151Z",
-      "type": "text"
+      "body": "a2a-autopilot-demo-runbook.txt",
+      "sentAt": "2026-05-04T08:01:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-a2a-autopilot-demo-runbook",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 637
     },
     {
-      "id": "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯，怎么了？演示稿那块有冲突吗？你说出来我可以先按你那边改。",
-      "sentAt": "2026-05-04T18:10:40.578Z",
-      "type": "text"
-    },
-    {
-      "id": "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
+      "id": "msg-demo-runtime-agent-im-a2a-demo-brief",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "没事，我爱你",
-      "sentAt": "2026-05-04T19:23:49.622Z",
-      "type": "text"
+      "body": "agent-im-a2a-demo-brief.pdf",
+      "sentAt": "2026-05-04T08:02:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-im-a2a-demo-brief",
+      "contentType": "application/pdf",
+      "size": 1054
     },
     {
-      "id": "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "啊这……林雯你突然说这个，有点懵😅 不过还是正事要紧，引用一致性的备注你看看有什么问题吗？我好接着补流程截图。",
-      "sentAt": "2026-05-04T19:23:50.884Z",
-      "type": "text"
-    },
-    {
-      "id": "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
+      "id": "msg-demo-runtime-research-report-risk-register",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "你知道我是谁吗",
-      "sentAt": "2026-05-04T19:24:03.787Z",
-      "type": "text"
+      "body": "research-report-risk-register.pdf",
+      "sentAt": "2026-05-04T08:03:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-research-report-risk-register",
+      "contentType": "application/pdf",
+      "size": 968
     },
     {
-      "id": "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "啊？林雯你没事吧？是不是最近赶演示稿太累了😅 先别管那些了，你帮我看看访谈纪要里引用一致性的备注，我明天开始补流程截图。",
-      "sentAt": "2026-05-04T19:24:05.189Z",
-      "type": "text"
-    },
-    {
-      "id": "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
+      "id": "msg-demo-runtime-agent-im-a2a-demo-poster",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "咕咕嘎嘎是什么意思",
-      "sentAt": "2026-05-04T19:24:18.087Z",
-      "type": "text"
+      "body": "agent-im-a2a-demo-poster.svg",
+      "sentAt": "2026-05-04T08:04:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-im-a2a-demo-poster",
+      "contentType": "image/svg+xml",
+      "size": 3002
     },
     {
-      "id": "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯，你这到底是在说啥啊😅 要不你先休息下，明天清醒了我再跟你对引用一致性的部分？",
-      "sentAt": "2026-05-04T19:24:19.337Z",
-      "type": "text"
-    },
-    {
-      "id": "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
+      "id": "msg-demo-runtime-agent-im-a2a-flow-board",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "你怎么还不睡",
-      "sentAt": "2026-05-04T19:24:28.487Z",
-      "type": "text"
+      "body": "agent-im-a2a-flow-board.svg",
+      "sentAt": "2026-05-04T08:05:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-im-a2a-flow-board",
+      "contentType": "image/svg+xml",
+      "size": 3957
     },
     {
-      "id": "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯你真的不看看我标的引用一致性备注吗…我明天补截图前想把这块对好，不然我怕后面又得改。",
-      "sentAt": "2026-05-04T19:24:29.857Z",
-      "type": "text"
-    },
-    {
-      "id": "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
+      "id": "msg-demo-runtime-agent-collaboration-protocol-ai-seed",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "别管那么多了",
-      "sentAt": "2026-05-04T19:24:37.800Z",
-      "type": "text"
+      "body": "agent-collaboration-protocol-ai-seed.md",
+      "sentAt": "2026-05-04T08:06:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-collaboration-protocol-ai-seed",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 420
     },
     {
-      "id": "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8",
-      "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯你这样我真的很慌啊……引用一致性的备注你到底看了没？不看的话我明天补截图只能按自己理解来了。",
-      "sentAt": "2026-05-04T19:24:39.077Z",
-      "type": "text"
-    },
-    {
-      "id": "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
+      "id": "msg-demo-runtime-image-2-material-prompts-ai-seed",
       "roomId": "room-team",
       "senderId": "user-lin",
       "senderName": "林雯",
-      "body": "行",
-      "sentAt": "2026-05-04T19:24:46.303Z",
-      "type": "text"
+      "body": "image-2-material-prompts-ai-seed.txt",
+      "sentAt": "2026-05-04T08:07:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-image-2-material-prompts-ai-seed",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 576
     },
     {
-      "id": "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg",
+      "id": "msg-demo-runtime-demo-scene-lin-asleep-file-handoff",
       "roomId": "room-team",
-      "senderId": "user-chen",
-      "senderName": "陈晨",
-      "body": "林雯你终于说“行”了😅 那我明天开始按着纪要标的备注补流程截图，你要是看了有哪里不对赶紧跟我说啊，别等我截图都截完了又改。",
-      "sentAt": "2026-05-04T19:24:47.833Z",
-      "type": "text"
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "demo-scene-lin-asleep-file-handoff.md",
+      "sentAt": "2026-05-04T08:08:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-demo-scene-lin-asleep-file-handoff",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 558
+    },
+    {
+      "id": "msg-demo-runtime-demo-scene-a2a-calendar-negotiation",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "demo-scene-a2a-calendar-negotiation.md",
+      "sentAt": "2026-05-04T08:09:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-demo-scene-a2a-calendar-negotiation",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 602
+    },
+    {
+      "id": "msg-demo-runtime-campus-service-interview-quotes-v2",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "campus-service-interview-quotes-v2.txt",
+      "sentAt": "2026-05-04T08:10:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-campus-service-interview-quotes-v2",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 675
+    },
+    {
+      "id": "msg-demo-runtime-agent-autopilot-permission-table",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "agent-autopilot-permission-table.txt",
+      "sentAt": "2026-05-04T08:11:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-autopilot-permission-table",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 607
+    },
+    {
+      "id": "msg-demo-runtime-presenter-script-agent-im-2min",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "presenter-script-agent-im-2min.md",
+      "sentAt": "2026-05-04T08:12:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-presenter-script-agent-im-2min",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 679
+    },
+    {
+      "id": "msg-demo-runtime-agent-im-a2a-investor-demo-onepager",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "agent-im-a2a-investor-demo-onepager.pdf",
+      "sentAt": "2026-05-04T08:13:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-im-a2a-investor-demo-onepager",
+      "contentType": "application/pdf",
+      "size": 1110
+    },
+    {
+      "id": "msg-demo-runtime-campus-service-research-evidence-pack",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "campus-service-research-evidence-pack.pdf",
+      "sentAt": "2026-05-04T08:14:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-campus-service-research-evidence-pack",
+      "contentType": "application/pdf",
+      "size": 955
+    },
+    {
+      "id": "msg-demo-runtime-agent-risk-permission-policy",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "agent-risk-permission-policy.pdf",
+      "sentAt": "2026-05-04T08:15:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-agent-risk-permission-policy",
+      "contentType": "application/pdf",
+      "size": 1077
+    },
+    {
+      "id": "msg-demo-runtime-image2-agent-im-a2a-poster",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "image2-agent-im-a2a-poster.png",
+      "sentAt": "2026-05-04T08:16:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-image2-agent-im-a2a-poster",
+      "contentType": "image/png",
+      "size": 1444587
+    },
+    {
+      "id": "msg-demo-runtime-image2-campus-service-research-board",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "image2-campus-service-research-board.png",
+      "sentAt": "2026-05-04T08:17:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-image2-campus-service-research-board",
+      "contentType": "image/png",
+      "size": 1856099
+    },
+    {
+      "id": "msg-demo-runtime-image2-a2a-schedule-coordination",
+      "roomId": "room-team",
+      "senderId": "user-lin",
+      "senderName": "林雯",
+      "body": "image2-a2a-schedule-coordination.png",
+      "sentAt": "2026-05-04T08:18:00.000Z",
+      "type": "file",
+      "fileId": "file-demo-runtime-image2-a2a-schedule-coordination",
+      "contentType": "image/png",
+      "size": 1268783
     }
   ],
   "files": [
+    {
+      "id": "file-demo-runtime-image2-a2a-schedule-coordination",
+      "name": "image2-a2a-schedule-coordination.png",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:18:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "image-2",
+        "png",
+        "calendar",
+        "a2a",
+        "ai-seed"
+      ],
+      "summary": "Openable Image-2 generated schedule coordination board for A2A negotiation.",
+      "contentType": "image/png",
+      "size": 1268783,
+      "localPath": "file-demo-runtime-image2-a2a-schedule-coordination-image2-a2a-schedule-coordination.png"
+    },
+    {
+      "id": "file-demo-runtime-image2-campus-service-research-board",
+      "name": "image2-campus-service-research-board.png",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:17:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "image-2",
+        "png",
+        "research",
+        "campus-service",
+        "ai-seed"
+      ],
+      "summary": "Openable Image-2 generated research board for the campus service project.",
+      "contentType": "image/png",
+      "size": 1856099,
+      "localPath": "file-demo-runtime-image2-campus-service-research-board-image2-campus-service-research-board.png"
+    },
+    {
+      "id": "file-demo-runtime-image2-agent-im-a2a-poster",
+      "name": "image2-agent-im-a2a-poster.png",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:16:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "image-2",
+        "png",
+        "poster",
+        "a2a",
+        "ai-seed"
+      ],
+      "summary": "Openable Image-2 generated poster for Agent IM A2A collaboration.",
+      "contentType": "image/png",
+      "size": 1444587,
+      "localPath": "file-demo-runtime-image2-agent-im-a2a-poster-image2-agent-im-a2a-poster.png"
+    },
+    {
+      "id": "file-demo-runtime-agent-risk-permission-policy",
+      "name": "agent-risk-permission-policy.pdf",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:15:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "pdf",
+        "risk",
+        "permission",
+        "policy",
+        "ai-seed"
+      ],
+      "summary": "PDF policy sheet for Agent risk gates and permissions.",
+      "contentType": "application/pdf",
+      "size": 1077,
+      "localPath": "file-demo-runtime-agent-risk-permission-policy-agent-risk-permission-policy.pdf"
+    },
+    {
+      "id": "file-demo-runtime-campus-service-research-evidence-pack",
+      "name": "campus-service-research-evidence-pack.pdf",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:14:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "pdf",
+        "research",
+        "evidence",
+        "campus-service",
+        "ai-seed"
+      ],
+      "summary": "PDF evidence pack for the campus service research demo.",
+      "contentType": "application/pdf",
+      "size": 955,
+      "localPath": "file-demo-runtime-campus-service-research-evidence-pack-campus-service-research-evidence-pack.pdf"
+    },
+    {
+      "id": "file-demo-runtime-agent-im-a2a-investor-demo-onepager",
+      "name": "agent-im-a2a-investor-demo-onepager.pdf",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:13:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "pdf",
+        "onepager",
+        "product",
+        "a2a",
+        "ai-seed"
+      ],
+      "summary": "One-page PDF explaining the Agent IM A2A product story.",
+      "contentType": "application/pdf",
+      "size": 1110,
+      "localPath": "file-demo-runtime-agent-im-a2a-investor-demo-onepager-agent-im-a2a-investor-demo-onepager.pdf"
+    },
+    {
+      "id": "file-demo-runtime-presenter-script-agent-im-2min",
+      "name": "presenter-script-agent-im-2min.md",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:12:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "script",
+        "demo",
+        "a2a",
+        "presentation",
+        "ai-seed"
+      ],
+      "summary": "Short presenter script for a two-minute real-machine demo.",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 679,
+      "localPath": "file-demo-runtime-presenter-script-agent-im-2min-presenter-script-agent-im-2min.md"
+    },
+    {
+      "id": "file-demo-runtime-agent-autopilot-permission-table",
+      "name": "agent-autopilot-permission-table.txt",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:11:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "policy",
+        "permission",
+        "risk",
+        "autopilot",
+        "ai-seed"
+      ],
+      "summary": "Permission table for explaining what the Agent can and cannot do.",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 607,
+      "localPath": "file-demo-runtime-agent-autopilot-permission-table-agent-autopilot-permission-table.txt"
+    },
+    {
+      "id": "file-demo-runtime-campus-service-interview-quotes-v2",
+      "name": "campus-service-interview-quotes-v2.txt",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:10:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "interview",
+        "quotes",
+        "evidence",
+        "research",
+        "ai-seed"
+      ],
+      "summary": "Searchable interview quote pack for the campus service research project.",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 675,
+      "localPath": "file-demo-runtime-campus-service-interview-quotes-v2-campus-service-interview-quotes-v2.txt"
+    },
+    {
+      "id": "file-demo-runtime-demo-scene-a2a-calendar-negotiation",
+      "name": "demo-scene-a2a-calendar-negotiation.md",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:09:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "a2a",
+        "calendar",
+        "confirmation",
+        "runbook",
+        "ai-seed"
+      ],
+      "summary": "Runbook for the A2A schedule negotiation demo scene.",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 602,
+      "localPath": "file-demo-runtime-demo-scene-a2a-calendar-negotiation-demo-scene-a2a-calendar-negotiation.md"
+    },
+    {
+      "id": "file-demo-runtime-demo-scene-lin-asleep-file-handoff",
+      "name": "demo-scene-lin-asleep-file-handoff.md",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:08:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "a2a",
+        "handoff",
+        "file",
+        "runbook",
+        "ai-seed"
+      ],
+      "summary": "Runbook for the offline file handoff demo scene.",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 558,
+      "localPath": "file-demo-runtime-demo-scene-lin-asleep-file-handoff-demo-scene-lin-asleep-file-handoff.md"
+    },
+    {
+      "id": "file-demo-runtime-image-2-material-prompts-ai-seed",
+      "name": "image-2-material-prompts-ai-seed.txt",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:07:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "image-2",
+        "prompt",
+        "poster",
+        "design",
+        "ai-seed"
+      ],
+      "summary": "Searchable image-generation prompt pack for creating richer Image-2 demo visuals.",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 576,
+      "localPath": "file-demo-runtime-image-2-material-prompts-ai-seed-image-2-material-prompts-ai-seed.txt"
+    },
+    {
+      "id": "file-demo-runtime-agent-collaboration-protocol-ai-seed",
+      "name": "agent-collaboration-protocol-ai-seed.md",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:06:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "markdown",
+        "agent",
+        "protocol",
+        "ai-seed"
+      ],
+      "summary": "Markdown protocol for the real Agent IM collaboration runtime.",
+      "contentType": "text/markdown; charset=utf-8",
+      "size": 420,
+      "localPath": "file-demo-runtime-agent-collaboration-protocol-ai-seed-agent-collaboration-protocol-ai-seed.md"
+    },
+    {
+      "id": "file-demo-runtime-agent-im-a2a-flow-board",
+      "name": "agent-im-a2a-flow-board.svg",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:05:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "design",
+        "workflow",
+        "image",
+        "a2a",
+        "ai-seed"
+      ],
+      "summary": "Openable workflow board showing planner, tools, risk gate, confirmation, and audit log.",
+      "contentType": "image/svg+xml",
+      "size": 3957,
+      "localPath": "file-demo-runtime-agent-im-a2a-flow-board-agent-im-a2a-flow-board.svg"
+    },
+    {
+      "id": "file-demo-runtime-agent-im-a2a-demo-poster",
+      "name": "agent-im-a2a-demo-poster.svg",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:04:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "poster",
+        "image",
+        "a2a",
+        "ai-seed"
+      ],
+      "summary": "Openable poster-style visual asset for the Agent IM A2A demo.",
+      "contentType": "image/svg+xml",
+      "size": 3002,
+      "localPath": "file-demo-runtime-agent-im-a2a-demo-poster-agent-im-a2a-demo-poster.svg"
+    },
+    {
+      "id": "file-demo-runtime-research-report-risk-register",
+      "name": "research-report-risk-register.pdf",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:03:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "pdf",
+        "risk",
+        "research",
+        "ai-seed"
+      ],
+      "summary": "Openable PDF risk register for the research report and Agent handoff.",
+      "contentType": "application/pdf",
+      "size": 968,
+      "localPath": "file-demo-runtime-research-report-risk-register-research-report-risk-register.pdf"
+    },
+    {
+      "id": "file-demo-runtime-agent-im-a2a-demo-brief",
+      "name": "agent-im-a2a-demo-brief.pdf",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:02:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "pdf",
+        "a2a",
+        "brief",
+        "ai-seed"
+      ],
+      "summary": "Openable PDF brief for the Agent-to-Agent collaboration demo.",
+      "contentType": "application/pdf",
+      "size": 1054,
+      "localPath": "file-demo-runtime-agent-im-a2a-demo-brief-agent-im-a2a-demo-brief.pdf"
+    },
+    {
+      "id": "file-demo-runtime-a2a-autopilot-demo-runbook",
+      "name": "a2a-autopilot-demo-runbook.txt",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:01:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "a2a",
+        "autopilot",
+        "runbook",
+        "ai-seed"
+      ],
+      "summary": "A2A autopilot runbook with rules, roles, and searchable instructions.",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 637,
+      "localPath": "file-demo-runtime-a2a-autopilot-demo-runbook-a2a-autopilot-demo-runbook.txt"
+    },
+    {
+      "id": "file-demo-runtime-campus-service-interview-notes-ai-seed",
+      "name": "campus-service-interview-notes-ai-seed.txt",
+      "uploaderId": "user-lin",
+      "version": 1,
+      "roomId": "room-team",
+      "updatedAt": "2026-05-04T08:00:00.000Z",
+      "visibility": "room",
+      "agentCanShare": true,
+      "tags": [
+        "interview",
+        "notes",
+        "research",
+        "ai-seed"
+      ],
+      "summary": "Interview notes for campus service digitalization research.",
+      "contentType": "text/plain; charset=utf-8",
+      "size": 487,
+      "localPath": "file-demo-runtime-campus-service-interview-notes-ai-seed-campus-service-interview-notes-ai-seed.txt"
+    },
     {
       "id": "file-brief",
       "name": "信息系统课程作业要求.pdf",
@@ -621,9 +1095,19 @@
   ],
   "calendar": [
     {
+      "id": "cal-lin-focus-block",
+      "title": "林雯演示稿更新专注时间",
+      "startsAt": "2026-05-06T19:30:00+08:00",
+      "roomId": "room-team",
+      "attendees": [
+        "user-lin"
+      ],
+      "sourceTaskId": "task-slides"
+    },
+    {
       "id": "cal-review",
       "title": "第 4 组最后一次合稿检查",
-      "startsAt": "2026-05-06T23:00:00+08:00",
+      "startsAt": "2026-05-05T20:30:00+08:00",
       "roomId": "room-team",
       "attendees": [
         "user-lin",
@@ -642,9 +1126,110 @@
         "user-zhao"
       ],
       "sourceTaskId": "task-interview-materials"
+    },
+    {
+      "id": "cal-zhao-report-review",
+      "title": "赵一鸣报告结构复核",
+      "startsAt": "2026-05-07T16:00:00+08:00",
+      "roomId": "room-team",
+      "attendees": [
+        "user-zhao"
+      ],
+      "sourceTaskId": "task-report"
+    },
+    {
+      "id": "cal-teacher-office-hour",
+      "title": "王老师课程答疑",
+      "startsAt": "2026-05-08T10:00:00+08:00",
+      "roomId": "room-class",
+      "attendees": [
+        "user-teacher"
+      ],
+      "sourceTaskId": "task-report"
     }
   ],
   "fileTextChunks": [
+    {
+      "id": "file-demo-runtime-presenter-script-agent-im-2min-chunk-0",
+      "fileId": "file-demo-runtime-presenter-script-agent-im-2min",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "# Agent IM two-minute presenter script\n\n1. Show LLM connected and explain that every member has a personal Agent.\n2. Ask: Who owns interview material and what should I do first today?\n3. Trigger: Chen asks Lin Agent to send the Image-2 research board while Lin is offline.\n4. Show that the Agent sends a real downloadable file only after matching authorization and risk.\n5. Trigger: Zhao asks Lin Agent and Chen Agent to coordinate a final review time.\n6. Show the A2A session, confirmation queue, and audit-backed calendar update after approval.\nClose: The product is not only chat. It lets personal Agents represent people in real collaboration while keeping humans in control.",
+      "createdAt": "2026-05-04T08:12:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-agent-autopilot-permission-table-chunk-0",
+      "fileId": "file-demo-runtime-agent-autopilot-permission-table",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "Agent Autopilot Permission Table\n\nAction | Auto-execute? | Required evidence\nAnswer context question | yes, low risk | authorized room messages and tasks\nSearch files | yes, low risk | room-visible file metadata and indexed text chunks\nShare downloadable authorized file | yes when risk is low | requester is in room, file has localPath or mxcUri, agentCanShare=true\nChange calendar | no, needs confirmation | clear calendarPatch with oldStartsAt and newStartsAt\nChange task status | no, needs confirmation | clear taskPatch with oldStatus and newStatus\nRead private chat | never | not in authorized context",
+      "createdAt": "2026-05-04T08:11:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-campus-service-interview-quotes-v2-chunk-0",
+      "fileId": "file-demo-runtime-campus-service-interview-quotes-v2",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "Campus Service Research - Interview Quotes v2\n\nStudent A: I do not know where to report a broken classroom projector, so I usually ask classmates first.\nStudent B: Repair progress is unclear. I want a simple timeline and a notification when the status changes.\nStudent volunteer: Duplicate requests happen because students cannot see whether someone already reported the same issue.\nService desk staff: The most useful improvement would be one intake form with location, photo, category, and contact method.\nAgent demo note: Chen owns interview material and citation consistency. This text should be searchable by Agent when users ask about interview evidence or pain points.",
+      "createdAt": "2026-05-04T08:10:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-demo-scene-a2a-calendar-negotiation-chunk-0",
+      "fileId": "file-demo-runtime-demo-scene-a2a-calendar-negotiation",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "# Demo Scene: Agents coordinate a schedule change\n\nTrigger message: Zhao asks Lin Agent to negotiate with Chen Agent and move the final review from Tuesday 20:30 to Wednesday 23:00.\nExpected behavior: the runtime creates an A2A session with multiple turns, proposes a calendarPatch, and places the change in the confirmation queue.\nHuman confirmation: before approval, internal calendar data must not change. After approval, calendar.startsAt is updated and an audit log is written.\nPresenter line: Agents can negotiate and prepare a patch, but they do not bypass human control for high-impact changes.",
+      "createdAt": "2026-05-04T08:09:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-demo-scene-lin-asleep-file-handoff-chunk-0",
+      "fileId": "file-demo-runtime-demo-scene-lin-asleep-file-handoff",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "# Demo Scene: Lin is asleep, her Agent handles the file handoff\n\nTrigger message: Chen asks whether Lin Agent can send the image generated last night.\nExpected behavior: Lin Agent searches authorized room files, matches the latest Image-2 poster or research board, checks that the file is downloadable, and sends it only when risk is low.\nEvidence to show: the outgoing chat message contains a real file chip and the file download endpoint returns bytes.\nBoundary: if a file is metadata-only or not authorized, the Agent must not claim that it sent the file.",
+      "createdAt": "2026-05-04T08:08:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-image-2-material-prompts-ai-seed-chunk-0",
+      "fileId": "file-demo-runtime-image-2-material-prompts-ai-seed",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "Image-2 material prompts for Agent IM demo\n\n1. Poster: premium enterprise AI collaboration dashboard, teal and graphite palette, real-time agent handoff, risk gate, file cards, clean typography.\n2. Flow board: product design diagram showing User -> Planner -> Tool Registry -> Risk Gate -> Confirmation Queue -> Audit Log.\n3. File card artwork: research report, interview appendix, action plan, slide deck, realistic document thumbnails.\nThese prompts are stored as searchable demo material. The generated SVG files in this batch are openable fallback visuals for local demos.",
+      "createdAt": "2026-05-04T08:07:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-agent-collaboration-protocol-ai-seed-chunk-0",
+      "fileId": "file-demo-runtime-agent-collaboration-protocol-ai-seed",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "# Agent 协作协议\n\n- 人类用户消息由 DeepSeek Flash 生成，强调自然、上下文相关。\n- 个人 Agent 规划由 DeepSeek Pro 生成，工具执行由本地 runtime 完成。\n- 文件代发必须检查 agentCanShare、可见房间和可下载媒体备份。\n- 日程和任务状态修改必须进入确认队列。\n- 自动托管模式需要记录每一步：计划、工具、风险、确认、审计。",
+      "createdAt": "2026-05-04T08:06:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-a2a-autopilot-demo-runbook-chunk-0",
+      "fileId": "file-demo-runtime-a2a-autopilot-demo-runbook",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "Agent IM A2A Autopilot Demo Runbook\n\nGoal: show three personal agents negotiating a file handoff and a schedule change with risk gates.\nLin Agent: may share files uploaded by Lin when agentCanShare=true and the file is downloadable.\nChen Agent: may request interview material updates and propose task status changes.\nZhao Agent: may coordinate the final review time but must request confirmation for calendar changes.\nDo not fake private-room visibility. Each Agent can only cite rooms, tasks and files it is authorized to see.\nInteresting query: “引用一致性在哪里提到？” should match the interview notes and this runbook.",
+      "createdAt": "2026-05-04T08:01:00.000Z"
+    },
+    {
+      "id": "file-demo-runtime-campus-service-interview-notes-ai-seed-chunk-0",
+      "fileId": "file-demo-runtime-campus-service-interview-notes-ai-seed",
+      "roomId": "room-team",
+      "uploaderId": "user-lin",
+      "index": 0,
+      "text": "校园服务数字化调研 - 访谈纪要\n\n访谈对象：校园服务中心值班老师、两名学生志愿者。\n核心发现：学生最关心报修进度透明、服务入口分散、通知到达率。\n可引用观点：如果系统能把报修、预约、反馈集中在一个入口，会减少重复询问。\nA2A 演示用途：陈晨的 Agent 可以引用本文件补齐访谈材料和引用一致性。\n待补齐：陈晨需要在 5 月 10 日 21:00 前补一张流程截图。",
+      "createdAt": "2026-05-04T08:00:00.000Z"
+    },
     {
       "id": "chunk-interview-notes-txt-0",
       "fileId": "file-interview-notes-txt",
@@ -666,698 +1251,441 @@
   ],
   "actionLogs": [
     {
-      "id": "log-agent-run-1777923734894-ef7b514096fad",
+      "id": "log-demo-runtime-image2-a2a-schedule-coordination",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:web_search:????? DeepSeek API ??????,??????",
+      "action": "prepare_demo_asset:image2-a2a-schedule-coordination.png",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "https://api-docs.deepseek.com/",
-        "https://platform.deepseek.com/docs/api-reference",
-        "https://chat-deep.ai/docs/api/",
-        "https://deepseekapi.io/",
-        "https://ghost.codersera.com/blog/how-to-use-deepseek-v4-api-developer-guide-2026/",
-        "mem-agent-lin-1777923734894-893f023a19259"
+        "file-demo-runtime-image2-a2a-schedule-coordination",
+        "msg-demo-runtime-image2-a2a-schedule-coordination"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "web.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:42:14.894Z"
+      "createdAt": "2026-05-04T08:18:00.000Z"
     },
     {
-      "id": "log-agent-run-1777923063123-cc719a07f0fb68",
+      "id": "log-demo-runtime-image2-campus-service-research-board",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:web_search:????? DeepSeek API ????",
+      "action": "prepare_demo_asset:image2-campus-service-research-board.png",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "https://www.cnblogs.com/qiniushanghai/p/19958003",
-        "https://find-aiverse.com/zh/posts/2026-04-17-deepseek/",
-        "https://api-docs.deepseek.com/zh-cn/",
-        "https://ofox.ai/zh/blog/deepseek-v4-api-guide-2026/",
-        "https://www.lxc666.cn/blogs/Software/deepseek.html",
-        "mem-agent-lin-1777923063123-03ee3a3e1ea558"
+        "file-demo-runtime-image2-campus-service-research-board",
+        "msg-demo-runtime-image2-campus-service-research-board"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "web.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:31:03.123Z"
+      "createdAt": "2026-05-04T08:17:00.000Z"
     },
     {
-      "id": "log-agent-run-1777922951059-625ed38507d728",
+      "id": "log-demo-runtime-image2-agent-im-a2a-poster",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:web_search:????? DeepSeek API ????",
+      "action": "prepare_demo_asset:image2-agent-im-a2a-poster.png",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777922951059-4f35cc920a15e"
+        "file-demo-runtime-image2-agent-im-a2a-poster",
+        "msg-demo-runtime-image2-agent-im-a2a-poster"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "web.search",
-        "web.search.failed",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:29:11.059Z"
+      "createdAt": "2026-05-04T08:16:00.000Z"
     },
     {
-      "id": "log-agent-run-1777922822896-5173b109d71dd8",
+      "id": "log-demo-runtime-agent-risk-permission-policy",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:web_search:????? DeepSeek API ????",
+      "action": "prepare_demo_asset:agent-risk-permission-policy.pdf",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读外部搜索和回答；未修改内部任务、日程、文件或消息。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777922822896-d339e3ce2ab06"
+        "file-demo-runtime-agent-risk-permission-policy",
+        "msg-demo-runtime-agent-risk-permission-policy"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "web.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:27:02.896Z"
+      "createdAt": "2026-05-04T08:15:00.000Z"
     },
     {
-      "id": "log-ai-autoreply-user-chen-1777922687833-56a032d843a908",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
-        "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:24:47.833Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777922679077-a2e015ca57128",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
-        "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:24:39.077Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777922669857-026cfaab3e419",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
-        "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:24:29.857Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777922659337-799a3c56c7164",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
-        "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:24:19.337Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777922645189-a880d1bb653ed",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
-        "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:24:05.189Z"
-    },
-    {
-      "id": "log-ai-autoreply-user-chen-1777922630884-5c48a4304be97",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
-        "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T19:23:50.884Z"
-    },
-    {
-      "id": "log-agent-run-1777921867199-59c3f40243f4c8",
+      "id": "log-demo-runtime-campus-service-research-evidence-pack",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:你好",
+      "action": "prepare_demo_asset:campus-service-research-evidence-pack.pdf",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777921867199-12bf2e828e3bf8"
+        "file-demo-runtime-campus-service-research-evidence-pack",
+        "msg-demo-runtime-campus-service-research-evidence-pack"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:11:07.199Z"
+      "createdAt": "2026-05-04T08:14:00.000Z"
     },
     {
-      "id": "log-agent-run-1777921861127-9657d3d6109be8",
+      "id": "log-demo-runtime-agent-im-a2a-investor-demo-onepager",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:你好",
+      "action": "prepare_demo_asset:agent-im-a2a-investor-demo-onepager.pdf",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777921861127-96e1f76629e138"
+        "file-demo-runtime-agent-im-a2a-investor-demo-onepager",
+        "msg-demo-runtime-agent-im-a2a-investor-demo-onepager"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:11:01.127Z"
+      "createdAt": "2026-05-04T08:13:00.000Z"
     },
     {
-      "id": "log-agent-run-1777921818255-e43ce43d37675",
+      "id": "log-demo-runtime-presenter-script-agent-im-2min",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:deadline:这次作业什么时候截止？",
+      "action": "prepare_demo_asset:presenter-script-agent-im-2min.md",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777919141853-a1f29df2074958",
-        "mem-agent-lin-1777918419677-865be015dadd68",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78",
-        "mem-agent-lin-1777921818255-ade533a847b528"
+        "file-demo-runtime-presenter-script-agent-im-2min",
+        "msg-demo-runtime-presenter-script-agent-im-2min"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T19:10:18.255Z"
+      "createdAt": "2026-05-04T08:12:00.000Z"
     },
     {
-      "id": "log-1777920421250-27417ea24eb288",
-      "createdAt": "2026-05-04T18:47:01.250Z",
+      "id": "log-demo-runtime-agent-autopilot-permission-table",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "confirm_action:action-1777920407188-504633fbdf7208",
+      "action": "prepare_demo_asset:agent-autopilot-permission-table.txt",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.2,
-        "reason": "Human review by user-lin: 用户在 Agent 工作台确认",
-        "model": "human-review-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "action-1777920407188-504633fbdf7208",
-        "user-lin"
+        "file-demo-runtime-agent-autopilot-permission-table",
+        "msg-demo-runtime-agent-autopilot-permission-table"
       ],
       "toolCalls": [
-        "agent_action.confirm",
-        "calendar.update"
-      ]
-    },
-    {
-      "id": "log-agent-chen-1777920407188-c10a8c0e1ce738",
-      "createdAt": "2026-05-04T18:46:47.188Z",
-      "agentId": "agent-chen",
-      "roomId": "room-team",
-      "action": "处理来自 林雯的 Agent 的日程协调提案",
-      "status": "needs_confirmation",
-      "risk": {
-        "level": "high",
-        "score": 0.82,
-        "reason": "林雯的Agent提出了将合稿检查从周二20:30改到周三23:00的提案。这涉及多人日程（林雯、陈晨、赵一鸣），且林雯本人不在线，提案来自其Agent。目前陈晨主动询问但未获明确回应，存在风险。",
-        "model": "llm-driven"
-      },
-      "contextIds": [
-        "cal-review",
-        "task-check"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "agent.coordinate",
-        "llm.evaluate",
-        "calendar.inspect",
-        "agent_to_agent.negotiate",
-        "memory.write"
-      ]
+      "createdAt": "2026-05-04T08:11:00.000Z"
     },
     {
-      "id": "log-agent-run-1777920345889-92d2170e99a958",
+      "id": "log-demo-runtime-campus-service-interview-quotes-v2",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:谁负责访谈材料？",
+      "action": "prepare_demo_asset:campus-service-interview-quotes-v2.txt",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777920345889-f88c51e912b748"
+        "file-demo-runtime-campus-service-interview-quotes-v2",
+        "msg-demo-runtime-campus-service-interview-quotes-v2"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:45:45.889Z"
+      "createdAt": "2026-05-04T08:10:00.000Z"
     },
     {
-      "id": "log-agent-run-1777919303803-761c571825f57",
+      "id": "log-demo-runtime-demo-scene-a2a-calendar-negotiation",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:谁负责访谈材料？",
+      "action": "prepare_demo_asset:demo-scene-a2a-calendar-negotiation.md",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777919303803-505bb291cbff9"
+        "file-demo-runtime-demo-scene-a2a-calendar-negotiation",
+        "msg-demo-runtime-demo-scene-a2a-calendar-negotiation"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:28:23.803Z"
+      "createdAt": "2026-05-04T08:09:00.000Z"
     },
     {
-      "id": "log-agent-run-1777919141853-7d26655e4a7a08",
+      "id": "log-demo-runtime-demo-scene-lin-asleep-file-handoff",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:deadline:deadline 是？",
+      "action": "prepare_demo_asset:demo-scene-lin-asleep-file-handoff.md",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-02",
-        "task-report",
-        "task-slides",
-        "msg-04",
-        "mem-agent-lin-1777918532127-d57b8380a236b",
-        "mem-agent-lin-1777918419677-865be015dadd68",
-        "mem-agent-lin-1777918261473-352a96d5007f1",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78",
-        "mem-agent-lin-1777919141853-a1f29df2074958"
+        "file-demo-runtime-demo-scene-lin-asleep-file-handoff",
+        "msg-demo-runtime-demo-scene-lin-asleep-file-handoff"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:25:41.853Z"
+      "createdAt": "2026-05-04T08:08:00.000Z"
     },
     {
-      "id": "log-agent-run-1777918532127-b5a9cddbe1b11",
+      "id": "log-demo-runtime-image-2-material-prompts-ai-seed",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:deadline:还有几天？",
+      "action": "prepare_demo_asset:image-2-material-prompts-ai-seed.txt",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-02",
-        "msg-04",
-        "task-report",
-        "task-slides",
-        "file-brief",
-        "mem-agent-lin-1777918532127-d57b8380a236b"
+        "file-demo-runtime-image-2-material-prompts-ai-seed",
+        "msg-demo-runtime-image-2-material-prompts-ai-seed"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:15:32.127Z"
+      "createdAt": "2026-05-04T08:07:00.000Z"
     },
     {
-      "id": "log-agent-run-1777918419677-1004d5a9eb29d",
+      "id": "log-demo-runtime-agent-collaboration-protocol-ai-seed",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:deadline:deadline 是？",
+      "action": "prepare_demo_asset:agent-collaboration-protocol-ai-seed.md",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-02",
-        "msg-04",
-        "mem-agent-lin-1777918261473-352a96d5007f1",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78",
-        "mem-agent-lin-1777918419677-865be015dadd68"
+        "file-demo-runtime-agent-collaboration-protocol-ai-seed",
+        "msg-demo-runtime-agent-collaboration-protocol-ai-seed"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:13:39.677Z"
+      "createdAt": "2026-05-04T08:06:00.000Z"
     },
     {
-      "id": "log-agent-run-1777918261474-da1796e1a4a54",
+      "id": "log-demo-runtime-agent-im-a2a-flow-board",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:deadline:什么时候交？",
+      "action": "prepare_demo_asset:agent-im-a2a-flow-board.svg",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-02",
-        "task-report",
-        "msg-04",
-        "mem-agent-lin-1777918261473-352a96d5007f1"
+        "file-demo-runtime-agent-im-a2a-flow-board",
+        "msg-demo-runtime-agent-im-a2a-flow-board"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T18:11:01.474Z"
+      "createdAt": "2026-05-04T08:05:00.000Z"
     },
     {
-      "id": "log-ai-autoreply-user-chen-1777918240578-73f9081af0baf",
-      "agentId": "actor-user-chen",
-      "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
-      },
-      "contextIds": [
-        "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
-        "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ"
-      ],
-      "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
-      ],
-      "createdAt": "2026-05-04T18:10:40.578Z"
-    },
-    {
-      "id": "log-agent-run-1777917496675-d61fcef15147f8",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "agent_run:deadline:这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78",
-        "mem-agent-lin-1777917496670-be887a33589be8"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T17:58:16.675Z"
-    },
-    {
-      "id": "log-agent-run-1777917342793-103f404901c5b8",
+      "id": "log-demo-runtime-agent-im-a2a-demo-poster",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:谁负责访谈材料？",
+      "action": "prepare_demo_asset:agent-im-a2a-demo-poster.svg",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777917342793-b71b241b506c6"
+        "file-demo-runtime-agent-im-a2a-demo-poster",
+        "msg-demo-runtime-agent-im-a2a-demo-poster"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T17:55:42.793Z"
+      "createdAt": "2026-05-04T08:04:00.000Z"
     },
     {
-      "id": "log-agent-run-1777916077683-83a49cfd5d2ad",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "agent_run:summary:这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读总结并写入结构化记忆。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-01",
-        "msg-02",
-        "msg-class-rubric",
-        "msg-03",
-        "file-brief",
-        "file-action-plan-md",
-        "file-interview-notes-txt",
-        "file-slides-v3",
-        "mem-agent-lin-1777916077683-3917d3ad2df5"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "room.summarize",
-        "room_search",
-        "task_extract",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T17:34:37.683Z"
-    },
-    {
-      "id": "log-agent-run-1777915800668-b759a0dc9cd8d8",
-      "agentId": "agent-lin",
-      "roomId": "room-class",
-      "action": "agent_run:deadline:这次作业什么时候截止？",
-      "status": "executed",
-      "risk": {
-        "level": "low",
-        "score": 0.12,
-        "reason": "只读检索授权房间、文件和结构化记忆。",
-        "model": "risk-mini-v1"
-      },
-      "contextIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777915774622-4accb25d855f78",
-        "mem-agent-lin-1777915800668-abeaa127b61c9"
-      ],
-      "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "deadline.answer",
-        "room_search",
-        "file_library.search",
-        "memory.search",
-        "memory.write"
-      ],
-      "createdAt": "2026-05-04T17:30:00.668Z"
-    },
-    {
-      "id": "log-agent-run-1777915774622-72fd01365e3478",
+      "id": "log-demo-runtime-research-report-risk-register",
       "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "agent_run:chat:这次作业什么时候截止？",
+      "action": "prepare_demo_asset:research-report-risk-register.pdf",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.12,
-        "reason": "自由对话回复，只读上下文，无外部副作用。",
-        "model": "risk-mini-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "mem-agent-lin-1777915774622-4accb25d855f78"
+        "file-demo-runtime-research-report-risk-register",
+        "msg-demo-runtime-research-report-risk-register"
       ],
       "toolCalls": [
-        "deepseek.pro.chat.completions",
-        "memory.write"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T17:29:34.622Z"
+      "createdAt": "2026-05-04T08:03:00.000Z"
     },
     {
-      "id": "log-ai-autoreply-user-chen-1777913549887-a31eddadc8c268",
-      "agentId": "actor-user-chen",
+      "id": "log-demo-runtime-agent-im-a2a-demo-brief",
+      "agentId": "agent-lin",
       "roomId": "room-team",
-      "action": "ai_autoreply:user-chen",
+      "action": "prepare_demo_asset:agent-im-a2a-demo-brief.pdf",
       "status": "executed",
       "risk": {
         "level": "low",
-        "score": 0.18,
-        "reason": "AI human actor replied to a user message under room autoreply policy.",
-        "model": "ai-autoreply-policy-v1"
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
       },
       "contextIds": [
-        "msg-1777913548454-45fa904fcd4028",
-        "msg-1777913549887-c710f26000db78"
+        "file-demo-runtime-agent-im-a2a-demo-brief",
+        "msg-demo-runtime-agent-im-a2a-demo-brief"
       ],
       "toolCalls": [
-        "deepseek.flash.chat.completions",
-        "matrix.send_event"
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
       ],
-      "createdAt": "2026-05-04T16:52:29.887Z"
+      "createdAt": "2026-05-04T08:02:00.000Z"
+    },
+    {
+      "id": "log-demo-runtime-a2a-autopilot-demo-runbook",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "prepare_demo_asset:a2a-autopilot-demo-runbook.txt",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
+      },
+      "contextIds": [
+        "file-demo-runtime-a2a-autopilot-demo-runbook",
+        "msg-demo-runtime-a2a-autopilot-demo-runbook"
+      ],
+      "toolCalls": [
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
+      ],
+      "createdAt": "2026-05-04T08:01:00.000Z"
+    },
+    {
+      "id": "log-demo-runtime-campus-service-interview-notes-ai-seed",
+      "agentId": "agent-lin",
+      "roomId": "room-team",
+      "action": "prepare_demo_asset:campus-service-interview-notes-ai-seed.txt",
+      "status": "executed",
+      "risk": {
+        "level": "low",
+        "score": 0.1,
+        "reason": "Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.",
+        "model": "demo-seed-v1"
+      },
+      "contextIds": [
+        "file-demo-runtime-campus-service-interview-notes-ai-seed",
+        "msg-demo-runtime-campus-service-interview-notes-ai-seed"
+      ],
+      "toolCalls": [
+        "demo_assets.prepare",
+        "local.media.write",
+        "file_text.index"
+      ],
+      "createdAt": "2026-05-04T08:00:00.000Z"
     },
     {
       "id": "log-seed-01",
@@ -1404,360 +1732,59 @@
       "createdAt": "2026-05-04T14:12:30+08:00"
     }
   ],
-  "actionRequests": [
+  "actionRequests": [],
+  "a2aSessions": [],
+  "agentAutopilotPolicies": [
     {
-      "id": "action-1777920407188-504633fbdf7208",
       "agentId": "agent-lin",
-      "roomId": "room-team",
-      "kind": "coordinate",
-      "status": "executed",
-      "input": {
-        "fromAgentId": "agent-lin",
-        "toAgentId": "agent-chen",
-        "proposal": "把周二合稿检查改到周三 23:00，请和陈晨的 Agent 协调。",
-        "proposedPlan": "建议先确认林雯的实际意图和可用性，再与赵一鸣（组长）协商是否变更，不要直接更改日程。",
-        "calendarPatch": {
-          "itemId": "cal-review",
-          "title": "第 4 组最后一次合稿检查",
-          "oldStartsAt": "2026-05-05T20:30:00+08:00",
-          "newStartsAt": "2026-05-06T23:00:00+08:00"
-        }
-      },
-      "createdAt": "2026-05-04T18:46:47.188Z",
-      "updatedAt": "2026-05-04T18:47:01.250Z",
-      "requiresHuman": false,
-      "risk": {
-        "level": "low",
-        "score": 0.2,
-        "reason": "Human review by user-lin: 用户在 Agent 工作台确认",
-        "model": "human-review-v1"
-      },
-      "logId": "log-1777920421250-27417ea24eb288"
+      "enabled": true,
+      "allowedRoomIds": [
+        "room-team"
+      ],
+      "autoExecuteMaxRisk": "low",
+      "allowedActions": [
+        "reply",
+        "search_files",
+        "share_low_risk_files",
+        "suggest_task_updates",
+        "coordinate_schedule",
+        "a2a_negotiate"
+      ],
+      "updatedAt": "2026-05-04T12:00:00+08:00"
+    },
+    {
+      "agentId": "agent-chen",
+      "enabled": false,
+      "allowedRoomIds": [
+        "room-team",
+        "room-agent"
+      ],
+      "autoExecuteMaxRisk": "low",
+      "allowedActions": [
+        "reply",
+        "search_files",
+        "a2a_negotiate"
+      ],
+      "updatedAt": "2026-05-04T12:00:00+08:00"
+    },
+    {
+      "agentId": "agent-zhao",
+      "enabled": false,
+      "allowedRoomIds": [
+        "room-team",
+        "room-agent"
+      ],
+      "autoExecuteMaxRisk": "low",
+      "allowedActions": [
+        "reply",
+        "search_files",
+        "coordinate_schedule",
+        "a2a_negotiate"
+      ],
+      "updatedAt": "2026-05-04T12:00:00+08:00"
     }
   ],
-  "memories": [
-    {
-      "id": "mem-agent-lin-1777923734894-893f023a19259",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "Web search: ????? DeepSeek API ??????,?????? -> 根据搜索结果，使用 DeepSeek API 的基本调用步骤如下：\n\n**1. 获取 API 密钥**\n前往 DeepSeek 平台（platform.deepseek.com）注册账号并创建 API Key[2]。\n\n**2. 安装兼容的 SDK**\nDeepSeek API 兼容 OpenAI 和 Anthropi",
-      "sourceIds": [
-        "https://api-docs.deepseek.com/",
-        "https://platform.deepseek.com/docs/api-reference",
-        "https://chat-deep.ai/docs/api/",
-        "https://deepseekapi.io/",
-        "https://ghost.codersera.com/blog/how-to-use-deepseek-v4-api-developer-guide-2026/"
-      ],
-      "createdAt": "2026-05-04T19:42:14.894Z",
-      "updatedAt": "2026-05-04T19:42:14.894Z"
-    },
-    {
-      "id": "mem-agent-lin-1777923063123-03ee3a3e1ea558",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "Web search: ????? DeepSeek API ???? -> 林雯目前离线。根据组内消息记录，我注意到最近林雯（用户）和陈晨的对话出现了一些异常表述（如\"我爱你\"\"咕咕嘎嘎\"等），与你现在问的\"DeepSeek API教程\"没有直接关联。\n\n不过，针对 **DeepSeek API 使用说明**，我查到了以下实用信息：\n\n---\n\n### 核心接入要点（2026年）\n\n1. **",
-      "sourceIds": [
-        "https://www.cnblogs.com/qiniushanghai/p/19958003",
-        "https://find-aiverse.com/zh/posts/2026-04-17-deepseek/",
-        "https://api-docs.deepseek.com/zh-cn/",
-        "https://ofox.ai/zh/blog/deepseek-v4-api-guide-2026/",
-        "https://www.lxc666.cn/blogs/Software/deepseek.html"
-      ],
-      "createdAt": "2026-05-04T19:31:03.123Z",
-      "updatedAt": "2026-05-04T19:31:03.123Z"
-    },
-    {
-      "id": "mem-agent-lin-1777922951059-4f35cc920a15e",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "Web search: ????? DeepSeek API ???? -> 外部搜索失败，所以我不能把这次回答说成联网结果。失败原因：Unexpected end of JSON input",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T19:29:11.059Z",
-      "updatedAt": "2026-05-04T19:29:11.059Z"
-    },
-    {
-      "id": "mem-agent-lin-1777922822896-d339e3ce2ab06",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "Web search: ????? DeepSeek API ???? -> 这次外部搜索没有拿到可用结果，所以我不能编造来源。你可以换一个更具体的关键词再搜。",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T19:27:02.896Z",
-      "updatedAt": "2026-05-04T19:27:02.896Z"
-    },
-    {
-      "id": "mem-agent-lin-1777921867199-12bf2e828e3bf8",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：你好 -> 你好！我是林雯的 Agent，有什么可以帮你的吗？",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T19:11:07.199Z",
-      "updatedAt": "2026-05-04T19:11:07.199Z"
-    },
-    {
-      "id": "mem-agent-lin-1777921861127-96e1f76629e138",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：你好 -> 你好！我是林雯的Agent，有什么可以帮你的吗？",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T19:11:01.127Z",
-      "updatedAt": "2026-05-04T19:11:01.127Z"
-    },
-    {
-      "id": "mem-agent-lin-1777921818255-ade533a847b528",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告PDF和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777919141853-a1f29df2074958",
-        "mem-agent-lin-1777918419677-865be015dadd68",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78"
-      ],
-      "createdAt": "2026-05-04T19:10:18.255Z",
-      "updatedAt": "2026-05-04T19:10:18.255Z"
-    },
-    {
-      "id": "mem-agent-lin-1777920407188-72d3f4c5a994",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "coordination",
-      "content": "建议先确认林雯的实际意图和可用性，再与赵一鸣（组长）协商是否变更，不要直接更改日程。",
-      "sourceIds": [
-        "cal-review",
-        "task-check"
-      ],
-      "createdAt": "2026-05-04T18:46:47.188Z",
-      "updatedAt": "2026-05-04T18:46:47.188Z"
-    },
-    {
-      "id": "mem-agent-lin-1777920345889-f88c51e912b748",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：谁负责访谈材料？ -> 陈晨（资料整理）负责补齐访谈材料和引用来源，目标截止日期是5月10日21:00。",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T18:45:45.889Z",
-      "updatedAt": "2026-05-04T18:45:45.889Z"
-    },
-    {
-      "id": "mem-agent-lin-1777919303803-505bb291cbff9",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：谁负责访谈材料？ -> 陈晨（资料整理）负责访谈材料，目标是5月10日21:00前补齐纪要、截图和引用来源。",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T18:28:23.803Z",
-      "updatedAt": "2026-05-04T18:28:23.803Z"
-    },
-    {
-      "id": "mem-agent-lin-1777919141853-a1f29df2074958",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "最终截止日期是5月12日 23:59，需要提交调研报告PDF和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：\n本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [
-        "msg-02",
-        "task-report",
-        "task-slides",
-        "msg-04",
-        "mem-agent-lin-1777918532127-d57b8380a236b",
-        "mem-agent-lin-1777918419677-865be015dadd68",
-        "mem-agent-lin-1777918261473-352a96d5007f1",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78"
-      ],
-      "createdAt": "2026-05-04T18:25:41.853Z",
-      "updatedAt": "2026-05-04T18:25:41.853Z"
-    },
-    {
-      "id": "mem-agent-lin-1777918532127-d57b8380a236b",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "最终截止日期是5月12日 23:59，今天是5月4日，因此还有8天。\n参考记忆：",
-      "sourceIds": [
-        "msg-02",
-        "msg-04",
-        "task-report",
-        "task-slides",
-        "file-brief"
-      ],
-      "createdAt": "2026-05-04T18:15:32.127Z",
-      "updatedAt": "2026-05-04T18:15:32.127Z"
-    },
-    {
-      "id": "mem-agent-lin-1777918419677-865be015dadd68",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "本课程的最终提交截止日期是 5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。此外，小组内部计划在周二（5月6日）20:30 进行最后一次合稿检查。\n参考记忆：最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：\n作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [
-        "msg-02",
-        "msg-04",
-        "mem-agent-lin-1777918261473-352a96d5007f1",
-        "mem-agent-lin-1777917496670-be887a33589be8",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78"
-      ],
-      "createdAt": "2026-05-04T18:13:39.677Z",
-      "updatedAt": "2026-05-04T18:13:39.677Z"
-    },
-    {
-      "id": "mem-agent-lin-1777918261473-352a96d5007f1",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "最终截止日期是5月12日 23:59，需要提交调研报告 PDF 和 8 分钟课堂演示稿。此外，本周二（5月6日）20:30 有一次合稿检查。\n参考记忆：",
-      "sourceIds": [
-        "msg-02",
-        "task-report",
-        "msg-04"
-      ],
-      "createdAt": "2026-05-04T18:11:01.473Z",
-      "updatedAt": "2026-05-04T18:11:01.473Z"
-    },
-    {
-      "id": "mem-agent-lin-1777917496670-be887a33589be8",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-class",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n参考记忆：5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。\n自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777915800668-abeaa127b61c9",
-        "mem-agent-lin-1777915774622-4accb25d855f78"
-      ],
-      "createdAt": "2026-05-04T17:58:16.670Z",
-      "updatedAt": "2026-05-04T17:58:16.670Z"
-    },
-    {
-      "id": "mem-agent-lin-1777917342793-b71b241b506c6",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：谁负责访谈材料？ -> 根据行动计划和任务分工，访谈材料由「陈晨（资料整理）」负责，包括补齐访谈纪要、引用来源和流程截图，截止日期为 5月10日 21:00。",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T17:55:42.793Z",
-      "updatedAt": "2026-05-04T17:55:42.793Z"
-    },
-    {
-      "id": "mem-agent-lin-1777916077683-3917d3ad2df5",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-class",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "summary",
-      "content": "信息系统课程作业“校园服务数字化调研”以小组提交，5月12日23:59截止，分工明确（赵一鸣提交报告、林雯整理演示稿、陈晨补充访谈材料），相关文件已上传。\n赵一鸣负责最终提交调研报告PDF\n林雯整理并确认课堂演示稿\n陈晨补充访谈材料",
-      "sourceIds": [
-        "msg-01",
-        "msg-02",
-        "msg-class-rubric",
-        "msg-03",
-        "file-brief",
-        "file-action-plan-md",
-        "file-interview-notes-txt",
-        "file-slides-v3"
-      ],
-      "createdAt": "2026-05-04T17:34:37.683Z",
-      "updatedAt": "2026-05-04T17:34:37.683Z"
-    },
-    {
-      "id": "mem-agent-lin-1777915800668-abeaa127b61c9",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-class",
-        "room-class",
-        "room-team"
-      ],
-      "kind": "deadline",
-      "content": "5月12日 23:59\n参考记忆：自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [
-        "msg-02",
-        "file-brief",
-        "mem-agent-lin-1777915774622-4accb25d855f78"
-      ],
-      "createdAt": "2026-05-04T17:30:00.668Z",
-      "updatedAt": "2026-05-04T17:30:00.668Z"
-    },
-    {
-      "id": "mem-agent-lin-1777915774622-4accb25d855f78",
-      "ownerAgentId": "agent-lin",
-      "scopeRoomIds": [
-        "room-team"
-      ],
-      "kind": "note",
-      "content": "自由对话：这次作业什么时候截止？ -> 作业截止日期是5月12日 23:59，需要提交调研报告 PDF 和课堂演示稿。",
-      "sourceIds": [],
-      "createdAt": "2026-05-04T17:29:34.622Z",
-      "updatedAt": "2026-05-04T17:29:34.622Z"
-    }
-  ],
+  "memories": [],
   "matrixObserverCheckpoints": [],
   "aiAutoreplyPolicies": [
     {
@@ -1791,94 +1818,5 @@
       "priority": 30
     }
   ],
-  "aiReplyJobs": [
-    {
-      "id": "ai-reply-job-1777922686304-12d1662bd8563",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$AV6TVs4C0UEocrtAPHJaxw8E0W1SLouBzhw3dVon_Qk",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:24:46.304Z",
-      "updatedAt": "2026-05-04T19:24:47.833Z",
-      "replyMessageId": "$_cEWqlpixfaDpb_m0KYxYBywHlLYJWCDzyzgXZwRltg"
-    },
-    {
-      "id": "ai-reply-job-1777922677801-e7baf555fd4528",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$X9Mcyy7-MYRIE3aTyeLOVZFZlN_5wioDL8JwkK_Ba-c",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:24:37.801Z",
-      "updatedAt": "2026-05-04T19:24:39.077Z",
-      "replyMessageId": "$2LUO-G4xcatTFA0q-X_85Lg31xDLooqcmshtJlzTpv8"
-    },
-    {
-      "id": "ai-reply-job-1777922668489-f7f3f2c6a0bd48",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$0kgYggr690IbVi367oupWDAyvcF028l_R7qm9V3JRWE",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:24:28.489Z",
-      "updatedAt": "2026-05-04T19:24:29.857Z",
-      "replyMessageId": "$J4IBrXBiezXRq62vLYBowYp0KYcKBKr9-rpHuVSsOoA"
-    },
-    {
-      "id": "ai-reply-job-1777922658088-e8292f76532a7",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$2p9k5ypmpgaw9by_jk_k__Mxj4NuYzsspjgGO_50A_Q",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:24:18.088Z",
-      "updatedAt": "2026-05-04T19:24:19.337Z",
-      "replyMessageId": "$Wwj7N_T817p0fPu1TsFEfikMN1-BVb5TlImNJBAX7i0"
-    },
-    {
-      "id": "ai-reply-job-1777922643789-033a19226f351",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$XlCqVkVR5cTjGom9CDbcUNK9xqMVrOJa0Rs4FeoQqu8",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:24:03.789Z",
-      "updatedAt": "2026-05-04T19:24:05.189Z",
-      "replyMessageId": "$pmI8hTFwXNaj9Y-oBk-2rZv6Td_V-AQ3Z4Q1tbu0dPE"
-    },
-    {
-      "id": "ai-reply-job-1777922629628-81385d8623a4e",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$FK3-cdRZvE_4VMhzIyvYyXgDLnPxJye1Q5LIm1bsw-8",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T19:23:49.628Z",
-      "updatedAt": "2026-05-04T19:23:50.884Z",
-      "replyMessageId": "$YQXpWtwNG8gBkBnt9mfNiOmfGeoz4Hh9DZPyaHradkI"
-    },
-    {
-      "id": "ai-reply-job-1777918238163-3140da53897878",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "$e4y33WPRikhuOKDV4vaQNobALOwdme_NCHnE-RDj9k4",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T18:10:38.163Z",
-      "updatedAt": "2026-05-04T18:10:40.578Z",
-      "replyMessageId": "$w_94dEbckeWmIXkwoBjxRClJl-m5ER9HO-l0AU2TvjQ"
-    },
-    {
-      "id": "ai-reply-job-1777913548458-b2ea743406e9c",
-      "roomId": "room-team",
-      "targetUserId": "user-chen",
-      "triggeringMessageId": "msg-1777913548454-45fa904fcd4028",
-      "status": "completed",
-      "reason": "room auto reply policy",
-      "createdAt": "2026-05-04T16:52:28.458Z",
-      "updatedAt": "2026-05-04T16:52:29.887Z",
-      "replyMessageId": "msg-1777913549887-c710f26000db78"
-    }
-  ]
+  "aiReplyJobs": []
 }

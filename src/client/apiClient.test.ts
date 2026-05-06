@@ -3,6 +3,7 @@ import {
   askDeadline,
   checkAiStatus,
   confirmAgentAction,
+  createStateEventSource,
   generateDemoAssets,
   fetchState,
   fileDownloadUrl,
@@ -89,6 +90,33 @@ describe('api client', () => {
     expect(fileDownloadUrl('/api-root/', 'file uploaded/report')).toBe(
       '/api-root/api/files/file%20uploaded%2Freport/download'
     );
+  });
+
+  it('adds the configured API token to browser-only GET URLs', async () => {
+    vi.stubEnv('VITE_AGENT_API_TOKEN', 'local-secret');
+    vi.resetModules();
+    const { createStateEventSource: createStateEventSourceWithToken, fileDownloadUrl: fileDownloadUrlWithToken } =
+      await import('./apiClient');
+    const created: string[] = [];
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        constructor(url: string) {
+          created.push(url);
+        }
+      }
+    );
+
+    fileDownloadUrlWithToken('/api-root/', 'file uploaded/report');
+    createStateEventSourceWithToken('/api-root/');
+
+    expect(fileDownloadUrlWithToken('/api-root/', 'file uploaded/report')).toBe(
+      '/api-root/api/files/file%20uploaded%2Freport/download?agent_im_token=local-secret'
+    );
+    expect(created).toEqual(['/api-root/api/events?agent_im_token=local-secret']);
+
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('surfaces backend error messages to the UI', async () => {

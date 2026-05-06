@@ -75,6 +75,9 @@ type RoomContentTab = 'chat' | 'tasks' | 'files' | 'calendar' | 'members';
 const apiBaseUrl = import.meta.env.VITE_AGENT_API_BASE ?? '';
 const currentUserId = 'user-lin';
 const currentAgentId = 'agent-lin';
+const eventStreamDisconnectedError = '实时连接已断开；请确认本地 API 服务仍在运行。';
+const defaultFileSharePrompt = '把最新行动计划发一下';
+const defaultCoordinatePrompt = '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。';
 
 const softAppear = {
   initial: { opacity: 0, y: 10 },
@@ -96,6 +99,7 @@ function App() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [eventStreamStatus, setEventStreamStatus] = useState<EventStreamStatus>('connecting');
   const [autopilotWorker, setAutopilotWorker] = useState<AutopilotWorkerStatus | null>(null);
+  const eventStreamErrorVisibleRef = useRef(false);
 
   async function refreshState() {
     const [nextState, workerStatus] = await Promise.all([
@@ -121,19 +125,32 @@ function App() {
     refreshState()
       .catch((loadError) => {
         if (!disposed) {
+          eventStreamErrorVisibleRef.current = false;
           setError(loadError instanceof Error ? loadError.message : '无法连接本地 API 服务');
         }
       });
 
     const events = createStateEventSource(apiBaseUrl);
+    function clearEventStreamError() {
+      setError((currentError) => {
+        if (!eventStreamErrorVisibleRef.current) {
+          return currentError;
+        }
+        eventStreamErrorVisibleRef.current = false;
+        return null;
+      });
+    }
+
     events.onopen = () => {
       if (!disposed) {
         setEventStreamStatus('connected');
+        clearEventStreamError();
       }
     };
     events.addEventListener('state', (event) => {
       if (!disposed) {
         setEventStreamStatus('connected');
+        clearEventStreamError();
         setState(JSON.parse((event as MessageEvent).data) as DemoState);
       }
     });
@@ -147,7 +164,14 @@ function App() {
     events.onerror = () => {
       if (!disposed) {
         setEventStreamStatus('disconnected');
-        setError('实时连接已断开；请确认本地 API 服务仍在运行。');
+        setError((currentError) => {
+          if (currentError) {
+            eventStreamErrorVisibleRef.current = false;
+            return currentError;
+          }
+          eventStreamErrorVisibleRef.current = true;
+          return eventStreamDisconnectedError;
+        });
       }
     };
 
@@ -185,11 +209,13 @@ function App() {
   async function runAction<T>(label: string, action: () => Promise<T>): Promise<T | undefined> {
     setBusyAction(label);
     setError(null);
+    eventStreamErrorVisibleRef.current = false;
     try {
       const result = await action();
       await refreshState();
       return result;
     } catch (actionError) {
+      eventStreamErrorVisibleRef.current = false;
       setError(actionError instanceof Error ? actionError.message : '操作失败');
       return undefined;
     } finally {
@@ -229,7 +255,7 @@ function App() {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'share_file',
-        userText: agentPrompt || '把最新行动计划发一下',
+        userText: defaultFileSharePrompt,
         targetUserId: 'user-chen'
       });
       setAgentResult({ kind: 'agent-run', value: response });
@@ -243,7 +269,7 @@ function App() {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'coordinate',
-        userText: agentPrompt || '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。',
+        userText: defaultCoordinatePrompt,
         targetUserId: 'user-chen'
       });
       setAgentResult({ kind: 'agent-run', value: response });
@@ -283,11 +309,13 @@ function App() {
   async function handleCheckAiStatus() {
     setBusyAction('ai-status-check');
     setError(null);
+    eventStreamErrorVisibleRef.current = false;
     try {
       const response = await checkAiStatus(apiBaseUrl);
       setState((current) => (current ? { ...current, aiStatus: response.aiStatus } : current));
       return response;
     } catch (statusError) {
+      eventStreamErrorVisibleRef.current = false;
       setError(statusError instanceof Error ? statusError.message : 'LLM 状态检查失败');
       return undefined;
     } finally {
@@ -298,9 +326,11 @@ function App() {
   async function handleRefreshState() {
     setBusyAction('refresh-state');
     setError(null);
+    eventStreamErrorVisibleRef.current = false;
     try {
       return await refreshState();
     } catch (refreshError) {
+      eventStreamErrorVisibleRef.current = false;
       setError(refreshError instanceof Error ? refreshError.message : '刷新状态失败');
       return undefined;
     } finally {
@@ -962,8 +992,10 @@ function AgentWorkbench(props: {
 }) {
   const pendingActions = props.actions.filter(
     (action) =>
+      action.agentId === props.agent.id &&
       action.roomId === props.selectedRoomId &&
-      (action.status === 'needs_confirmation' || action.status === 'pending')
+      action.requiresHuman &&
+      action.status === 'needs_confirmation'
   );
   const aiStatus = deriveAiStatus(props.result, props.aiStatus);
   const resultKey = props.result ? getAgentResultKey(props.result) : 'empty-agent-result';
@@ -992,13 +1024,11 @@ function AgentWorkbench(props: {
       </header>
 
       <div className="agent-output-area">
-        <AnimatePresence mode="popLayout">
-          {props.error ? (
-            <motion.div className="error-banner" key="agent-error" {...softAppear}>
-              {props.error}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        {props.error ? (
+          <motion.div className="error-banner" key="agent-error" {...softAppear}>
+            {props.error}
+          </motion.div>
+        ) : null}
         <AnimatePresence mode="popLayout">
           {props.result ? (
             <motion.div className="agent-result-motion" key={resultKey} {...softAppear}>

@@ -183,4 +183,54 @@ describe('agent context bundle', () => {
     expect(bundle.text).not.toContain('????????');
     expect(bundle.text).not.toContain('没有来源的模型笔记');
   });
+
+  it('defaults to current-room context and expands to authorized global context only when requested', () => {
+    const base = createDemoState();
+    const state = {
+      ...base,
+      messages: [
+        ...base.messages,
+        {
+          id: 'msg-global-only',
+          roomId: 'room-class',
+          senderId: 'user-teacher',
+          senderName: '王老师',
+          body: 'global-only-marker belongs to the class-wide rubric.',
+          sentAt: '2026-05-04T12:30:00.000Z',
+          type: 'text' as const
+        }
+      ]
+    };
+
+    const currentRoom = buildAgentContextBundle(state, {
+      roomId: 'room-team',
+      agentId: 'agent-lin',
+      userText: 'global-only-marker 是什么？',
+      focus: 'chat'
+    });
+    const global = buildAgentContextBundle(state, {
+      roomId: 'room-team',
+      agentId: 'agent-lin',
+      userText: '全局查一下 global-only-marker 是什么？',
+      focus: 'chat'
+    });
+
+    expect(currentRoom.text).not.toContain('msg-global-only');
+    expect(global.text).toContain('msg-global-only');
+  });
+
+  it('renders calendar availability for room members in Agent context', () => {
+    const state = createDemoState();
+
+    const bundle = buildAgentContextBundle(state, {
+      roomId: 'room-team',
+      agentId: 'agent-lin',
+      userText: '陈晨周三晚上有没有空？',
+      focus: 'coordinate'
+    });
+
+    expect(bundle.text).toContain('## Calendar availability');
+    expect(bundle.text).toContain('user-chen');
+    expect(bundle.text).toContain('cal-interview-sync');
+  });
 });
