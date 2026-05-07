@@ -83,3 +83,18 @@ After this tag, implement Phase 1 from the product architecture spec:
 4. CORS allowlist behavior.
 5. Download header hardening.
 6. `/api/readiness`.
+
+## Phase 1 Product Safety Branch
+
+Branch: `product-safety-phase1`
+
+Target:
+
+- Product/public mode requires `AGENT_IM_API_TOKEN`.
+- Product/public mode rejects `agent_im_token` query parameters.
+- Browser client uses `x-agent-im-token` for SSE and downloads.
+- CORS requires explicit `AGENT_IM_ALLOWED_ORIGINS` in product/public mode.
+- Downloads use attachment, `nosniff`, no-referrer, and no-store headers.
+- Product/public mode rejects SVG uploads.
+- `/api/readiness` reports auth, storage, worker, connector, and provider checks without exposing secrets.
+- Production-open mode is blocked for detailed product readiness.

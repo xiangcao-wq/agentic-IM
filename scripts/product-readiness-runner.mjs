@@ -6,6 +6,7 @@ export const defaultChecks = [
   { name: 'local agent eval', script: 'eval:agent' },
   { name: 'real provider agent eval', script: 'eval:agent:real', skipInLocalDemo: true },
   { name: 'browser smoke', script: 'smoke:browser' },
+  { name: 'readiness endpoint', readinessEndpoint: true },
   { name: 'Matrix and API smoke', script: 'infra:smoke', skipInLocalDemo: true }
 ];
 
@@ -19,30 +20,97 @@ export async function runReadinessChecks(checks, options = {}) {
     if (localDemo && check.skipInLocalDemo) {
       const skipped = { ...check, status: 'skipped', durationMs: 0, reason: '--local-demo' };
       results.push(skipped);
-      log(`[readiness] SKIP ${check.name} (${check.script}) because --local-demo was provided.`);
+      log(`[readiness] SKIP ${check.name}${formatCheckTarget(check)} because --local-demo was provided.`);
       continue;
     }
 
-    log(`[readiness] RUN  ${check.name} (${check.script})`);
-    const result = await runNpmScript(check, options);
+    log(`[readiness] RUN  ${check.name}${formatCheckTarget(check)}`);
+    const result = await runCheck(check, options);
     results.push(result);
 
     if (result.status !== 'passed') {
-      error(`[readiness] FAIL ${check.name} (${check.script}) after ${formatDuration(result.durationMs)}`);
+      error(`[readiness] FAIL ${check.name}${formatCheckTarget(check)} after ${formatDuration(result.durationMs)}`);
       if (result.error) {
         error(`[readiness] ${result.error}`);
       }
       break;
     }
 
-    log(`[readiness] PASS ${check.name} (${check.script}) in ${formatDuration(result.durationMs)}`);
+    log(`[readiness] PASS ${check.name}${formatCheckTarget(check)} in ${formatDuration(result.durationMs)}`);
   }
 
   return results;
 }
 
+export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch) {
+  const readinessUrl = `${baseUrl.replace(/\/+$/, '')}/api/readiness`;
+  const response = await fetchImpl(readinessUrl, {
+    headers: token ? { 'x-agent-im-token': token } : {}
+  });
+  if (!response.ok) {
+    throw new Error(`/api/readiness failed with ${response.status}`);
+  }
+  const body = await response.json();
+  if (
+    !body?.checks?.auth ||
+    !body.checks.storage ||
+    !body.checks.worker ||
+    !body.checks.connector ||
+    !body.checks.provider
+  ) {
+    throw new Error('/api/readiness response is missing required checks');
+  }
+  return body;
+}
+
 export function formatDuration(ms) {
   return `${Math.round(ms / 100) / 10}s`;
+}
+
+function runCheck(check, options) {
+  if (check.readinessEndpoint) {
+    return runReadinessEndpointCheck(check, options);
+  }
+
+  if (typeof check.run === 'function') {
+    return runCustomCheck(check, options);
+  }
+
+  return runNpmScript(check, options);
+}
+
+function runReadinessEndpointCheck(check, options) {
+  const env = options.env ?? process.env;
+  const baseUrl =
+    firstEnvValue(env, ['AGENT_IM_API_BASE', 'VITE_AGENT_API_BASE', 'AGENT_IM_API_URL']) ?? 'http://127.0.0.1:8791';
+  const token = firstEnvValue(env, ['AGENT_IM_API_TOKEN', 'VITE_AGENT_API_TOKEN']) ?? '';
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  return runTimedCheck(check, () => checkReadinessEndpoint(baseUrl, token, fetchImpl));
+}
+
+function runCustomCheck(check, options) {
+  return runTimedCheck(check, () => check.run(options));
+}
+
+async function runTimedCheck(check, callback) {
+  const startedAt = Date.now();
+
+  try {
+    await callback();
+    return {
+      ...check,
+      durationMs: Date.now() - startedAt,
+      status: 'passed'
+    };
+  } catch (error) {
+    return {
+      ...check,
+      durationMs: Date.now() - startedAt,
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 function runNpmScript(check, options) {
@@ -96,6 +164,26 @@ function runNpmScript(check, options) {
       });
     });
   });
+}
+
+function formatCheckTarget(check) {
+  if (check.script) {
+    return ` (${check.script})`;
+  }
+  if (check.readinessEndpoint) {
+    return ' (/api/readiness)';
+  }
+  return '';
+}
+
+function firstEnvValue(env, names) {
+  for (const name of names) {
+    const value = env[name];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
 }
 
 function createNpmInvocation(npmCommand, script) {

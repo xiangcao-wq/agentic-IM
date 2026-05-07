@@ -16,9 +16,10 @@ Default checks:
   npm run eval:agent
   npm run eval:agent:real
   npm run smoke:browser
+  GET /api/readiness
   npm run infra:smoke
 
---local-demo skips eval:agent:real and infra:smoke, but still runs browser smoke.
+--local-demo skips eval:agent:real and infra:smoke, but still runs browser smoke and /api/readiness.
 `);
   process.exit(0);
 }
@@ -46,7 +47,7 @@ for (const result of results) {
 if (skipped.length > 0) {
   console.log('\nSkipped checks:');
   for (const result of skipped) {
-    console.log(`- ${result.script}: skipped for ${result.reason}`);
+    console.log(`- ${result.script ?? result.name}: skipped for ${result.reason}`);
   }
 }
 

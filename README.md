@@ -30,6 +30,45 @@ npm run dev
 
 These runtime files are intentionally ignored for normal commits. The repository contains the source assets and seed scripts, so a server can recreate the complete demo state without committing local chat history or machine-specific Matrix media ids.
 
+## Deployment Modes
+
+Local Demo:
+
+```bash
+AGENT_IM_PUBLIC_MODE=false
+AGENT_IM_API_TOKEN=
+VITE_AGENT_API_TOKEN=
+npm run demo:prepare
+npm run dev:full
+```
+
+Local demo allows no-token requests and keeps `agent_im_token` query-token compatibility for older local tooling.
+
+Controlled Server Pilot:
+
+```bash
+AGENT_IM_PUBLIC_MODE=true
+AGENT_IM_API_TOKEN=<server-token>
+AGENT_IM_ALLOWED_ORIGINS=https://your-agentbridge-host.example.com
+VITE_AGENT_API_TOKEN=<server-token>
+npm run build
+npm run api
+```
+
+Controlled server pilot requirements:
+
+- `AGENT_IM_API_TOKEN` is required.
+- Browser requests send the token in the `x-agent-im-token` header.
+- `agent_im_token` query parameters are rejected.
+- CORS allows only origins listed in `AGENT_IM_ALLOWED_ORIGINS`.
+- File downloads are served as attachments with `nosniff` and no-store cache headers.
+- SVG uploads are rejected.
+- Readiness is available without exposing secrets:
+
+```bash
+curl -H "x-agent-im-token: <server-token>" https://your-agentbridge-host.example.com/api/readiness
+```
+
 ## Verified Flow
 
 1. 发送一条真实用户消息，后端写入 `messages`。
@@ -116,9 +155,12 @@ Optional variables:
 
 - `AGENT_IM_DB_PATH`: override for the JSON state file.
 - `MATRIX_BOOTSTRAP_PATH`: override for Matrix bootstrap credentials.
-- `AGENT_IM_API_TOKEN`: require `x-agent-im-token` or `Authorization: Bearer ...` on state-changing API requests.
-- `VITE_AGENT_API_TOKEN`: frontend token value used when `AGENT_IM_API_TOKEN` is enabled.
-- `AGENT_IM_ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS; defaults to local Vite origins.
+- `AGENT_IM_PUBLIC_MODE`: set to `true` for controlled server or public mode.
+- `AGENT_IM_API_TOKEN`: server token required in controlled server or public mode.
+- `AGENT_IM_ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS.
+- `AGENT_IM_ALLOW_NO_AUTH`: emergency local override only; do not enable for controlled server deployments.
+- `AGENT_IM_ALLOW_QUERY_TOKEN`: local compatibility only; product/public/production mode rejects query tokens.
+- `VITE_AGENT_API_TOKEN`: browser client token value for local demos or controlled single-user deployments.
 - `AGENT_IM_MAX_UPLOAD_BYTES`: upload size limit; defaults to 10 MB.
 - `AGENT_IM_MEDIA_DIR`: local media fallback directory; defaults to `data/media` when Matrix media is not configured.
 
