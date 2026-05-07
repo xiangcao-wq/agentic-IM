@@ -1483,6 +1483,59 @@ describe('real local agent IM server', () => {
     expect(body.checks.storage).toMatchObject({ ok: false, status: 'blocked', mode: 'json-local' });
   });
 
+  it('reports storage readiness blocked when the state store can read but is not writable', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createReadOnlyHealthStateStore()
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.ok).toBe(true);
+      expect(body.ok).toBe(false);
+      expect(body.checks.auth).toMatchObject({ ok: true, status: 'ready', mode: 'public' });
+      expect(body.checks.storage).toMatchObject({
+        ok: false,
+        status: 'blocked',
+        mode: 'json-local',
+        readable: true,
+        writable: false
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
   it('fails startup in public mode when no API token is configured', async () => {
     const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
     const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
@@ -2221,6 +2274,21 @@ function createUnreadableStateStore(): StateStore {
       throw new Error('state store unavailable');
     },
     async write() {}
+  };
+}
+
+function createReadOnlyHealthStateStore(): StateStore {
+  return {
+    async init() {},
+    async read() {
+      return createDemoState();
+    },
+    async write() {
+      throw new Error('state store read-only');
+    },
+    async health() {
+      return { readable: true, writable: false };
+    }
   };
 }
 

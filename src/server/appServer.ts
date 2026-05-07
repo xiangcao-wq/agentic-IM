@@ -49,7 +49,7 @@ import {
   type CorsConfig
 } from './security/auth';
 import { assertUploadContentAllowed, createDownloadHeaders } from './security/downloadPolicy';
-import { JsonStateStore, type StateStore } from './stateStore';
+import { JsonStateStore, type StateStore, type StateStoreHealth } from './stateStore';
 import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
 interface ServerOptions {
@@ -390,12 +390,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           return sendJson(response, { error: 'readiness requires authenticated product mode' }, 403);
         }
 
-        let storageWritable = true;
-        try {
-          await db.read();
-        } catch {
-          storageWritable = false;
-        }
+        const storageHealth = await checkStateStoreHealth(db);
 
         return sendJson(
           response,
@@ -407,7 +402,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
               tokenConfigured: Boolean(authConfig.apiToken),
               allowedOrigins: corsConfig.allowedOrigins
             },
-            storage: { mode: 'json-local', writable: storageWritable },
+            storage: { mode: 'json-local', ...storageHealth },
             worker: {
               autopilotEnabled: autopilotWorkerStatus.enabled,
               running: autopilotWorkerStatus.running,
@@ -2012,6 +2007,32 @@ class HttpError extends Error {
     message: string
   ) {
     super(message);
+  }
+}
+
+async function checkStateStoreHealth(db: StateStore): Promise<StateStoreHealth> {
+  if (db.health) {
+    try {
+      const health = await db.health();
+      return {
+        readable: Boolean(health.readable),
+        writable: Boolean(health.writable)
+      };
+    } catch {
+      return { readable: false, writable: false };
+    }
+  }
+
+  try {
+    const currentState = await db.read();
+    try {
+      await db.write(currentState);
+      return { readable: true, writable: true };
+    } catch {
+      return { readable: true, writable: false };
+    }
+  } catch {
+    return { readable: false, writable: false };
   }
 }
 

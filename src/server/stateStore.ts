@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createDemoState } from '../domain/demoState';
 import type { DemoState } from '../domain/types';
@@ -9,6 +9,12 @@ export interface StateStore {
   read(): Promise<DemoState>;
   write(state: DemoState): Promise<void>;
   update?(updater: (state: DemoState) => DemoState | Promise<DemoState>): Promise<DemoState>;
+  health?(): Promise<StateStoreHealth>;
+}
+
+export interface StateStoreHealth {
+  readable: boolean;
+  writable: boolean;
 }
 
 export class JsonStateStore implements StateStore {
@@ -32,6 +38,30 @@ export class JsonStateStore implements StateStore {
   async write(state: DemoState): Promise<void> {
     validateDemoStateShape(state);
     await writeFile(this.dbPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  }
+
+  async health(): Promise<StateStoreHealth> {
+    let readable = false;
+    let writable = false;
+
+    try {
+      validateDemoStateShape(JSON.parse(await readFile(this.dbPath, 'utf8')));
+      readable = true;
+    } catch {
+      readable = false;
+    }
+
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      handle = await open(this.dbPath, 'r+');
+      writable = true;
+    } catch {
+      writable = false;
+    } finally {
+      await handle?.close();
+    }
+
+    return { readable, writable };
   }
 
   update(updater: (state: DemoState) => DemoState | Promise<DemoState>): Promise<DemoState> {

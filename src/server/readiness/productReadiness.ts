@@ -17,7 +17,7 @@ export interface ProductReadiness {
       tokenConfigured: boolean;
       allowedOrigins: string[];
     };
-    storage: ReadinessCheck & { mode: string };
+    storage: ReadinessCheck & { mode: string; readable: boolean; writable: boolean };
     worker: ReadinessCheck & { autopilotEnabled: boolean; running: boolean };
     connector: ReadinessCheck & { matrixEnabled: boolean; bootstrapMode: string };
     provider: ReadinessCheck & { configured: boolean; provider: string; health: string };
@@ -32,7 +32,7 @@ export interface ProductReadinessInput {
     tokenConfigured: boolean;
     allowedOrigins: string[];
   };
-  storage: { mode: string; writable: boolean };
+  storage: { mode: string; readable: boolean; writable: boolean };
   worker: { autopilotEnabled: boolean; running: boolean; lastError?: string };
   connector: { matrixEnabled: boolean; bootstrapMode: string };
   provider: { configured: boolean; provider: string; health: string };
@@ -74,14 +74,11 @@ function buildAuthCheck(input: ProductReadinessInput['auth']): ProductReadiness[
   if (input.mode === 'local-token') {
     const blockers = localTokenAuthBlockers(input);
     return authCheck(input, {
-      ok: blockers.length === 0,
-      status: blockers.length === 0 ? 'ready' : 'blocked',
-      message:
-        blockers.length === 0
-          ? input.allowQueryToken
-            ? 'Local token auth is enforced; local query-token compatibility is active.'
-            : 'Local token auth is enforced.'
-          : `Local token auth is blocked: ${blockers.join('; ')}.`
+      ok: false,
+      status: 'blocked',
+      message: `Local token mode is not product-ready; configure public or production auth for product readiness${
+        blockers.length > 0 ? ` (${blockers.join('; ')})` : ''
+      }.`
     });
   }
 
@@ -135,17 +132,37 @@ function localTokenAuthBlockers(input: ProductReadinessInput['auth']): string[] 
   if (!input.tokenConfigured) {
     blockers.push('API token is not configured');
   }
+  if (input.allowQueryToken) {
+    blockers.push('query-string tokens are allowed');
+  }
 
   return blockers;
 }
 
 function buildStorageCheck(input: ProductReadinessInput['storage']): ProductReadiness['checks']['storage'] {
+  const ready = input.readable && input.writable;
+
   return {
-    ok: input.writable,
-    status: input.writable ? 'ready' : 'blocked',
-    message: input.writable ? 'Local JSON storage is writable.' : 'Local JSON storage is not writable.',
-    mode: input.mode
+    ok: ready,
+    status: ready ? 'ready' : 'blocked',
+    message: buildStorageMessage(input),
+    mode: input.mode,
+    readable: input.readable,
+    writable: input.writable
   };
+}
+
+function buildStorageMessage(input: ProductReadinessInput['storage']): string {
+  if (input.readable && input.writable) {
+    return 'Local JSON storage is readable and writable.';
+  }
+  if (!input.readable && !input.writable) {
+    return 'Local JSON storage is not readable or writable.';
+  }
+  if (!input.readable) {
+    return 'Local JSON storage is not readable.';
+  }
+  return 'Local JSON storage is not writable.';
 }
 
 function buildWorkerCheck(input: ProductReadinessInput['worker']): ProductReadiness['checks']['worker'] {

@@ -105,7 +105,7 @@ describe('buildProductReadiness', () => {
     });
   });
 
-  it('allows local-token query-token compatibility while reporting it explicitly', () => {
+  it('blocks local-token auth because it is not product-ready', () => {
     const readiness = buildProductReadiness({
       ...readyInput(),
       auth: {
@@ -117,13 +117,18 @@ describe('buildProductReadiness', () => {
       }
     });
 
-    expect(readiness.ok).toBe(true);
+    expect(readiness.ok).toBe(false);
     expect(readiness.checks.auth).toMatchObject({
-      ok: true,
-      status: 'ready',
+      ok: false,
+      status: 'blocked',
       mode: 'local-token',
-      message: 'Local token auth is enforced; local query-token compatibility is active.'
+      requireAuth: true,
+      allowQueryToken: true,
+      tokenConfigured: true,
+      allowedOrigins: ['http://127.0.0.1:5175']
     });
+    expect(readiness.checks.auth.message).toContain('not product-ready');
+    expect(readiness.checks.auth.message).toContain('query-string tokens are allowed');
   });
 
   it('degrades local-demo auth because it is not product-ready', () => {
@@ -208,11 +213,16 @@ describe('buildProductReadiness', () => {
   it('blocks storage readiness when local storage is not writable', () => {
     const readiness = buildProductReadiness({
       ...readyInput(),
-      storage: { mode: 'json-local', writable: false }
+      storage: { mode: 'json-local', readable: true, writable: false }
     });
 
     expect(readiness.ok).toBe(false);
-    expect(readiness.checks.storage).toMatchObject({ ok: false, status: 'blocked' });
+    expect(readiness.checks.storage).toMatchObject({
+      ok: false,
+      status: 'blocked',
+      readable: true,
+      writable: false
+    });
   });
 });
 
@@ -225,7 +235,7 @@ function readyInput(): ProductReadinessInput {
       tokenConfigured: true,
       allowedOrigins: ['https://agentbridge.example.com']
     },
-    storage: { mode: 'json-local', writable: true },
+    storage: { mode: 'json-local', readable: true, writable: true },
     worker: { autopilotEnabled: true, running: true },
     connector: { matrixEnabled: false, bootstrapMode: 'local' },
     provider: { configured: true, provider: 'deepseek', health: 'connected' }

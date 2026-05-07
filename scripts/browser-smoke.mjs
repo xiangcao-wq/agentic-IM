@@ -2,6 +2,8 @@ import { chromium } from 'playwright';
 
 const baseUrl = process.env.AGENT_IM_WEB_URL ?? 'http://127.0.0.1:5175';
 const apiBaseUrl = process.env.AGENT_IM_API_URL ?? baseUrl;
+const apiToken = process.env.AGENT_IM_API_TOKEN?.trim();
+const apiRequestHeaders = apiToken ? { 'x-agent-im-token': apiToken } : undefined;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const pageErrors = [];
@@ -20,6 +22,19 @@ async function waitForWorkbenchReady() {
   await page.locator('.agent-dock .action-grid').waitFor({ timeout: 120_000 });
   await page.locator('.chat-panel > .composer input[aria-label="chat composer"]').waitFor({ timeout: 120_000 });
   await page.locator('#agent-prompt').waitFor({ timeout: 120_000 });
+}
+
+function withApiAuth(options) {
+  if (!apiRequestHeaders) {
+    return options;
+  }
+  return {
+    ...options,
+    headers: {
+      ...apiRequestHeaders,
+      ...(options.headers ?? {})
+    }
+  };
 }
 
 try {
@@ -49,14 +64,14 @@ try {
   if (!policyPatchResponse.ok()) {
     throw new Error(`Autopilot policy toggle failed with HTTP ${policyPatchResponse.status()}`);
   }
-  const restorePolicy = await page.request.patch(`${apiBaseUrl}/api/agent/autopilot-policy`, {
+  const restorePolicy = await page.request.patch(`${apiBaseUrl}/api/agent/autopilot-policy`, withApiAuth({
     data: {
       agentId: 'agent-lin',
       enabled: true,
       roomId: 'room-team',
       roomEnabled: true
     }
-  });
+  }));
   if (!restorePolicy.ok()) {
     throw new Error(`Autopilot policy restore failed with HTTP ${restorePolicy.status()}`);
   }
@@ -107,13 +122,13 @@ try {
   }
   await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
 
-  const a2aResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
+  const a2aResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
       body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
     }
-  });
+  }));
   if (!a2aResponse.ok()) {
     throw new Error(`A2A trigger failed with HTTP ${a2aResponse.status()}`);
   }
@@ -122,13 +137,13 @@ try {
     throw new Error('Expected /api/messages to return an autopilot A2A session.');
   }
 
-  const a2aChatResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
+  const a2aChatResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
       body: 'Lin Agent, who is responsible for interview materials?'
     }
-  });
+  }));
   if (!a2aChatResponse.ok()) {
     throw new Error(`A2A chat trigger failed with HTTP ${a2aChatResponse.status()}`);
   }
@@ -137,13 +152,13 @@ try {
     throw new Error('Expected explicit Agent mention to return an autopilot chat message.');
   }
 
-  const a2aNegotiationResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
+  const a2aNegotiationResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-zhao',
       body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
     }
-  });
+  }));
   if (!a2aNegotiationResponse.ok()) {
     throw new Error(`A2A schedule negotiation failed with HTTP ${a2aNegotiationResponse.status()}`);
   }
