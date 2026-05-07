@@ -114,7 +114,13 @@ describe('api client', () => {
       await import('./apiClient');
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
       if (String(url).endsWith('/api/events')) {
-        return new Response(new ReadableStream<Uint8Array>({ start: (controller) => controller.close() }), {
+        const encoder = new TextEncoder();
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+            controller.close();
+          }
+        }), {
           headers: { 'content-type': 'text/event-stream' }
         });
       }
@@ -204,6 +210,93 @@ describe('api client', () => {
       expect(errors).toEqual([{ type: 'error', data: 'Event stream disconnected' }]);
     });
     events.close();
+  });
+
+  it('reconnects after EOF and dispatches ready on the next stream', async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"attempt":1}\n\n'));
+            controller.close();
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      )
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"attempt":2}\n\n'));
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      );
+    const received: Array<{ type: string; data: string }> = [];
+
+    const events = createStateEventSource('/api-root/', fetchMock);
+    events.addEventListener('ready', (event) => received.push({ type: event.type, data: event.data }));
+    events.addEventListener('error', (event) => received.push({ type: event.type, data: event.data }));
+
+    await events.ready;
+    await vi.waitFor(() => {
+      expect(received).toEqual([
+        { type: 'ready', data: '{"attempt":1}' },
+        { type: 'error', data: 'Event stream disconnected' }
+      ]);
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(received).toEqual([
+        { type: 'ready', data: '{"attempt":1}' },
+        { type: 'error', data: 'Event stream disconnected' },
+        { type: 'ready', data: '{"attempt":2}' }
+      ]);
+    });
+
+    events.close();
+    vi.useRealTimers();
+  });
+
+  it('continues reading when an SSE listener throws', async () => {
+    const encoder = new TextEncoder();
+    const streamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+        controller.enqueue(encoder.encode('event: state\ndata: {"rooms":[]}\n\n'));
+        controller.enqueue(encoder.encode('event: agent-progress\ndata: {"id":"progress-1"}\n\n'));
+        controller.close();
+      }
+    });
+    const fetchMock = vi.fn(async () => new Response(streamBody, { headers: { 'content-type': 'text/event-stream' } }));
+    const thrown = new Error('listener failed');
+    const progress: string[] = [];
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let resolveProgress!: () => void;
+    const progressReceived = new Promise<void>((resolve) => {
+      resolveProgress = resolve;
+    });
+
+    try {
+      const events = createStateEventSource('/api-root/', fetchMock);
+      events.addEventListener('state', () => {
+        throw thrown;
+      });
+      events.addEventListener('agent-progress', (event) => {
+        progress.push(event.data);
+        resolveProgress();
+      });
+
+      await events.ready;
+      await progressReceived;
+      expect(progress).toEqual(['{"id":"progress-1"}']);
+      expect(consoleError).toHaveBeenCalledWith('Event stream listener failed', thrown);
+      events.close();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('surfaces backend error messages to the UI', async () => {

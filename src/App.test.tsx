@@ -36,7 +36,6 @@ describe('App runtime upgrade controls', () => {
   let host: HTMLDivElement;
   let root: Root;
   let eventListeners: Record<string, (event: { type: string; data: string }) => void>;
-  let resolveStreamReady: () => void;
 
   beforeEach(() => {
     host = document.createElement('div');
@@ -67,11 +66,8 @@ describe('App runtime upgrade controls', () => {
       configurable: true,
       value: vi.fn()
     });
-    const ready = new Promise<void>((resolve) => {
-      resolveStreamReady = resolve;
-    });
     apiMocks.createStateEventSource.mockReturnValue({
-      ready,
+      ready: Promise.resolve(),
       addEventListener: vi.fn((eventName: string, listener: (event: { type: string; data: string }) => void) => {
         eventListeners[eventName] = listener;
       }),
@@ -87,6 +83,8 @@ describe('App runtime upgrade controls', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -139,6 +137,7 @@ describe('App runtime upgrade controls', () => {
   });
 
   it('downloads files without entering global busy state or refreshing state', async () => {
+    vi.useFakeTimers();
     const state = createDemoState();
     const downloadableFile = state.files.find((file) => file.roomId === 'room-team')!;
     downloadableFile.localPath = 'uploads/report.txt';
@@ -183,6 +182,11 @@ describe('App runtime upgrade controls', () => {
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(linkClick).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agentbridge-download');
   });
 
@@ -408,7 +412,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('实时连接已断开');
 
     await act(async () => {
-      resolveStreamReady();
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
       await waitForMotionExit();
     });
     expect(host.textContent).not.toContain('实时连接已断开');
@@ -424,7 +428,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('operation failed');
 
     await act(async () => {
-      resolveStreamReady();
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
     });
     expect(host.textContent).toContain('operation failed');
   });

@@ -188,6 +188,7 @@ function App() {
         setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
       }
     };
+    events.addEventListener('ready', handleStreamReady);
     events.addEventListener('state', handleStateEvent);
     events.addEventListener('agent-progress', handleAgentProgressEvent);
     events.addEventListener('error', handleStreamFailure);
@@ -199,6 +200,7 @@ function App() {
     return () => {
       disposed = true;
       window.clearInterval(workerStatusTimer);
+      events.removeEventListener('ready', handleStreamReady);
       events.removeEventListener('state', handleStateEvent);
       events.removeEventListener('agent-progress', handleAgentProgressEvent);
       events.removeEventListener('error', handleStreamFailure);
@@ -256,7 +258,7 @@ function App() {
         link.click();
       } finally {
         link.remove();
-        URL.revokeObjectURL(objectUrl);
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
       }
     } catch (downloadError) {
       eventStreamErrorVisibleRef.current = false;

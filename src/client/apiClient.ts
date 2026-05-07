@@ -16,6 +16,7 @@ import type {
 } from '../domain/types';
 
 type Fetcher = typeof fetch;
+export const eventStreamReconnectDelayMs = 1_000;
 
 export interface SendMessageInput {
   roomId: string;
@@ -370,9 +371,10 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
-  const abortController = new AbortController();
   const listeners = new Map<string, Set<(event: StateStreamMessageEvent) => void>>();
   let closed = false;
+  let activeAbortController: AbortController | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let readySettled = false;
   let resolveReady!: () => void;
   let rejectReady!: (error: unknown) => void;
@@ -391,12 +393,21 @@ function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
     };
   });
 
-  void (async () => {
+  const scheduleReconnect = () =>
+    new Promise<void>((resolve) => {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        resolve();
+      }, eventStreamReconnectDelayMs);
+    });
+
+  const connect = async () => {
+    activeAbortController = new AbortController();
     try {
       const response = await fetcher(url, {
         method: 'GET',
         headers: withApiToken({ accept: 'text/event-stream' }),
-        signal: abortController.signal
+        signal: activeAbortController.signal
       });
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
@@ -404,10 +415,12 @@ function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
       if (!response.body) {
         throw new Error('Event stream response did not include a body');
       }
-      resolveReady();
       await readSseBody(response.body, (frame) => {
         const event = parseSseFrame(frame);
         if (event) {
+          if (event.type === 'ready') {
+            resolveReady();
+          }
           dispatchEvent(listeners, event);
         }
       });
@@ -424,12 +437,24 @@ function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
       }
       if (!readySettled) {
         rejectReady(error);
-        return;
       }
-      dispatchEvent(listeners, {
-        type: 'error',
-        data: error instanceof Error ? error.message : 'Event stream disconnected'
-      });
+      if (!closed) {
+        dispatchEvent(listeners, {
+          type: 'error',
+          data: error instanceof Error ? error.message : 'Event stream disconnected'
+        });
+      }
+    } finally {
+      activeAbortController = null;
+    }
+  };
+
+  void (async () => {
+    while (!closed) {
+      await connect();
+      if (!closed) {
+        await scheduleReconnect();
+      }
     }
   })();
 
@@ -445,7 +470,11 @@ function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
     },
     close() {
       closed = true;
-      abortController.abort();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      activeAbortController?.abort();
       listeners.clear();
     }
   };
@@ -513,7 +542,11 @@ function dispatchEvent(
   event: StateStreamMessageEvent
 ): void {
   for (const listener of Array.from(listeners.get(event.type) ?? [])) {
-    listener(event);
+    try {
+      listener(event);
+    } catch (error) {
+      console.error('Event stream listener failed', error);
+    }
   }
 }
 
