@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 const requiredReadinessChecks = ['auth', 'storage', 'worker', 'connector', 'provider'];
+const defaultReadinessTimeoutMs = 15_000;
 
 export const defaultChecks = [
   { name: 'unit tests', script: 'test' },
@@ -46,14 +47,54 @@ export async function runReadinessChecks(checks, options = {}) {
 
 export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch, options = {}) {
   const readinessUrl = `${baseUrl.replace(/\/+$/, '')}/api/readiness`;
-  const response = await fetchImpl(readinessUrl, {
+  const timeoutMs = options.readinessTimeoutMs ?? defaultReadinessTimeoutMs;
+  const abortController =
+    timeoutMs > 0 ? options.abortControllerFactory?.() ?? new AbortController() : undefined;
+  const requestInit = {
     headers: token ? { 'x-agent-im-token': token } : {}
-  });
+  };
+  if (abortController) {
+    requestInit.signal = abortController.signal;
+  }
+
+  let timedOut = false;
+  let timeoutId;
+  const setTimeoutImpl = options.setTimeoutImpl ?? setTimeout;
+  const clearTimeoutImpl = options.clearTimeoutImpl ?? clearTimeout;
+  const timeoutPromise =
+    timeoutMs > 0
+      ? new Promise((_, reject) => {
+          timeoutId = setTimeoutImpl(() => {
+            timedOut = true;
+            abortController?.abort();
+            reject(new Error(`/api/readiness timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+        })
+      : undefined;
+
+  let response;
+  try {
+    response = await (timeoutPromise
+      ? Promise.race([fetchImpl(readinessUrl, requestInit), timeoutPromise])
+      : fetchImpl(readinessUrl, requestInit));
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`/api/readiness timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeoutImpl(timeoutId);
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(`/api/readiness failed with ${response.status}`);
+    const bodyText = sanitizeForReadinessError(await readResponseText(response), token);
+    const bodyDetail = bodyText ? `; body: ${bodyText}` : '';
+    throw new Error(`${readinessUrl} failed with ${response.status}${bodyDetail}`);
   }
   const body = await response.json();
-  validateReadinessBody(body, options);
+  validateReadinessBody(body, { ...options, token });
   return body;
 }
 
@@ -80,7 +121,15 @@ function runReadinessEndpointCheck(check, options) {
   const token = firstEnvValue(env, ['AGENT_IM_API_TOKEN', 'VITE_AGENT_API_TOKEN']) ?? '';
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  return runTimedCheck(check, () => checkReadinessEndpoint(baseUrl, token, fetchImpl, { localDemo: options.localDemo }));
+  return runTimedCheck(check, () =>
+    checkReadinessEndpoint(baseUrl, token, fetchImpl, {
+      localDemo: options.localDemo,
+      readinessTimeoutMs: options.readinessTimeoutMs,
+      abortControllerFactory: options.abortControllerFactory,
+      setTimeoutImpl: options.setTimeoutImpl,
+      clearTimeoutImpl: options.clearTimeoutImpl
+    })
+  );
 }
 
 function runCustomCheck(check, options) {
@@ -177,31 +226,46 @@ function validateReadinessBody(body, options = {}) {
   }
 
   const localDemo = options.localDemo ?? false;
-  const unhealthyCheckName = requiredReadinessChecks.find((name) => {
-    const check = checks[name];
-    if (check.ok === true) {
+  const checkEntries = Object.entries(checks);
+  const failingCheckEntry = checkEntries.find(([name, check]) => {
+    if (check?.ok === true) {
       return false;
     }
     return !localDemo || !isAllowedLocalDemoDegradedCheck(name, check);
   });
 
-  if (unhealthyCheckName) {
-    throw new Error(`/api/readiness reported ${unhealthyCheckName} is not ready`);
+  if (failingCheckEntry) {
+    throw new Error(formatReadinessCheckFailure(failingCheckEntry[0], failingCheckEntry[1], options.token));
   }
 
-  if (body.ok !== true && (!localDemo || requiredReadinessChecks.every((name) => checks[name].ok === true))) {
+  const hasOnlyAllowedLocalDemoFailures =
+    localDemo &&
+    checkEntries.some(([, check]) => check?.ok !== true) &&
+    checkEntries.every(([name, check]) => check?.ok === true || isAllowedLocalDemoDegradedCheck(name, check));
+
+  if (body.ok !== true && !hasOnlyAllowedLocalDemoFailures) {
     throw new Error('/api/readiness reported overall readiness is not ready');
   }
 }
 
+function formatReadinessCheckFailure(name, check, token) {
+  const status = sanitizeForReadinessError(formatOptionalField(check?.status, 'unknown'), token);
+  const message = sanitizeForReadinessError(formatOptionalField(check?.message, 'none'), token);
+  return `/api/readiness reported ${name} is not ready (status: ${status}, message: ${message})`;
+}
+
+function formatOptionalField(value, fallback) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
 function isAllowedLocalDemoDegradedCheck(name, check) {
   if (name === 'auth') {
-    return check.ok === false && check.status === 'degraded' && check.mode === 'local-demo';
+    return check?.ok === false && check.status === 'degraded' && check.mode === 'local-demo';
   }
 
   if (name === 'provider') {
     return (
-      check.ok === false &&
+      check?.ok === false &&
       check.status === 'degraded' &&
       check.configured === false &&
       check.provider === 'fallback' &&
@@ -210,6 +274,29 @@ function isAllowedLocalDemoDegradedCheck(name, check) {
   }
 
   return false;
+}
+
+async function readResponseText(response) {
+  if (typeof response.text !== 'function') {
+    return '';
+  }
+
+  try {
+    return await response.text();
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeForReadinessError(value, token) {
+  let sanitized = String(value ?? '').slice(0, 1000);
+  if (token) {
+    sanitized = sanitized.split(token).join('[redacted]');
+  }
+  return sanitized
+    .replace(/(x-agent-im-token\s*[:=]\s*)([^\s,;]+)/gi, '$1[redacted]')
+    .replace(/(Authorization\s*:\s*Bearer\s+)([^\s,;]+)/gi, '$1[redacted]')
+    .replace(/(Bearer\s+)([A-Za-z0-9._~+/=-]+)/gi, '$1[redacted]');
 }
 
 function firstEnvValue(env, names) {
