@@ -1255,8 +1255,38 @@ describe('real local agent IM server', () => {
     });
     servers.push(app);
 
+    const deniedRead = await fetch(`${app.url}/api/state`);
+    const allowedRead = await fetch(`${app.url}/api/state`, {
+      headers: { 'x-agent-im-token': 'local-secret' }
+    });
+    const deniedWrite = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: 'unauthorized write'
+      })
+    });
+    const allowedWrite = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-im-token': 'local-secret'
+      },
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: 'authorized write'
+      })
+    });
     const allowedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
 
+    expect(deniedRead.status).toBe(401);
+    expect(allowedRead.ok).toBe(true);
+    expect(deniedWrite.status).toBe(401);
+    expect(await deniedWrite.json()).toMatchObject({ error: 'unauthorized' });
+    expect(allowedWrite.status).toBe(201);
     expect(allowedSse.ok).toBe(true);
     await allowedSse.body?.cancel();
   });
