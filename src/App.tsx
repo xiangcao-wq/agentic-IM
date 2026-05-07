@@ -160,6 +160,10 @@ function App() {
       if (!disposed) {
         setEventStreamStatus('disconnected');
         setError((currentError) => {
+          if (currentError === eventStreamDisconnectedError) {
+            eventStreamErrorVisibleRef.current = true;
+            return currentError;
+          }
           if (currentError) {
             eventStreamErrorVisibleRef.current = false;
             return currentError;

@@ -433,6 +433,28 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('operation failed');
   });
 
+  it('clears stale realtime disconnect errors after repeated SSE failures reconnect', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await act(async () => {
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
+      await waitForMotionExit();
+    });
+    expect(host.textContent).not.toContain('实时连接已断开');
+  });
+
   it('clears stale realtime disconnect errors when a state SSE event arrives', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
