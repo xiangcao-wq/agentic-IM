@@ -55,17 +55,66 @@ export function buildProductReadiness(input: ProductReadinessInput): ProductRead
 }
 
 function buildAuthCheck(input: ProductReadinessInput['auth']): ProductReadiness['checks']['auth'] {
-  const blockers: string[] = [];
-  const productMode = input.mode === 'public' || input.mode === 'production';
+  if (input.mode === 'production-open') {
+    return authCheck(input, {
+      ok: false,
+      status: 'blocked',
+      message: 'production-open mode is not allowed for product readiness'
+    });
+  }
 
-  if (productMode && !input.requireAuth) {
+  if (input.mode === 'local-demo') {
+    return authCheck(input, {
+      ok: false,
+      status: 'degraded',
+      message: 'Local demo mode is not product-ready; configure token auth for product readiness.'
+    });
+  }
+
+  if (input.mode === 'local-token') {
+    const blockers = localTokenAuthBlockers(input);
+    return authCheck(input, {
+      ok: blockers.length === 0,
+      status: blockers.length === 0 ? 'ready' : 'blocked',
+      message:
+        blockers.length === 0
+          ? input.allowQueryToken
+            ? 'Local token auth is enforced; local query-token compatibility is active.'
+            : 'Local token auth is enforced.'
+          : `Local token auth is blocked: ${blockers.join('; ')}.`
+    });
+  }
+
+  const blockers = productAuthBlockers(input);
+  return authCheck(input, {
+    ok: blockers.length === 0,
+    status: blockers.length === 0 ? 'ready' : 'blocked',
+    message: blockers.length === 0 ? 'Product auth is enforced.' : `Product auth is blocked: ${blockers.join('; ')}.`
+  });
+}
+
+function authCheck(
+  input: ProductReadinessInput['auth'],
+  check: Pick<ReadinessCheck, 'ok' | 'status' | 'message'>
+): ProductReadiness['checks']['auth'] {
+  return {
+    ...check,
+    mode: input.mode,
+    requireAuth: input.requireAuth,
+    allowQueryToken: input.allowQueryToken,
+    tokenConfigured: input.tokenConfigured,
+    allowedOrigins: [...input.allowedOrigins]
+  };
+}
+
+function productAuthBlockers(input: ProductReadinessInput['auth']): string[] {
+  const blockers: string[] = [];
+
+  if (!input.requireAuth) {
     blockers.push('auth is not required');
   }
-  if (productMode && !input.tokenConfigured) {
+  if (!input.tokenConfigured) {
     blockers.push('API token is not configured');
-  }
-  if (input.mode === 'production-open') {
-    blockers.push('production-open mode deliberately runs without required auth');
   }
   if (input.allowQueryToken) {
     blockers.push('query-string tokens are allowed');
@@ -74,16 +123,20 @@ function buildAuthCheck(input: ProductReadinessInput['auth']): ProductReadiness[
     blockers.push('no allowed CORS origins are configured');
   }
 
-  return {
-    ok: blockers.length === 0,
-    status: blockers.length === 0 ? 'ready' : 'blocked',
-    message: blockers.length === 0 ? 'Product auth is enforced.' : `Product auth is blocked: ${blockers.join('; ')}.`,
-    mode: input.mode,
-    requireAuth: input.requireAuth,
-    allowQueryToken: input.allowQueryToken,
-    tokenConfigured: input.tokenConfigured,
-    allowedOrigins: [...input.allowedOrigins]
-  };
+  return blockers;
+}
+
+function localTokenAuthBlockers(input: ProductReadinessInput['auth']): string[] {
+  const blockers: string[] = [];
+
+  if (!input.requireAuth) {
+    blockers.push('auth is not required');
+  }
+  if (!input.tokenConfigured) {
+    blockers.push('API token is not configured');
+  }
+
+  return blockers;
 }
 
 function buildStorageCheck(input: ProductReadinessInput['storage']): ProductReadiness['checks']['storage'] {
@@ -146,7 +199,7 @@ function buildProviderCheck(input: ProductReadinessInput['provider']): ProductRe
     };
   }
 
-  if (input.health === 'failed' || input.health === 'missing') {
+  if (input.health === 'failed' || input.health === 'missing' || input.health === 'unknown') {
     return {
       ok: false,
       status: 'degraded',

@@ -1405,6 +1405,84 @@ describe('real local agent IM server', () => {
     }
   });
 
+  it('does not expose detailed readiness in production-open mode', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowNoAuth = process.env.AGENT_IM_ALLOW_NO_AUTH;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    delete process.env.AGENT_IM_PUBLIC_MODE;
+    process.env.AGENT_IM_ALLOW_NO_AUTH = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: null,
+        aiProvider: null
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`);
+      const body = await response.json();
+
+      expect([401, 403]).toContain(response.status);
+      expect(body).toMatchObject({ error: expect.any(String) });
+      expect(body.checks).toBeUndefined();
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowNoAuth === undefined) {
+        delete process.env.AGENT_IM_ALLOW_NO_AUTH;
+      } else {
+        process.env.AGENT_IM_ALLOW_NO_AUTH = previousAllowNoAuth;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('reports storage readiness blocked when the state store cannot be read', async () => {
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createUsageAiProvider({
+        requestCount: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalTokens: 6,
+        promptCacheHitTokens: 1,
+        promptCacheMissTokens: 3,
+        promptCacheHitRate: 0.25
+      }),
+      stateStore: createUnreadableStateStore()
+    });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/readiness`);
+    const body = await response.json();
+
+    expect(response.ok).toBe(true);
+    expect(body.ok).toBe(false);
+    expect(body.checks.storage).toMatchObject({ ok: false, status: 'blocked', mode: 'json-local' });
+  });
+
   it('fails startup in public mode when no API token is configured', async () => {
     const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
     const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
@@ -2133,6 +2211,16 @@ function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number
       updateQueue = pending.catch(() => undefined);
       return pending;
     }
+  };
+}
+
+function createUnreadableStateStore(): StateStore {
+  return {
+    async init() {},
+    async read() {
+      throw new Error('state store unavailable');
+    },
+    async write() {}
   };
 }
 

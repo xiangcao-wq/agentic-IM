@@ -385,6 +385,18 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
       }
 
       if (request.method === 'GET' && url.pathname === '/api/readiness') {
+        response.setHeader('cache-control', 'no-store');
+        if (authConfig.mode === 'production-open') {
+          return sendJson(response, { error: 'readiness requires authenticated product mode' }, 403);
+        }
+
+        let storageWritable = true;
+        try {
+          await db.read();
+        } catch {
+          storageWritable = false;
+        }
+
         return sendJson(
           response,
           buildProductReadiness({
@@ -395,7 +407,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
               tokenConfigured: Boolean(authConfig.apiToken),
               allowedOrigins: corsConfig.allowedOrigins
             },
-            storage: { mode: 'json-local', writable: true },
+            storage: { mode: 'json-local', writable: storageWritable },
             worker: {
               autopilotEnabled: autopilotWorkerStatus.enabled,
               running: autopilotWorkerStatus.running,
