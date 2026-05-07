@@ -9,7 +9,7 @@ export function createDownloadHeaders(input: DownloadHeaderInput): Record<string
   const fallbackFilename = sanitizeHeaderFallbackFilename(filename);
   return {
     'cache-control': 'private, no-store',
-    'content-disposition': `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    'content-disposition': `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeRfc5987Value(filename)}`,
     'content-length': String(input.byteLength),
     'content-type': input.contentType || 'application/octet-stream',
     'referrer-policy': 'no-referrer',
@@ -27,8 +27,28 @@ function sanitizeHeaderFallbackFilename(filename: string): string {
   return filename.replace(/[^\x20-\x7e]/g, '_');
 }
 
-export function assertUploadContentTypeAllowed(input: { contentType: string; productMode: boolean }): void {
-  if (input.productMode && input.contentType.toLowerCase() === 'image/svg+xml') {
+function encodeRfc5987Value(value: string): string {
+  return encodeURIComponent(value).replace(/['()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
+
+export function assertUploadContentAllowed(input: {
+  filename: string;
+  contentType: string;
+  productMode: boolean;
+}): void {
+  if (!input.productMode) {
+    return;
+  }
+
+  const normalizedContentType = input.contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  const normalizedExtension = input.filename.toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
+  if (normalizedContentType === 'image/svg+xml' || normalizedExtension === '.svg') {
     throw new Error('SVG uploads are disabled in product mode');
   }
+}
+
+export function assertUploadContentTypeAllowed(input: { contentType: string; productMode: boolean }): void {
+  assertUploadContentAllowed({ ...input, filename: '' });
 }

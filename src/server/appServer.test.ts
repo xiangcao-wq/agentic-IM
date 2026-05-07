@@ -1524,13 +1524,69 @@ describe('real local agent IM server', () => {
       });
       servers.push(app);
 
+      const cases = [
+        { contentType: 'image/svg+xml', filename: 'diagram.svg' },
+        { contentType: 'text/plain', filename: 'diagram.svg' },
+        { contentType: 'IMAGE/SVG+XML', filename: 'diagram.txt' },
+        { contentType: 'image/svg+xml; charset=utf-8', filename: 'diagram.txt' }
+      ];
+
+      for (const uploadCase of cases) {
+        const response = await fetch(
+          `${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': uploadCase.contentType,
+              'x-agent-im-token': 'local-secret',
+              'x-file-name': uploadCase.filename
+            },
+            body: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+          }
+        );
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'SVG uploads are disabled in product mode' });
+      }
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('rejects SVG uploads in production-open mode', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousAllowNoAuth = process.env.AGENT_IM_ALLOW_NO_AUTH;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    process.env.AGENT_IM_ALLOW_NO_AUTH = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: null
+      });
+      servers.push(app);
+
       const response = await fetch(
         `${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`,
         {
           method: 'POST',
           headers: {
-            'content-type': 'image/svg+xml',
-            'x-agent-im-token': 'local-secret',
+            'content-type': 'text/plain',
             'x-file-name': 'diagram.svg'
           },
           body: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
@@ -1540,10 +1596,15 @@ describe('real local agent IM server', () => {
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: 'SVG uploads are disabled in product mode' });
     } finally {
-      if (previousPublicMode === undefined) {
-        delete process.env.AGENT_IM_PUBLIC_MODE;
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
       } else {
-        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      if (previousAllowNoAuth === undefined) {
+        delete process.env.AGENT_IM_ALLOW_NO_AUTH;
+      } else {
+        process.env.AGENT_IM_ALLOW_NO_AUTH = previousAllowNoAuth;
       }
       if (previousAllowedOrigins === undefined) {
         delete process.env.AGENT_IM_ALLOWED_ORIGINS;

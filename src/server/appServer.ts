@@ -42,11 +42,12 @@ import { MatrixStore } from './matrixClient';
 import {
   authorizeRequest,
   isCorsOriginAllowed,
+  isProductMode,
   resolveAuthConfig,
   resolveCorsConfig,
   type CorsConfig
 } from './security/auth';
-import { assertUploadContentTypeAllowed, createDownloadHeaders } from './security/downloadPolicy';
+import { assertUploadContentAllowed, createDownloadHeaders } from './security/downloadPolicy';
 import { JsonStateStore, type StateStore } from './stateStore';
 import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
@@ -158,7 +159,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     AGENT_IM_API_TOKEN:
       options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN : (options.apiToken ?? undefined)
   });
-  const productMode = authConfig.mode === 'public' || authConfig.mode === 'production';
+  const productMode = isProductMode(process.env);
   const corsConfig = resolveCorsConfig(process.env, {
     allowedOrigins: options.allowedOrigins
   });
@@ -2053,7 +2054,11 @@ function validateFileUpload(
   }
 
   try {
-    assertUploadContentTypeAllowed({ contentType: input.contentType, productMode: input.productMode });
+    assertUploadContentAllowed({
+      filename: input.filename,
+      contentType: input.contentType,
+      productMode: input.productMode
+    });
   } catch (error) {
     throw new HttpError(400, error instanceof Error ? error.message : 'unsupported file type');
   }
