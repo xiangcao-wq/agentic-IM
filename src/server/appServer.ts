@@ -46,6 +46,7 @@ import {
   resolveCorsConfig,
   type CorsConfig
 } from './security/auth';
+import { assertUploadContentTypeAllowed, createDownloadHeaders } from './security/downloadPolicy';
 import { JsonStateStore, type StateStore } from './stateStore';
 import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
@@ -157,6 +158,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     AGENT_IM_API_TOKEN:
       options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN : (options.apiToken ?? undefined)
   });
+  const productMode = authConfig.mode === 'public' || authConfig.mode === 'production';
   const corsConfig = resolveCorsConfig(process.env, {
     allowedOrigins: options.allowedOrigins
   });
@@ -703,7 +705,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           tooLargeMessage: 'file too large'
         });
         const state = await readRuntimeState();
-        validateFileUpload(state, { roomId, senderId, filename, bytes, contentType, maxUploadBytes });
+        validateFileUpload(state, { roomId, senderId, filename, bytes, contentType, maxUploadBytes, productMode });
 
         const baseState = await db.read();
         let file = createUploadedFile(baseState, {
@@ -770,7 +772,8 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           filename: 'demo-assets',
           bytes: Buffer.from('demo'),
           contentType: 'application/octet-stream',
-          maxUploadBytes
+          maxUploadBytes,
+          productMode
         });
         const baseState = await db.read();
         const generated = await generateDemoAssetsForRoom(baseState, state, {
@@ -2030,6 +2033,7 @@ function validateFileUpload(
     bytes: Uint8Array;
     contentType: string;
     maxUploadBytes: number;
+    productMode: boolean;
   }
 ): void {
   if (!state.rooms.some((room) => room.id === input.roomId)) {
@@ -2046,6 +2050,12 @@ function validateFileUpload(
   }
   if (input.bytes.byteLength > input.maxUploadBytes) {
     throw new HttpError(413, 'file too large');
+  }
+
+  try {
+    assertUploadContentTypeAllowed({ contentType: input.contentType, productMode: input.productMode });
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : 'unsupported file type');
   }
 
   if (input.filename !== 'demo-assets') {
@@ -2367,17 +2377,15 @@ function sendBytes(
   bytes: Uint8Array,
   input: { contentType: string; filename: string }
 ): void {
-  response.writeHead(200, {
-    'content-disposition': contentDisposition(input.filename),
-    'content-length': String(bytes.byteLength),
-    'content-type': input.contentType
-  });
+  response.writeHead(
+    200,
+    createDownloadHeaders({
+      filename: input.filename,
+      contentType: input.contentType,
+      byteLength: bytes.byteLength
+    })
+  );
   response.end(Buffer.from(bytes));
-}
-
-function contentDisposition(filename: string): string {
-  const asciiName = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 function publish(clients: Set<EventClient>, event: string, body: unknown): void {

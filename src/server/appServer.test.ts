@@ -688,6 +688,10 @@ describe('real local agent IM server', () => {
     const download = await fetch(`${app.url}/api/files/${file.id}/download`);
     expect(download.ok).toBe(true);
     expect(download.headers.get('content-type')).toContain('text/plain');
+    expect(download.headers.get('content-disposition')).toContain('attachment');
+    expect(download.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(download.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(download.headers.get('cache-control')).toBe('private, no-store');
     expect(await download.text()).toBe('访谈对象：校园服务中心');
 
     const state = await requestJson(`${app.url}/api/state`);
@@ -1079,6 +1083,10 @@ describe('real local agent IM server', () => {
     const posterResponse = await fetch(`${app.url}/api/files/${poster!.id}/download`);
     expect(posterResponse.ok).toBe(true);
     expect(posterResponse.headers.get('content-type')).toContain('image/svg+xml');
+    expect(posterResponse.headers.get('content-disposition')).toContain('attachment');
+    expect(posterResponse.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(posterResponse.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(posterResponse.headers.get('cache-control')).toBe('private, no-store');
     expect(await posterResponse.text()).toContain('<svg');
 
     const image2 = generated.files.find((file: { name: string; id: string }) => file.name === 'image2-agent-im-a2a-poster.png');
@@ -1086,6 +1094,10 @@ describe('real local agent IM server', () => {
     const image2Response = await fetch(`${app.url}/api/files/${image2!.id}/download`);
     expect(image2Response.ok).toBe(true);
     expect(image2Response.headers.get('content-type')).toContain('image/png');
+    expect(image2Response.headers.get('content-disposition')).toContain('attachment');
+    expect(image2Response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(image2Response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(image2Response.headers.get('cache-control')).toBe('private, no-store');
     expect((await image2Response.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
   });
 
@@ -1495,6 +1507,52 @@ describe('real local agent IM server', () => {
     expect(state.files.some((file: { name: string }) => file.name === 'malware.exe' || file.name === 'notes.txt')).toBe(false);
   });
 
+  it('rejects SVG uploads in product mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret'
+      });
+      servers.push(app);
+
+      const response = await fetch(
+        `${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'image/svg+xml',
+            'x-agent-im-token': 'local-secret',
+            'x-file-name': 'diagram.svg'
+          },
+          body: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        }
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'SVG uploads are disabled in product mode' });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
   it('rejects oversized JSON request bodies before mutating state', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -1612,6 +1670,10 @@ describe('real local agent IM server', () => {
     expect(response.ok).toBe(true);
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(response.headers.get('content-disposition')).toContain('team-notes.txt');
+    expect(response.headers.get('content-disposition')).toContain('attachment');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(await response.text()).toBe('real matrix media bytes');
   });
 
