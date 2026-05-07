@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 
 const baseUrl = process.env.AGENT_IM_WEB_URL ?? 'http://127.0.0.1:5175';
+const apiBaseUrl = process.env.AGENT_IM_API_URL ?? baseUrl;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const pageErrors = [];
@@ -25,6 +26,19 @@ try {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
 
+  const [findFileResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/run') && response.request().method() === 'POST',
+      { timeout: 120_000 }
+    ),
+    page.getByRole('button', { name: /Agent 找文件/ }).click()
+  ]);
+  const findFilePayload = await findFileResponse.json();
+  if (findFilePayload.intent !== 'find_file') {
+    throw new Error(`Expected Agent find_file intent from shortcut, received ${findFilePayload.intent}`);
+  }
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
+
   const [policyPatchResponse] = await Promise.all([
     page.waitForResponse(
       (response) => response.url().endsWith('/api/agent/autopilot-policy') && response.request().method() === 'PATCH',
@@ -35,7 +49,7 @@ try {
   if (!policyPatchResponse.ok()) {
     throw new Error(`Autopilot policy toggle failed with HTTP ${policyPatchResponse.status()}`);
   }
-  const restorePolicy = await page.request.patch(`${baseUrl}/api/agent/autopilot-policy`, {
+  const restorePolicy = await page.request.patch(`${apiBaseUrl}/api/agent/autopilot-policy`, {
     data: {
       agentId: 'agent-lin',
       enabled: true,
@@ -75,9 +89,25 @@ try {
   if (agentRunPayload.intent !== 'chat') {
     throw new Error(`Expected Agent chat intent, received ${agentRunPayload.intent}`);
   }
-  await page.locator('.result-panel').waitFor({ timeout: 120_000 });
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
 
-  const a2aResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const [sendMessageResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/run') && response.request().method() === 'POST',
+      { timeout: 120_000 }
+    ),
+    (async () => {
+      await page.locator('#agent-prompt').fill('tell Chen: I will join later');
+      await page.getByRole('button', { name: 'send agent prompt' }).click();
+    })()
+  ]);
+  const sendMessagePayload = await sendMessageResponse.json();
+  if (sendMessagePayload.intent !== 'send_message' || sendMessagePayload.result?.status !== 'executed') {
+    throw new Error(`Expected executed send_message payload, received ${JSON.stringify(sendMessagePayload)}`);
+  }
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
+
+  const a2aResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
@@ -92,7 +122,7 @@ try {
     throw new Error('Expected /api/messages to return an autopilot A2A session.');
   }
 
-  const a2aChatResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const a2aChatResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
@@ -107,7 +137,7 @@ try {
     throw new Error('Expected explicit Agent mention to return an autopilot chat message.');
   }
 
-  const a2aNegotiationResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const a2aNegotiationResponse = await page.request.post(`${apiBaseUrl}/api/messages`, {
     data: {
       roomId: 'room-team',
       senderId: 'user-zhao',
@@ -135,8 +165,11 @@ try {
     JSON.stringify({
       ok: true,
       url: baseUrl,
+      apiUrl: apiBaseUrl,
       screenshot: 'tmp/agent-im-browser-smoke.png',
+      shortcutIntent: findFilePayload.intent,
       agentIntent: agentRunPayload.intent,
+      delegatedMessageIntent: sendMessagePayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
       a2aChatMessages: a2aChatPayload.autopilotMessages.length,
       a2aNegotiationTurns: negotiationSession.turns?.length ?? 0,

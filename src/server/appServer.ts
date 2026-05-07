@@ -128,6 +128,7 @@ const defaultAllowedOrigins = [5175, 5176, 5177, 5178, 5179].flatMap((port) => [
   `http://127.0.0.1:${port}`,
   `http://localhost:${port}`
 ]);
+const defaultMaxJsonBytes = 256 * 1024;
 const defaultMaxUploadBytes = 10 * 1024 * 1024;
 const defaultAutopilotWorkerIntervalMs = 60_000;
 
@@ -688,7 +689,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const agentCanShare = url.searchParams.get('agentCanShare') === 'true';
         const filename = parseUploadFileName(request);
         const contentType = getContentType(request);
-        const bytes = await readRawBody(request);
+        const bytes = await readRawBody(request, {
+          maxBytes: maxUploadBytes,
+          tooLargeMessage: 'file too large'
+        });
         const state = await readRuntimeState();
         validateFileUpload(state, { roomId, senderId, filename, bytes, contentType, maxUploadBytes });
 
@@ -1610,6 +1614,30 @@ async function executeConfirmedAgentAction(
     };
   }
 
+  if (action.kind === 'send_message') {
+    let message = createConfirmedDelegatedMessage(state, action);
+    if (matrixStore) {
+      message = await matrixStore.sendMessage(
+        state,
+        {
+          roomId: message.roomId,
+          senderId: message.senderId,
+          body: message.body
+        },
+        {
+          agentLabel: message.agentLabel,
+          sourceAgentId: message.sourceAgentId
+        }
+      );
+    }
+    return {
+      state: {
+        ...state,
+        messages: appendMessage(state.messages, message)
+      }
+    };
+  }
+
   if (action.kind !== 'share_file') {
     return { state };
   }
@@ -1715,13 +1743,14 @@ function getConfirmedFileBinding(
 function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRequest, file: FileItem): Message {
   const agent = state.agents.find((candidate) => candidate.id === action.agentId);
   const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  const targetRoomId = typeof action.input.targetRoomId === 'string' ? action.input.targetRoomId : action.roomId;
   if (!agent || !owner) {
     throw new Error(`unknown agent: ${action.agentId}`);
   }
 
   return {
     id: `msg-agent-share-${file.id}`,
-    roomId: action.roomId,
+    roomId: targetRoomId,
     senderId: agent.ownerId,
     senderName: agent.displayName,
     body: `我代表${owner.name}发送最新文件：${file.name}`,
@@ -1733,6 +1762,28 @@ function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRe
     mxcUri: file.mxcUri,
     contentType: file.contentType,
     size: file.size
+  };
+}
+
+function createConfirmedDelegatedMessage(state: DemoState, action: AgentActionRequest): Message {
+  const agent = state.agents.find((candidate) => candidate.id === action.agentId);
+  const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  const targetRoomId = typeof action.input.targetRoomId === 'string' ? action.input.targetRoomId : action.roomId;
+  const messageBody = typeof action.input.messageBody === 'string' ? action.input.messageBody.trim() : '';
+  const targetRoom = state.rooms.find((room) => room.id === targetRoomId);
+  if (!agent || !owner || !targetRoom || !messageBody || !agent.allowedRoomIds.includes(targetRoomId)) {
+    throw new Error(`invalid delegated message action: ${action.id}`);
+  }
+  return {
+    id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: targetRoomId,
+    senderId: agent.ownerId,
+    senderName: agent.displayName,
+    body: messageBody,
+    sentAt: new Date().toISOString(),
+    type: 'agent',
+    agentLabel: `${owner.name}的 Agent 代发`,
+    sourceAgentId: agent.id
   };
 }
 
@@ -1752,6 +1803,9 @@ function confirmedActionToolCalls(kind: AgentActionRequest['kind'], blockedRisk?
   }
   if (kind === 'share_file') {
     return ['file.share'];
+  }
+  if (kind === 'send_message') {
+    return ['message.send'];
   }
   return [];
 }
@@ -1773,6 +1827,9 @@ function actionReviewMutationLabel(
     if (action.kind === 'share_file') {
       return '文件代发被阻止';
     }
+    if (action.kind === 'send_message') {
+      return '消息代发被阻止';
+    }
     return '确认动作被阻止';
   }
   if (action.kind === 'coordinate') {
@@ -1783,6 +1840,9 @@ function actionReviewMutationLabel(
   }
   if (action.kind === 'share_file') {
     return '执行文件代发';
+  }
+  if (action.kind === 'send_message') {
+    return '执行消息代发';
   }
   return '执行确认动作';
 }
@@ -1799,6 +1859,9 @@ function actionReviewMutationDetail(action: AgentActionRequest): string | undefi
   if (action.kind === 'share_file') {
     const fileName = action.input.fileName ?? action.input.requestText;
     return typeof fileName === 'string' ? fileName : undefined;
+  }
+  if (action.kind === 'send_message') {
+    return typeof action.input.messageBody === 'string' ? action.input.messageBody : undefined;
   }
   return undefined;
 }
@@ -2283,14 +2346,30 @@ function getRoomName(state: DemoState, roomId: string): string {
 }
 
 async function readJson<T>(request: IncomingMessage): Promise<T> {
-  const raw = (await readRawBody(request)).toString('utf8');
-  return raw ? (JSON.parse(raw) as T) : ({} as T);
+  const raw = (await readRawBody(request, { maxBytes: defaultMaxJsonBytes })).toString('utf8');
+  if (!raw) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new HttpError(400, 'invalid JSON body');
+  }
 }
 
-async function readRawBody(request: IncomingMessage): Promise<Buffer> {
+async function readRawBody(
+  request: IncomingMessage,
+  options: { maxBytes: number; tooLargeMessage?: string }
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  let byteLength = 0;
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += buffer.byteLength;
+    if (byteLength > options.maxBytes) {
+      throw new HttpError(413, options.tooLargeMessage ?? 'request body too large');
+    }
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks);
 }

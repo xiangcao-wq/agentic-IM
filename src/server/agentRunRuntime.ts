@@ -19,11 +19,13 @@ import type {
   FileItem,
   Message,
   RiskAssessment,
+  SendMessageAction,
   WebSearchAnswer,
   WebSearchResultItem
 } from '../domain/types';
 import type { AiProvider, AiTextPrompt } from './aiProvider';
 import { defaultToolCallsForIntent, isAgentToolName, primaryToolNameForIntent } from './agentTools';
+import { executeCoreTool } from './agentCore/toolExecutor';
 import { runFileShareAction } from './agentRuntime';
 import { searchFileTextChunks } from './fileTextIndex';
 import type { WebSearchProvider } from './webSearch';
@@ -32,6 +34,7 @@ interface AgentRunDecision {
   intent: AgentRunIntent;
   plan: string;
   answer?: string;
+  citations: string[];
   targetUserId?: string;
   usedFallback?: boolean;
 }
@@ -50,6 +53,7 @@ const agentRunIntents = new Set<AgentRunIntent>([
   'deadline',
   'find_file',
   'share_file',
+  'send_message',
   'coordinate',
   'task_update_suggest',
   'web_search',
@@ -130,7 +134,7 @@ async function executeAgentPlan(
   progress?: AgentRunProgressOptions,
   tools: AgentRuntimeToolOptions = {}
 ): Promise<{ state: DemoState; response: AgentRunResult }> {
-  const decision = agentPlanToDecision(plan, input);
+  const decision = agentPlanToDecision(state, plan, input);
   const intent = plan.intent;
   const plannedToolNames = plan.toolCalls.map((toolCall) => toolCall.tool);
 
@@ -283,7 +287,12 @@ async function executeAgentPlan(
   }
 
   if (intent === 'share_file') {
-    const requesterId = getPlanStringArg(plan, 'file.share', 'requesterId') ?? decision.targetUserId ?? input.targetUserId ?? 'user-chen';
+    const requesterId =
+      getPlanStringArg(plan, 'file.share', 'requesterId') ??
+      decision.targetUserId ??
+      input.targetUserId ??
+      inferTargetUserIdFromText(state, input.userText, agent.ownerId) ??
+      'user-chen';
     emitAgentRunProgress(progress, input, {
       phase: 'executing',
       label: '评估文件代发',
@@ -293,8 +302,11 @@ async function executeAgentPlan(
     const runtime = await runFileShareAction(state, {
       agentId: input.agentId,
       roomId: input.roomId,
+      targetRoomId: input.targetRoomId ?? inferTargetRoomIdFromText(state, agent, input.userText),
       requesterId,
-      requestText: input.userText
+      requestText: input.userText,
+      fileId: input.fileId,
+      fileVersion: input.fileVersion
     }, aiProvider);
     const resultLog = {
       ...runtime.result.log,
@@ -341,8 +353,16 @@ async function executeAgentPlan(
     };
   }
 
+  if (intent === 'send_message') {
+    return handleAgentSendMessage(state, input, agent, plan, decision, aiProvider, progress);
+  }
+
   if (intent === 'coordinate') {
-    const targetUserId = getPlanStringArg(plan, 'agent.coordinate', 'targetUserId') ?? decision.targetUserId ?? input.targetUserId;
+    const targetUserId =
+      getPlanStringArg(plan, 'agent.coordinate', 'targetUserId') ??
+      decision.targetUserId ??
+      input.targetUserId ??
+      inferTargetUserIdFromText(state, input.userText, agent.ownerId);
     const toAgentId = targetUserId
       ? state.users.find((user) => user.id === targetUserId)?.agentId
       : 'agent-lin';
@@ -514,15 +534,16 @@ async function planAgentRun(
       'If authorized current/global context cannot answer and the user asks for external public facts or DeepSeek/web search, use web_search instead of inventing an internal answer.',
       'Do not invent internal project details that are not explicit in the authorized context. If an internal claim is only inferred, say it is an inference.',
       '你先判断用户真实意图，再输出一个可执行计划。此步骤只做规划，不发送消息、不改文件、不改日程。',
-      '可选 intent：summary、deadline、find_file、share_file、coordinate、task_update_suggest、web_search、chat。',
+      '可选 intent：summary、deadline、find_file、share_file、send_message、coordinate、task_update_suggest、web_search、chat。',
       'userVisiblePlan 是展示给用户看的简短执行计划或判断依据，不要输出隐藏推理过程。',
       '当用户只是自然提问或闲聊时选择 chat，并在 answer 中给出可直接展示的回复。',
       '当用户明确要求“联网/网上/搜索/查一下/最新/news/current/web search”等外部公开信息时选择 web_search，不要把它降级为只读内部上下文。',
       '询问“谁负责、进度如何、我今天先做什么、能看到哪些上下文”等上下文问题，一律选择 chat。',
+      '用户明确要求 Agent 代发普通文本消息给某个授权房间或成员时选择 send_message；需要发送文件时选择 share_file。',
       '只有用户明确要求改变日程/任务安排，或要求你和某个用户/Agent 协商确认时，才选择 coordinate。',
       '当用户请求总结、截止日期、文件、协调等能力时选择对应 intent；targetUserId 仅在明确提到目标用户时填写。',
       '如果不确定是否要执行外部动作，选择 chat，先解释判断并请求确认。',
-      '可用 tool：chat.answer、room.summarize、deadline.answer、file.search、file.share、web.search、agent.coordinate、task.suggest_update。',
+      '可用 tool：chat.answer、room.summarize、deadline.answer、file.search、file.share、message.send、web.search、agent.coordinate、task.suggest_update。',
       '',
       '请严格以 JSON 回复，不要包含其他文字。JSON 格式如下：',
       '{"mode":"answer","intent":"chat","userVisiblePlan":"一句话说明要如何处理","answer":"chat 时的直接回复","toolCalls":[{"tool":"chat.answer","args":{}}],"risk":{"level":"low","score":0.1,"reason":"只读回答","model":"llm-planner"},"citations":["消息或文件ID"],"needsConfirmationReason":null}'
@@ -560,7 +581,8 @@ function createFallbackDecision(input: AgentRunRequest): AgentRunDecision {
   return {
     intent,
     targetUserId: input.targetUserId,
-    plan: fallbackPlanForIntent(intent)
+    plan: fallbackPlanForIntent(intent),
+    citations: []
   };
 }
 
@@ -576,6 +598,10 @@ function createFallbackAgentPlan(input: AgentRunRequest): AgentPlan {
       requesterId: decision.targetUserId,
       question: input.userText,
       requestText: input.userText,
+      fileId: input.fileId,
+      fileVersion: input.fileVersion,
+      targetRoomId: input.targetRoomId,
+      messageBody: input.messageBody,
       proposal: input.userText
     }),
     risk: {
@@ -616,12 +642,13 @@ function parseAgentPlan(raw: string, fallback: AgentPlan, input: AgentRunRequest
         ? 'answer'
         : 'execute',
     intent,
-    userVisiblePlan:
+    userVisiblePlan: compactUserVisiblePlan(
       typeof parsed.userVisiblePlan === 'string' && parsed.userVisiblePlan.trim()
-        ? parsed.userVisiblePlan.trim()
+        ? parsed.userVisiblePlan
         : typeof parsed.plan === 'string' && parsed.plan.trim()
-          ? parsed.plan.trim()
-          : fallback.userVisiblePlan,
+          ? parsed.plan
+          : fallback.userVisiblePlan
+    ),
     answer: typeof parsed.answer === 'string' ? parsed.answer.trim() : undefined,
     toolCalls,
     risk,
@@ -631,6 +658,19 @@ function parseAgentPlan(raw: string, fallback: AgentPlan, input: AgentRunRequest
     needsConfirmationReason:
       typeof parsed.needsConfirmationReason === 'string' ? parsed.needsConfirmationReason.trim() : undefined
   };
+}
+
+function compactUserVisiblePlan(value: string): string {
+  const cleaned = value
+    .replace(/\s+/g, ' ')
+    .replace(/^(思考过程|思路|reasoning|plan)\s*[:：-]\s*/i, '')
+    .trim();
+  if (!cleaned) {
+    return fallbackPlanForIntent('chat');
+  }
+  const withoutListMarkers = cleaned.replace(/第\s*\d+\s*条\s*[:：]\s*/g, '');
+  const firstSentence = withoutListMarkers.match(/^.{1,180}?[。！？.!?](?=\s|$)/u)?.[0] ?? withoutListMarkers;
+  return firstSentence.length > 180 ? `${firstSentence.slice(0, 177)}...` : firstSentence;
 }
 
 function parsePlanRisk(value: unknown): RiskAssessment {
@@ -666,6 +706,10 @@ function parseToolCalls(
     requesterId: targetUserId,
     question: input.userText,
     requestText: input.userText,
+    fileId: input.fileId,
+    fileVersion: input.fileVersion,
+    targetRoomId: input.targetRoomId,
+    messageBody: input.messageBody,
     proposal: input.userText
   });
   if (!Array.isArray(value) || value.length === 0) {
@@ -706,11 +750,12 @@ function normalizeToolCallsForIntent(intent: AgentRunIntent, toolCalls: AgentToo
   return matching.length > 0 ? matching : defaultToolCallsForIntent(intent, toolCalls[0]?.args ?? {});
 }
 
-function agentPlanToDecision(plan: AgentPlan, input: AgentRunRequest): AgentRunDecision {
+function agentPlanToDecision(state: DemoState, plan: AgentPlan, input: AgentRunRequest): AgentRunDecision {
   return {
     intent: plan.intent,
     plan: plan.userVisiblePlan,
     answer: plan.answer,
+    citations: filterExistingContextIds(state, plan.citations),
     usedFallback: plan.risk.model === 'fallback.local_rules',
     targetUserId:
       getPlanStringArg(plan, primaryToolNameForIntent(plan.intent), 'targetUserId') ??
@@ -742,6 +787,8 @@ function inferIntentFromText(text: string): AgentRunIntent {
     (lowered.includes('who') && lowered.includes('responsib'));
   const asksVisibility = includesAny(text, ['能看到哪些', '可以看到哪些', '可见哪些', '你能看到']) ||
     lowered.includes('what can you see');
+  const asksCapability = includesAny(text, ['能代谁', '可以代谁', '你是谁', '你的权限', '能做什么']) ||
+    includesAny(lowered, ['who can you act for', 'what can you do']);
 
   if (looksLikeWebSearchRequest(text)) {
     return 'web_search';
@@ -758,8 +805,14 @@ function inferIntentFromText(text: string): AgentRunIntent {
   if (asksVisibility) {
     return 'chat';
   }
+  if (asksCapability) {
+    return 'chat';
+  }
   if (looksLikeTaskUpdateRequest(text)) {
     return 'task_update_suggest';
+  }
+  if (!asksNotToSend && !mentionsFile && looksLikeDelegatedMessageRequest(text)) {
+    return 'send_message';
   }
   if (
     !asksNotToSend &&
@@ -789,6 +842,9 @@ function normalizeDecisionIntent(intent: AgentRunIntent, text: string): AgentRun
     return 'chat';
   }
   if (intent === 'task_update_suggest' && !looksLikeTaskUpdateRequest(text)) {
+    return 'chat';
+  }
+  if (intent === 'send_message' && !looksLikeDelegatedMessageRequest(text)) {
     return 'chat';
   }
   return intent;
@@ -876,12 +932,19 @@ function looksLikeTaskUpdateRequest(text: string): boolean {
   );
 }
 
+function looksLikeDelegatedMessageRequest(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return includesAny(text, ['发消息', '发送消息', '帮我发', '代我发', '告诉', '通知', '转告']) ||
+    includesAny(lowered, ['send a message', 'send message', 'tell ', 'notify ', 'message ']);
+}
+
 function fallbackPlanForIntent(intent: AgentRunIntent): string {
   const plans: Record<AgentRunIntent, string> = {
     summary: '根据当前授权上下文生成结构化总结。',
     deadline: '检索授权消息、任务和文件后回答截止日期问题。',
     find_file: '只读检索授权文件清单并返回匹配结果。',
     share_file: '评估文件分享请求、匹配授权文件并按风险决定是否执行。',
+    send_message: '评估目标房间和内容风险后，由 Agent 代发普通协作消息。',
     coordinate: '分析日程或任务协调请求的影响和风险。',
     task_update_suggest: '生成任务更新建议并等待人工确认。',
     web_search: '搜索公开网页信息，结合来源片段生成带引用的回答。',
@@ -1279,6 +1342,308 @@ function truncateForReply(text: string, maxLength: number): string {
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength)}...`;
 }
 
+function filterExistingContextIds(state: DemoState, ids: string[]): string[] {
+  const existingIds = new Set([
+    ...state.messages.map((message) => message.id),
+    ...state.files.map((file) => file.id),
+    ...state.fileTextChunks.map((chunk) => chunk.id),
+    ...state.tasks.map((task) => task.id),
+    ...state.calendar.map((item) => item.id),
+    ...state.actionLogs.map((log) => log.id),
+    ...state.actionRequests.map((request) => request.id),
+    ...state.a2aSessions.map((session) => session.id),
+    ...(state.memories ?? []).map((memory) => memory.id)
+  ]);
+  return uniqueStrings(ids.filter((id) => existingIds.has(id)));
+}
+
+function requiresInternalEvidenceForChat(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return (
+    includesAny(text, [
+      '谁负责',
+      '谁在负责',
+      '负责人',
+      '归谁管',
+      '谁管',
+      '进度',
+      '材料',
+      '任务',
+      '文件',
+      '访谈',
+      '纪要',
+      '报告',
+      '演示稿',
+      '缺什么',
+      '还缺',
+      '状态',
+      '证据'
+    ]) ||
+    includesAny(lowered, [
+      'who is responsible',
+      'responsible for',
+      'progress',
+      'status',
+      'task',
+      'file',
+      'material',
+      'evidence',
+      'interview',
+      'report',
+      'slides'
+    ])
+  );
+}
+
+function handleAgentSendMessage(
+  state: DemoState,
+  input: AgentRunRequest,
+  agent: DemoState['agents'][number],
+  plan: AgentPlan,
+  decision: AgentRunDecision,
+  aiProvider?: AiProvider,
+  progress?: AgentRunProgressOptions
+): { state: DemoState; response: AgentRunResult } {
+  const targetUserId =
+    getPlanStringArg(plan, 'message.send', 'targetUserId') ??
+    decision.targetUserId ??
+    input.targetUserId ??
+    inferTargetUserIdFromText(state, input.userText, agent.ownerId);
+  const targetRoomId =
+    getPlanStringArg(plan, 'message.send', 'targetRoomId') ??
+    input.targetRoomId ??
+    inferTargetRoomIdFromText(state, agent, input.userText) ??
+    resolveDelegatedMessageRoomId(state, agent, input.roomId, targetUserId);
+  const messageBody =
+    getPlanStringArg(plan, 'message.send', 'messageBody') ??
+    getPlanStringArg(plan, 'message.send', 'body') ??
+    input.messageBody?.trim() ??
+    extractDelegatedMessageBody(input.userText);
+  const plannedToolNames = plan.toolCalls.map((toolCall) => toolCall.tool);
+
+  emitAgentRunProgress(progress, input, {
+    phase: 'executing',
+    label: '代发 Agent 消息',
+    detail: targetRoomId,
+    toolCalls: ['message.send']
+  });
+
+  const toolResult = executeCoreTool(state, {
+    toolName: 'message.send',
+    agent,
+    sourceRoomId: input.roomId,
+    input: { targetRoomId, targetUserId, messageBody }
+  });
+  const risk = toolResult.risk ?? {
+    level: 'high',
+    score: 0.9,
+    reason: toolResult.error ?? 'Message send tool execution failed.',
+    model: 'tool-executor-v1'
+  } satisfies RiskAssessment;
+  const status: SendMessageAction['status'] = toolResult.status === 'ok'
+    ? 'executed'
+    : toolResult.status === 'needs_confirmation'
+      ? 'needs_confirmation'
+      : 'blocked';
+  const message = status === 'executed' ? toolResult.data?.message : undefined;
+  const log = createLog({
+    agentId: input.agentId,
+    roomId: input.roomId,
+    action: `agent_run:send_message:${messageBody.slice(0, 80)}`,
+    status: status === 'executed' ? 'executed' : status === 'blocked' ? 'blocked' : 'needs_confirmation',
+    risk,
+    contextIds: uniqueStrings([input.roomId, targetRoomId, targetUserId].filter(Boolean) as string[]),
+    toolCalls: uniqueStrings([
+      ...modelToolCalls(aiProvider, plan),
+      ...plannedToolNames,
+      ...toolResult.toolCalls
+    ])
+  });
+  const result: SendMessageAction = {
+    status,
+    requiresHuman: status === 'needs_confirmation',
+    risk,
+    targetRoomId: toolResult.data?.targetRoomId ?? targetRoomId,
+    targetUserId: toolResult.data?.targetUserId ?? targetUserId,
+    messageBody: toolResult.data?.messageBody ?? messageBody,
+    message,
+    log
+  };
+
+  if (status === 'needs_confirmation') {
+    const queued = queueActionForConfirmation(state, {
+      agentId: input.agentId,
+      roomId: input.roomId,
+      kind: 'send_message',
+      input: {
+        targetRoomId,
+        targetUserId,
+        messageBody,
+        sourceRoomId: input.roomId,
+        plan: decision.plan,
+        policyReasons: toolResult.policyReasons ?? toolResult.observations
+      },
+      risk,
+      log
+    });
+    return {
+      state: queued.state,
+      response: {
+        intent: 'send_message',
+        requiresHuman: true,
+        plan: decision.plan,
+        reasoning: decision.plan,
+        result,
+        log,
+        actionRequest: queued.request
+      }
+    };
+  }
+
+  return {
+    state: {
+      ...state,
+      messages: appendRuntimeMessage(state.messages, message),
+      actionLogs: [log, ...state.actionLogs]
+    },
+    response: {
+      intent: 'send_message',
+      requiresHuman: false,
+      plan: decision.plan,
+      reasoning: decision.plan,
+      result,
+      message,
+      log
+    }
+  };
+}
+
+function resolveDelegatedMessageRoomId(
+  state: DemoState,
+  agent: DemoState['agents'][number],
+  fallbackRoomId: string,
+  targetUserId?: string
+): string {
+  if (!targetUserId) {
+    return fallbackRoomId;
+  }
+  return state.rooms.find(
+    (room) =>
+      room.type === 'direct' &&
+      agent.allowedRoomIds.includes(room.id) &&
+      room.memberIds.includes(agent.ownerId) &&
+      room.memberIds.includes(targetUserId)
+  )?.id ?? fallbackRoomId;
+}
+
+function inferTargetUserIdFromText(state: DemoState, text: string, ownerId: string): string | undefined {
+  const normalized = text.toLowerCase();
+  return state.users.find((user) => {
+    if (user.id === ownerId) {
+      return false;
+    }
+    const agent = state.agents.find((candidate) => candidate.id === user.agentId);
+    const aliases = [
+      user.id,
+      user.id.replace(/^user-/, ''),
+      user.name,
+      user.avatar,
+      agent?.displayName
+    ].filter(Boolean) as string[];
+    return aliases.some((alias) => normalized.includes(alias.toLowerCase()));
+  })?.id;
+}
+
+function inferTargetRoomIdFromText(
+  state: DemoState,
+  agent: DemoState['agents'][number],
+  text: string
+): string | undefined {
+  const normalized = text.toLowerCase();
+  return state.rooms
+    .filter((room) => agent.allowedRoomIds.includes(room.id))
+    .find((room) => {
+      const aliases = [
+        room.id,
+        room.name,
+        room.matrixAlias,
+        room.type === 'direct' ? '私聊' : undefined,
+        room.type === 'team' ? '群聊' : undefined
+      ].filter(Boolean) as string[];
+      return aliases.some((alias) => normalized.includes(alias.toLowerCase()));
+    })?.id;
+}
+
+function extractDelegatedMessageBody(text: string): string {
+  const explicit = text.match(/(?:发消息|发送|告诉|通知|转告|send|tell|notify)[^:：，,。]*[:：,，]\s*(.+)$/i);
+  const say = text.match(/(?:说|内容是)\s*[“"']?(.+?)[”"']?$/);
+  return (explicit?.[1] ?? say?.[1] ?? text).trim();
+}
+
+function assessDelegatedMessageRisk(
+  state: DemoState,
+  agent: DemoState['agents'][number],
+  targetRoomId: string,
+  targetUserId: string | undefined,
+  messageBody: string
+): RiskAssessment {
+  const targetRoom = state.rooms.find((room) => room.id === targetRoomId);
+  const targetUser = targetUserId ? state.users.find((user) => user.id === targetUserId) : undefined;
+  if (!targetRoom || !agent.allowedRoomIds.includes(targetRoomId) || !targetRoom.memberIds.includes(agent.ownerId)) {
+    return {
+      level: 'high',
+      score: 0.9,
+      reason: '目标房间不在 Agent 授权范围内，已阻止代发。',
+      model: 'risk-mini-v1'
+    };
+  }
+  if (targetUserId && !targetUser) {
+    return {
+      level: 'high',
+      score: 0.86,
+      reason: '目标成员无法确认，已阻止代发。',
+      model: 'risk-mini-v1'
+    };
+  }
+  if (messageBody.length > 500 || includesAny(messageBody, ['默认大家都同意', '密码', '密钥', 'token', 'secret'])) {
+    return {
+      level: 'medium',
+      score: 0.56,
+      reason: '代发内容较敏感或过长，需要人工确认后发送。',
+      model: 'risk-mini-v1'
+    };
+  }
+  return {
+    level: 'low',
+    score: 0.16,
+    reason: '目标房间在授权范围内，内容是普通协作消息，可自动代发。',
+    model: 'risk-mini-v1'
+  };
+}
+
+function createAgentDelegatedMessage(input: {
+  agent: DemoState['agents'][number];
+  ownerName: string;
+  roomId: string;
+  body: string;
+}): Message {
+  return {
+    id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: input.roomId,
+    senderId: input.agent.ownerId,
+    senderName: input.agent.displayName,
+    body: input.body,
+    sentAt: new Date().toISOString(),
+    type: 'agent',
+    agentLabel: `${input.ownerName}的 Agent 代发`,
+    sourceAgentId: input.agent.id
+  };
+}
+
+function appendRuntimeMessage(messages: Message[], message: Message | undefined): Message[] {
+  return message ? [...messages.filter((candidate) => candidate.id !== message.id), message] : messages;
+}
+
 async function handleAgentWebSearch(
   state: DemoState,
   input: AgentRunRequest,
@@ -1288,7 +1653,7 @@ async function handleAgentWebSearch(
   progress?: AgentRunProgressOptions,
   webSearchProvider?: WebSearchProvider
 ): Promise<{ state: DemoState; response: AgentRunResult }> {
-  const decision = agentPlanToDecision(plan, input);
+  const decision = agentPlanToDecision(state, plan, input);
   const query =
     getPlanStringArg(plan, 'web.search', 'query') ??
     getPlanStringArg(plan, 'web.search', 'q') ??
@@ -1533,17 +1898,30 @@ async function handleAgentChat(
     };
   }
 
-  let replyText = decision?.answer;
+  const requiresEvidence = requiresInternalEvidenceForChat(input.userText);
+  const decisionCitations = decision?.citations ?? [];
+  const shouldRejectDecisionAnswer =
+    Boolean(decision?.answer) &&
+    requiresEvidence &&
+    decisionCitations.length === 0;
+  let replyText = shouldRejectDecisionAnswer ? undefined : decision?.answer;
   let usedFallbackReply = false;
-  let fallbackContextIds: string[] = [];
+  let fallbackContextIds: string[] = decision?.answer && !shouldRejectDecisionAnswer ? decisionCitations : [];
   if (!replyText) {
-    try {
-      replyText = await generateChatReply(state, input, aiProvider);
-    } catch {
+    if (requiresEvidence) {
       const fallback = createFallbackChatReply(state, input);
       replyText = fallback.reply;
       fallbackContextIds = fallback.contextIds;
       usedFallbackReply = true;
+    } else {
+      try {
+      replyText = await generateChatReply(state, input, aiProvider);
+      } catch {
+        const fallback = createFallbackChatReply(state, input);
+        replyText = fallback.reply;
+        fallbackContextIds = fallback.contextIds;
+        usedFallbackReply = true;
+      }
     }
   }
   const plan = decision?.plan ?? fallbackPlanForIntent('chat');
@@ -1669,6 +2047,12 @@ function createFallbackChatReply(
         contextIds: [...contextIds, ...files.map((file) => file.id)]
       };
     }
+    if (requiresInternalEvidenceForChat(text) && contextIds.length === 0 && files.length === 0) {
+      return {
+        reply: '我在当前授权上下文里没有找到能回答这个项目事实的问题证据，因此不能确认具体负责人或材料状态。你可以先同步最新群聊、上传相关文件，或明确授权我查看对应房间后再问。',
+        contextIds: []
+      };
+    }
   }
 
   if (includesAny(text, ['先做', '优先', '哪件事']) || lowered.includes('first')) {
@@ -1685,6 +2069,12 @@ function createFallbackChatReply(
   }
 
   const recent = roomMessages.slice(-3);
+  if (requiresInternalEvidenceForChat(text) && recent.length === 0) {
+    return {
+      reply: '我在当前授权上下文里没有找到能回答这个项目事实的问题证据，因此不能确认具体结论。你可以先同步最新群聊、上传相关文件，或明确授权我查看对应房间后再问。',
+      contextIds: []
+    };
+  }
   return {
     reply: `我可以基于 ${room?.name ?? input.roomId} 的授权消息、任务和文件回答。当前没有外部 LLM 可用，所以我只能做本地上下文检索；你可以问截止时间、负责人、可见文件，或要求我评估是否能代发。`,
     contextIds: recent.map((message) => message.id)

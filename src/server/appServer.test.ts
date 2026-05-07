@@ -158,6 +158,40 @@ describe('real local agent IM server', () => {
     expect(state.messages.some((message: { id: string }) => message.id === sentMessage.autopilotMessages[0].id)).toBe(true);
   });
 
+  it('runs an Agent delegated message to a selected direct room through /api/agent/run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        userText: '告诉陈晨：我晚点发演示稿',
+        messageBody: '我晚点发演示稿'
+      })
+    });
+
+    expect(result.intent).toBe('send_message');
+    expect(result.result.status).toBe('executed');
+    expect(result.message).toMatchObject({
+      roomId: 'room-agent',
+      senderId: 'user-lin',
+      senderName: '林雯的 Agent',
+      body: '我晚点发演示稿',
+      type: 'agent',
+      agentLabel: '林雯的 Agent 代发'
+    });
+
+    const state = await requestJson(`${app.url}/api/state`);
+    expect(state.messages.some((message: { id: string }) => message.id === result.message.id)).toBe(true);
+  });
+
   it('adds a calendar event when a user explicitly confirms a schedule from recent room chat', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -1375,6 +1409,55 @@ describe('real local agent IM server', () => {
     expect(oversized.status).toBe(413);
     expect(await oversized.json()).toMatchObject({ error: 'file too large' });
     expect(state.files.some((file: { name: string }) => file.name === 'malware.exe' || file.name === 'notes.txt')).toBe(false);
+  });
+
+  it('rejects oversized JSON request bodies before mutating state', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const oversizedBody = `oversized ${'x'.repeat(300_000)}`;
+    const rejected = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: oversizedBody
+      })
+    });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(rejected.status).toBe(413);
+    expect(await rejected.json()).toMatchObject({ error: 'request body too large' });
+    expect(state.messages.some((message: { body: string }) => message.body === oversizedBody)).toBe(false);
+  });
+
+  it('returns a client error for malformed JSON request bodies', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{bad json'
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid JSON body' });
   });
 
   it('proxies Matrix media downloads for persisted files', async () => {

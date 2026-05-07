@@ -38,6 +38,12 @@ const toolDefinitions: Record<AgentToolName, AgentToolDefinition> = {
     requiresRiskGate: true,
     description: 'Share a real Matrix-backed authorized file or request confirmation.'
   },
+  'message.send': {
+    name: 'message.send',
+    sideEffect: 'write',
+    requiresRiskGate: true,
+    description: 'Send an Agent-authored delegated message to an authorized room or direct chat.'
+  },
   'web.search': {
     name: 'web.search',
     sideEffect: 'read',
@@ -72,6 +78,7 @@ export function defaultToolCallsForIntent(intent: AgentRunIntent, args: Record<s
     deadline: 'deadline.answer',
     find_file: 'file.search',
     share_file: 'file.share',
+    send_message: 'message.send',
     coordinate: 'agent.coordinate',
     task_update_suggest: 'task.suggest_update',
     web_search: 'web.search',
