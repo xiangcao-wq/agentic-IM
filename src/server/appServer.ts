@@ -39,6 +39,7 @@ import { createAiDemoSeedProvider } from './aiDemoSeed';
 import { createRuntimeDemoAssets, type DemoAsset } from './demoAssets';
 import { extractTextChunks } from './fileTextIndex';
 import { MatrixStore } from './matrixClient';
+import { buildProductReadiness } from './readiness/productReadiness';
 import {
   authorizeRequest,
   isCorsOriginAllowed,
@@ -381,6 +382,32 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       if (!authorizeRequest(request, url, authConfig)) {
         return sendJson(response, { error: 'unauthorized' }, 401);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/readiness') {
+        return sendJson(
+          response,
+          buildProductReadiness({
+            auth: {
+              mode: authConfig.mode,
+              requireAuth: authConfig.requireAuth,
+              allowQueryToken: authConfig.allowQueryToken,
+              tokenConfigured: Boolean(authConfig.apiToken),
+              allowedOrigins: corsConfig.allowedOrigins
+            },
+            storage: { mode: 'json-local', writable: true },
+            worker: {
+              autopilotEnabled: autopilotWorkerStatus.enabled,
+              running: autopilotWorkerStatus.running,
+              lastError: autopilotWorkerStatus.lastError
+            },
+            connector: {
+              matrixEnabled: Boolean(matrixStore),
+              bootstrapMode: matrixStore ? 'matrix' : 'local'
+            },
+            provider: createAiRuntimeStatus(aiProvider, aiStatusProbe)
+          })
+        );
       }
 
       if (request.method === 'GET' && url.pathname === '/api/state') {

@@ -1348,6 +1348,63 @@ describe('real local agent IM server', () => {
     }
   });
 
+  it('returns authenticated product readiness without exposing the API token in public mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        })
+      });
+      servers.push(app);
+
+      const denied = await fetch(`${app.url}/api/readiness`);
+      const allowed = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await allowed.json();
+
+      expect(denied.status).toBe(401);
+      expect(allowed.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.checks.auth).toMatchObject({
+        mode: 'public',
+        requireAuth: true,
+        allowQueryToken: false,
+        tokenConfigured: true,
+        allowedOrigins: ['https://agentbridge.example.com']
+      });
+      expect(JSON.stringify(body)).not.toContain('local-secret');
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
   it('fails startup in public mode when no API token is configured', async () => {
     const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
     const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
