@@ -1243,7 +1243,7 @@ describe('real local agent IM server', () => {
     });
   });
 
-  it('requires the configured API token for protected reads and writes', async () => {
+  it('allows local query-authenticated SSE when an API token is configured', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
@@ -1255,40 +1255,94 @@ describe('real local agent IM server', () => {
     });
     servers.push(app);
 
-    const deniedRead = await fetch(`${app.url}/api/state`);
-    const allowedRead = await fetch(`${app.url}/api/state`, {
-      headers: { 'x-agent-im-token': 'local-secret' }
-    });
     const allowedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
-    const denied = await fetch(`${app.url}/api/messages`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        roomId: 'room-team',
-        senderId: 'user-lin',
-        body: 'unauthorized write'
-      })
-    });
-    const allowed = await fetch(`${app.url}/api/messages`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-agent-im-token': 'local-secret'
-      },
-      body: JSON.stringify({
-        roomId: 'room-team',
-        senderId: 'user-lin',
-        body: 'authorized write'
-      })
-    });
 
-    expect(deniedRead.status).toBe(401);
-    expect(allowedRead.ok).toBe(true);
     expect(allowedSse.ok).toBe(true);
     await allowedSse.body?.cancel();
-    expect(denied.status).toBe(401);
-    expect(await denied.json()).toMatchObject({ error: 'unauthorized' });
-    expect(allowed.status).toBe(201);
+  });
+
+  it('requires header auth and rejects query tokens in public mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret'
+      });
+      servers.push(app);
+
+      const deniedRead = await fetch(`${app.url}/api/state`);
+      const deniedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
+      const allowedRead = await fetch(`${app.url}/api/state`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const allowedSse = await fetch(`${app.url}/api/events`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+
+      expect(deniedRead.status).toBe(401);
+      expect(deniedSse.status).toBe(401);
+      expect(allowedRead.ok).toBe(true);
+      expect(allowedSse.ok).toBe(true);
+      await allowedSse.body?.cancel();
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('fails startup in public mode when no API token is configured', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    let startedApp: Awaited<ReturnType<typeof createAppServer>> | undefined;
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+
+      await expect(
+        createAppServer({
+          dbPath,
+          port: 0,
+          matrixBootstrapPath: null,
+          apiToken: null
+        }).then((app) => {
+          startedApp = app;
+          return app;
+        })
+      ).rejects.toThrow('AGENT_IM_API_TOKEN is required when auth is required');
+    } finally {
+      if (startedApp) {
+        await startedApp.close();
+      }
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
   });
 
   it('rejects browser requests from origins outside the configured allowlist', async () => {

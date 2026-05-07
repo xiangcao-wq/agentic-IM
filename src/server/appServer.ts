@@ -39,6 +39,13 @@ import { createAiDemoSeedProvider } from './aiDemoSeed';
 import { createRuntimeDemoAssets, type DemoAsset } from './demoAssets';
 import { extractTextChunks } from './fileTextIndex';
 import { MatrixStore } from './matrixClient';
+import {
+  authorizeRequest,
+  isCorsOriginAllowed,
+  resolveAuthConfig,
+  resolveCorsConfig,
+  type CorsConfig
+} from './security/auth';
 import { JsonStateStore, type StateStore } from './stateStore';
 import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
@@ -124,10 +131,6 @@ const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8'
 };
 
-const defaultAllowedOrigins = [5175, 5176, 5177, 5178, 5179].flatMap((port) => [
-  `http://127.0.0.1:${port}`,
-  `http://localhost:${port}`
-]);
 const defaultMaxJsonBytes = 256 * 1024;
 const defaultMaxUploadBytes = 10 * 1024 * 1024;
 const defaultAutopilotWorkerIntervalMs = 60_000;
@@ -149,8 +152,14 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     options.webSearchProvider === null
       ? undefined
       : options.webSearchProvider ?? createConfiguredWebSearchProvider(process.env);
-  const apiToken = options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN?.trim() : options.apiToken;
-  const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(process.env.AGENT_IM_ALLOWED_ORIGINS);
+  const authConfig = resolveAuthConfig({
+    ...process.env,
+    AGENT_IM_API_TOKEN:
+      options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN : (options.apiToken ?? undefined)
+  });
+  const corsConfig = resolveCorsConfig(process.env, {
+    allowedOrigins: options.allowedOrigins
+  });
   const maxUploadBytes =
     options.maxUploadBytes ?? Number(process.env.AGENT_IM_MAX_UPLOAD_BYTES ?? defaultMaxUploadBytes);
   const mediaDir = options.mediaDir ?? process.env.AGENT_IM_MEDIA_DIR ?? join(process.cwd(), 'data', 'media');
@@ -355,7 +364,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
   const server = createServer(async (request, response) => {
     try {
-      if (!applyCorsHeaders(request, response, allowedOrigins)) {
+      if (!applyCorsHeaders(request, response, corsConfig)) {
         return sendJson(response, { error: 'origin not allowed' }, 403);
       }
 
@@ -367,7 +376,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${options.port}`}`);
 
-      if (!authorizeRequest(request, url, apiToken)) {
+      if (!authorizeRequest(request, url, authConfig)) {
         return sendJson(response, { error: 'unauthorized' }, 401);
       }
 
@@ -1973,53 +1982,27 @@ function statusForUnhandledError(message: string): number {
   return 500;
 }
 
-function parseAllowedOrigins(raw: string | undefined): string[] {
-  if (!raw?.trim()) {
-    return defaultAllowedOrigins;
-  }
-  return raw
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-}
-
 function applyCorsHeaders(
   request: IncomingMessage,
   response: ServerResponse,
-  allowedOrigins: string[]
+  config: CorsConfig
 ): boolean {
   const origin = getHeaderValue(request.headers.origin);
   if (!origin) {
+    if (!isCorsOriginAllowed(undefined, config)) {
+      return false;
+    }
     response.setHeader('access-control-allow-origin', '*');
     return true;
   }
 
-  if (!allowedOrigins.includes(origin)) {
+  if (!isCorsOriginAllowed(origin, config)) {
     return false;
   }
 
   response.setHeader('access-control-allow-origin', origin);
   response.setHeader('vary', 'origin');
   return true;
-}
-
-function authorizeRequest(request: IncomingMessage, url: URL, apiToken: string | null | undefined): boolean {
-  if (!apiToken || request.method === 'OPTIONS') {
-    return true;
-  }
-
-  const token =
-    getHeaderValue(request.headers['x-agent-im-token']) ??
-    parseBearerToken(request) ??
-    url.searchParams.get('agent_im_token') ??
-    undefined;
-  return token === apiToken;
-}
-
-function parseBearerToken(request: IncomingMessage): string | undefined {
-  const authorization = getHeaderValue(request.headers.authorization);
-  const match = authorization?.match(/^Bearer\s+(.+)$/i);
-  return match?.[1];
 }
 
 const uploadPolicy = {
