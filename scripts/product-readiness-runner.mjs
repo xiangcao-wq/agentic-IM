@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 
+const requiredReadinessChecks = ['auth', 'storage', 'worker', 'connector', 'provider'];
+
 export const defaultChecks = [
   { name: 'unit tests', script: 'test' },
   { name: 'typecheck and build', script: 'build' },
@@ -42,7 +44,7 @@ export async function runReadinessChecks(checks, options = {}) {
   return results;
 }
 
-export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch) {
+export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch, options = {}) {
   const readinessUrl = `${baseUrl.replace(/\/+$/, '')}/api/readiness`;
   const response = await fetchImpl(readinessUrl, {
     headers: token ? { 'x-agent-im-token': token } : {}
@@ -51,15 +53,7 @@ export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch) 
     throw new Error(`/api/readiness failed with ${response.status}`);
   }
   const body = await response.json();
-  if (
-    !body?.checks?.auth ||
-    !body.checks.storage ||
-    !body.checks.worker ||
-    !body.checks.connector ||
-    !body.checks.provider
-  ) {
-    throw new Error('/api/readiness response is missing required checks');
-  }
+  validateReadinessBody(body, options);
   return body;
 }
 
@@ -86,7 +80,7 @@ function runReadinessEndpointCheck(check, options) {
   const token = firstEnvValue(env, ['AGENT_IM_API_TOKEN', 'VITE_AGENT_API_TOKEN']) ?? '';
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  return runTimedCheck(check, () => checkReadinessEndpoint(baseUrl, token, fetchImpl));
+  return runTimedCheck(check, () => checkReadinessEndpoint(baseUrl, token, fetchImpl, { localDemo: options.localDemo }));
 }
 
 function runCustomCheck(check, options) {
@@ -174,6 +168,48 @@ function formatCheckTarget(check) {
     return ' (/api/readiness)';
   }
   return '';
+}
+
+function validateReadinessBody(body, options = {}) {
+  const checks = body?.checks;
+  if (!checks || requiredReadinessChecks.some((name) => !checks[name])) {
+    throw new Error('/api/readiness response is missing required checks');
+  }
+
+  const localDemo = options.localDemo ?? false;
+  const unhealthyCheckName = requiredReadinessChecks.find((name) => {
+    const check = checks[name];
+    if (check.ok === true) {
+      return false;
+    }
+    return !localDemo || !isAllowedLocalDemoDegradedCheck(name, check);
+  });
+
+  if (unhealthyCheckName) {
+    throw new Error(`/api/readiness reported ${unhealthyCheckName} is not ready`);
+  }
+
+  if (body.ok !== true && (!localDemo || requiredReadinessChecks.every((name) => checks[name].ok === true))) {
+    throw new Error('/api/readiness reported overall readiness is not ready');
+  }
+}
+
+function isAllowedLocalDemoDegradedCheck(name, check) {
+  if (name === 'auth') {
+    return check.ok === false && check.status === 'degraded' && check.mode === 'local-demo';
+  }
+
+  if (name === 'provider') {
+    return (
+      check.ok === false &&
+      check.status === 'degraded' &&
+      check.configured === false &&
+      check.provider === 'fallback' &&
+      check.health === 'missing'
+    );
+  }
+
+  return false;
 }
 
 function firstEnvValue(env, names) {
