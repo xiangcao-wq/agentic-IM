@@ -25,8 +25,8 @@ import {
   checkAiStatus,
   confirmAgentAction,
   createStateEventSource,
+  downloadFile,
   fetchState,
-  fileDownloadUrl,
   getAutopilotWorkerStatus,
   humanReply,
   runAgent,
@@ -139,7 +139,6 @@ function App() {
         }
       });
 
-    const events = createStateEventSource(apiBaseUrl);
     function clearEventStreamError() {
       setError((currentError) => {
         if (!eventStreamErrorVisibleRef.current) {
@@ -150,27 +149,14 @@ function App() {
       });
     }
 
-    events.onopen = () => {
+    function handleStreamReady() {
       if (!disposed) {
         setEventStreamStatus('connected');
         clearEventStreamError();
       }
-    };
-    events.addEventListener('state', (event) => {
-      if (!disposed) {
-        setEventStreamStatus('connected');
-        clearEventStreamError();
-        setState(JSON.parse((event as MessageEvent).data) as DemoState);
-      }
-    });
-    events.addEventListener('agent-progress', (event) => {
-      if (!disposed) {
-        setEventStreamStatus('connected');
-        const progress = JSON.parse((event as MessageEvent).data) as AgentProgressEvent;
-        setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
-      }
-    });
-    events.onerror = () => {
+    }
+
+    function handleStreamFailure() {
       if (!disposed) {
         setEventStreamStatus('disconnected');
         setError((currentError) => {
@@ -182,7 +168,29 @@ function App() {
           return eventStreamDisconnectedError;
         });
       }
+    }
+
+    const events = createStateEventSource(apiBaseUrl);
+    void events.ready.then(handleStreamReady).catch(handleStreamFailure);
+
+    const handleStateEvent = (event: { data: string }) => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+        clearEventStreamError();
+        setState(JSON.parse(event.data) as DemoState);
+      }
     };
+    const handleAgentProgressEvent = (event: { data: string }) => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+        clearEventStreamError();
+        const progress = JSON.parse(event.data) as AgentProgressEvent;
+        setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
+      }
+    };
+    events.addEventListener('state', handleStateEvent);
+    events.addEventListener('agent-progress', handleAgentProgressEvent);
+    events.addEventListener('error', handleStreamFailure);
 
     const workerStatusTimer = window.setInterval(() => {
       void refreshAutopilotWorkerStatus();
@@ -191,6 +199,9 @@ function App() {
     return () => {
       disposed = true;
       window.clearInterval(workerStatusTimer);
+      events.removeEventListener('state', handleStateEvent);
+      events.removeEventListener('agent-progress', handleAgentProgressEvent);
+      events.removeEventListener('error', handleStreamFailure);
       events.close();
     };
   }, []);
@@ -229,6 +240,27 @@ function App() {
       return undefined;
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function handleDownloadFile(file: FileItem) {
+    try {
+      const downloaded = await downloadFile(apiBaseUrl, file.id);
+      const objectUrl = URL.createObjectURL(downloaded.blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = downloaded.filename;
+      link.rel = 'noreferrer';
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (downloadError) {
+      eventStreamErrorVisibleRef.current = false;
+      setError(downloadError instanceof Error ? downloadError.message : '文件下载失败');
     }
   }
 
@@ -467,6 +499,7 @@ function App() {
           onComposerChange={setComposer}
           onSend={handleSendMessage}
           onFileUpload={handleUploadFile}
+          onDownloadFile={handleDownloadFile}
           onSummarize={handleSummarize}
           onRefreshTasks={handleRefreshState}
         />
@@ -606,6 +639,7 @@ function ChatPanel(props: {
   onComposerChange: (value: string) => void;
   onSend: () => void;
   onFileUpload: (file: File) => void;
+  onDownloadFile: (file: FileItem) => void;
   onSummarize: () => void;
   onRefreshTasks: () => void;
 }) {
@@ -686,6 +720,7 @@ function ChatPanel(props: {
             members={roomMembers}
             messages={props.sourceMessages}
             users={props.users}
+            onDownloadFile={props.onDownloadFile}
             onRefreshTasks={props.onRefreshTasks}
           />
         </motion.div>
@@ -711,7 +746,9 @@ function ChatPanel(props: {
                   <time>{formatTime(message.sentAt)}</time>
                 </div>
                 <p>{message.body}</p>
-                {message.fileId ? <FileAttachment file={attachedFile} fallbackName={message.body} /> : null}
+                {message.fileId ? (
+                  <FileAttachment file={attachedFile} fallbackName={message.body} onDownload={props.onDownloadFile} />
+                ) : null}
               </div>
             </motion.article>
           );
@@ -762,6 +799,7 @@ function RoomDetailPanel(props: {
   members: DemoState['users'];
   messages: Message[];
   users: DemoState['users'];
+  onDownloadFile: (file: FileItem) => void;
   onRefreshTasks: () => void;
 }) {
   if (props.activeTab === 'tasks') {
@@ -776,7 +814,7 @@ function RoomDetailPanel(props: {
   }
 
   if (props.activeTab === 'files') {
-    return <RoomFilesPanel files={props.files} users={props.users} />;
+    return <RoomFilesPanel files={props.files} users={props.users} onDownloadFile={props.onDownloadFile} />;
   }
 
   if (props.activeTab === 'calendar') {
@@ -786,7 +824,7 @@ function RoomDetailPanel(props: {
   return <RoomMembersPanel members={props.members} />;
 }
 
-function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] }) {
+function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users']; onDownloadFile: (file: FileItem) => void }) {
   return (
     <section className="room-detail-panel">
       <div className="room-detail-header">
@@ -809,7 +847,15 @@ function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] })
                 </span>
               </div>
               {downloadable ? (
-                <a href={fileDownloadUrl(apiBaseUrl, file.id)} download={file.name} aria-label={`download ${file.name}`}>
+                <a
+                  href="#"
+                  download={file.name}
+                  aria-label={`download ${file.name}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    props.onDownloadFile(file);
+                  }}
+                >
                   <Download size={15} />
                 </a>
               ) : null}
@@ -954,11 +1000,20 @@ function StatusPill({ status }: { status: TaskItem['status'] }) {
   );
 }
 
-function FileAttachment(props: { file?: FileItem; fallbackName: string }) {
+function FileAttachment(props: { file?: FileItem; fallbackName: string; onDownload: (file: FileItem) => void }) {
   const label = props.file?.name ?? props.fallbackName;
-  if (isDownloadableFile(props.file)) {
+  const file = props.file;
+  if (isDownloadableFile(file)) {
     return (
-      <a className="file-chip" href={fileDownloadUrl(apiBaseUrl, props.file.id)} download={props.file.name}>
+      <a
+        className="file-chip"
+        href="#"
+        download={file.name}
+        onClick={(event) => {
+          event.preventDefault();
+          props.onDownload(file);
+        }}
+      >
         <FileText size={16} />
         <span>{label}</span>
         <Download size={14} />

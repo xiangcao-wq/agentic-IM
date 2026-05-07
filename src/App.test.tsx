@@ -13,8 +13,8 @@ const apiMocks = vi.hoisted(() => ({
   confirmAgentAction: vi.fn(),
   coordinate: vi.fn(),
   createStateEventSource: vi.fn(),
+  downloadFile: vi.fn(),
   fetchState: vi.fn(),
-  fileDownloadUrl: vi.fn(),
   getAutopilotWorkerStatus: vi.fn(),
   generateDemoAssets: vi.fn(),
   humanReply: vi.fn(),
@@ -35,7 +35,8 @@ vi.mock('./client/apiClient', () => apiMocks);
 describe('App runtime upgrade controls', () => {
   let host: HTMLDivElement;
   let root: Root;
-  let eventListeners: Record<string, (event: MessageEvent) => void>;
+  let eventListeners: Record<string, (event: { type: string; data: string }) => void>;
+  let resolveStreamReady: () => void;
 
   beforeEach(() => {
     host = document.createElement('div');
@@ -53,10 +54,31 @@ describe('App runtime upgrade controls', () => {
       messages: [],
       logs: []
     });
-    apiMocks.fileDownloadUrl.mockReturnValue('/api/files/file/download');
+    apiMocks.downloadFile.mockResolvedValue({
+      blob: new Blob(['download body'], { type: 'text/plain' }),
+      filename: 'download.txt',
+      contentType: 'text/plain'
+    });
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:agentbridge-download')
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn()
+    });
+    const ready = new Promise<void>((resolve) => {
+      resolveStreamReady = resolve;
+    });
     apiMocks.createStateEventSource.mockReturnValue({
-      addEventListener: vi.fn((eventName: string, listener: (event: MessageEvent) => void) => {
+      ready,
+      addEventListener: vi.fn((eventName: string, listener: (event: { type: string; data: string }) => void) => {
         eventListeners[eventName] = listener;
+      }),
+      removeEventListener: vi.fn((eventName: string, listener: (event: { type: string; data: string }) => void) => {
+        if (eventListeners[eventName] === listener) {
+          delete eventListeners[eventName];
+        }
       }),
       close: vi.fn()
     });
@@ -114,6 +136,54 @@ describe('App runtime upgrade controls', () => {
     });
     expect(host.textContent).toContain('可用文件');
     expect(host.textContent).not.toContain('从当前对话中提取的任务');
+  });
+
+  it('downloads files without entering global busy state or refreshing state', async () => {
+    const state = createDemoState();
+    const downloadableFile = state.files.find((file) => file.roomId === 'room-team')!;
+    downloadableFile.localPath = 'uploads/report.txt';
+    apiMocks.fetchState.mockResolvedValue(state);
+    let resolveDownload!: (file: { blob: Blob; filename: string; contentType: string }) => void;
+    apiMocks.downloadFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDownload = resolve;
+      })
+    );
+    const linkClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.fetchState.mockClear();
+
+    const fileTab = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('文件'));
+    expect(fileTab).toBeTruthy();
+    await act(async () => {
+      fileTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const downloadLink = host.querySelector<HTMLAnchorElement>('a[aria-label^="download "]');
+    expect(downloadLink).toBeTruthy();
+
+    await act(async () => {
+      downloadLink!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.downloadFile).toHaveBeenCalledWith('', downloadableFile.id);
+    expect(apiMocks.fetchState).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain('download-file');
+
+    await act(async () => {
+      resolveDownload({
+        blob: new Blob(['download body'], { type: 'text/plain' }),
+        filename: 'report.txt',
+        contentType: 'text/plain'
+      });
+      await Promise.resolve();
+    });
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(linkClick).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agentbridge-download');
   });
 
   it('keeps room filter counts based on all rooms after switching filters', async () => {
@@ -319,9 +389,8 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as { onerror?: () => void };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
 
     expect(host.textContent).toContain('实时连接已断开');
@@ -333,17 +402,13 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as {
-      onerror?: () => void;
-      onopen?: () => void;
-    };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
     expect(host.textContent).toContain('实时连接已断开');
 
     await act(async () => {
-      eventSource.onopen?.();
+      resolveStreamReady();
       await waitForMotionExit();
     });
     expect(host.textContent).not.toContain('实时连接已断开');
@@ -359,7 +424,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('operation failed');
 
     await act(async () => {
-      eventSource.onopen?.();
+      resolveStreamReady();
     });
     expect(host.textContent).toContain('operation failed');
   });
@@ -371,9 +436,8 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as { onerror?: () => void };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
     expect(host.textContent).toContain('实时连接已断开');
 
