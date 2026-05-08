@@ -15,9 +15,18 @@ describe('agent event helpers', () => {
     expect(parseEventCursor('bad-cursor')).toBe(0);
   });
 
-  it('creates event ids from the raw sequence value', () => {
+  it('creates event ids for non-negative integer sequences', () => {
+    expect(createAgentEventId('run-1', 0)).toBe('run-1-event-00000000');
     expect(createAgentEventId('run-1', 42)).toBe('run-1-event-00000042');
-    expect(createAgentEventId('run-1', 3.5)).toBe('run-1-event-000003.5');
+  });
+
+  it('rejects invalid event id sequences', () => {
+    for (const sequence of [-1, 3.5, Number.POSITIVE_INFINITY, Number.NaN]) {
+      expect(() => createAgentEventId('run-1', sequence)).toThrow(RangeError);
+      expect(() => createAgentEventId('run-1', sequence)).toThrow(
+        'event sequence must be a non-negative integer'
+      );
+    }
   });
 
   it('creates a run event draft with product identity context', () => {
@@ -85,5 +94,24 @@ describe('agent event helpers', () => {
       riskLevel: 'low'
     });
     expect(draft.payload.riskLevel).toBe('low');
+  });
+
+  it('rejects legacy progress events for a different run', () => {
+    expect(() =>
+      agentProgressToEventDraft(
+        {
+          tenantId: 'local',
+          sessionId: 'session-1',
+          runId: 'run-1'
+        },
+        {
+          runId: 'run-2',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          phase: 'executing',
+          label: 'Execute file search'
+        }
+      )
+    ).toThrow('progress runId must match event context runId');
   });
 });

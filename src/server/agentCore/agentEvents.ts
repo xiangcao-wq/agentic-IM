@@ -1,3 +1,5 @@
+import type { RiskLevel } from '../../domain/types';
+
 export type AgentEventVisibility = 'user' | 'internal' | 'audit';
 
 export type AgentEventType =
@@ -23,7 +25,7 @@ export interface AgentEventDraft {
   label?: string;
   detail?: string;
   toolCalls: string[];
-  riskLevel?: string;
+  riskLevel?: RiskLevel;
   payload: AgentEventPayload;
 }
 
@@ -61,7 +63,7 @@ export interface LegacyAgentProgressEvent {
   label: string;
   detail?: string;
   toolCalls?: string[];
-  riskLevel?: string;
+  riskLevel?: RiskLevel;
 }
 
 export function encodeEventCursor(sequence: number): string {
@@ -83,6 +85,10 @@ export function parseEventCursor(cursor?: string | null): number {
 }
 
 export function createAgentEventId(runId: string, sequence: number): string {
+  if (!Number.isInteger(sequence) || sequence < 0) {
+    throw new RangeError('event sequence must be a non-negative integer');
+  }
+
   return `${runId}-event-${String(sequence).padStart(8, '0')}`;
 }
 
@@ -107,6 +113,10 @@ export function agentProgressToEventDraft(
   context: AgentProgressDraftContext,
   progress: LegacyAgentProgressEvent
 ): AgentEventDraft {
+  if (progress.runId !== context.runId) {
+    throw new Error('progress runId must match event context runId');
+  }
+
   const toolCalls = progress.toolCalls ? [...progress.toolCalls] : [];
 
   return {
