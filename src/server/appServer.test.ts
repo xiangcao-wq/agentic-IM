@@ -1716,6 +1716,114 @@ describe('real local agent IM server', () => {
     }
   });
 
+  it('reports event log readiness blocked when event store health throws', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createMemoryStateStore(createDemoState()),
+        agentEventStore: createThrowingHealthEventStore()
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(false);
+      expect(body.checks.eventLog).toMatchObject({
+        ok: false,
+        status: 'blocked',
+        mode: 'custom',
+        readable: false,
+        writable: false,
+        valid: false
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('allows an explicit event log readiness mode for injected event stores', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createMemoryStateStore(createDemoState()),
+        agentEventStore: new MemoryAgentEventStore(),
+        agentEventLogMode: 'external-jsonl'
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.ok).toBe(true);
+      expect(body.checks.eventLog).toMatchObject({
+        ok: true,
+        status: 'ready',
+        mode: 'external-jsonl',
+        readable: true,
+        writable: true,
+        valid: true
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
   it('fails startup in public mode when no API token is configured', async () => {
     const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
     const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
@@ -2495,6 +2603,20 @@ function createFailingAppendEventStore(): AgentEventStore {
     },
     async health() {
       return { readable: true, writable: false, valid: true };
+    }
+  };
+}
+
+function createThrowingHealthEventStore(): AgentEventStore {
+  const store = new MemoryAgentEventStore();
+
+  return {
+    init: () => store.init(),
+    append: (draft) => store.append(draft),
+    appendMany: (drafts) => store.appendMany(drafts),
+    list: (options) => store.list(options),
+    async health() {
+      throw new Error('event log health unavailable');
     }
   };
 }

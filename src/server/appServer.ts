@@ -34,7 +34,12 @@ import {
   type PendingTaskFollowUpResult
 } from './agentAutopilotRuntime';
 import { buildAgentTrace } from './agentCore/agentTrace';
-import { JsonlAgentEventStore, MemoryAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
+import {
+  JsonlAgentEventStore,
+  MemoryAgentEventStore,
+  type AgentEventStore,
+  type AgentEventStoreHealth
+} from './agentCore/eventLogStore';
 import { runProductAgentSession } from './agentCore/productHarness';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
@@ -61,6 +66,7 @@ interface ServerOptions {
   matrixBootstrapPath?: string | null;
   stateStore?: StateStore;
   agentEventStore?: AgentEventStore;
+  agentEventLogMode?: string;
   aiProvider?: AiProvider | null;
   apiToken?: string | null;
   allowedOrigins?: string[];
@@ -150,7 +156,8 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     (options.stateStore
       ? new MemoryAgentEventStore()
       : new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl')));
-  const agentEventLogMode = options.agentEventStore || options.stateStore ? 'memory' : 'jsonl-local';
+  const agentEventLogMode =
+    options.agentEventLogMode ?? (options.agentEventStore ? 'custom' : options.stateStore ? 'memory' : 'jsonl-local');
   await agentEventStore.init();
   // Kept in-process for diagnostics; replay reads and store initialization still fail normally.
   let lastAgentEventPersistenceError: string | undefined;
@@ -403,7 +410,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }
 
         const storageHealth = await checkStateStoreHealth(db);
-        const eventLogHealth = await agentEventStore.health();
+        const eventLogHealth = await checkAgentEventStoreHealth(agentEventStore);
 
         return sendJson(
           response,
@@ -2093,6 +2100,19 @@ async function checkStateStoreHealth(db: StateStore): Promise<StateStoreHealth> 
     }
   } catch {
     return { readable: false, writable: false };
+  }
+}
+
+async function checkAgentEventStoreHealth(agentEventStore: AgentEventStore): Promise<AgentEventStoreHealth> {
+  try {
+    const health = await agentEventStore.health();
+    return {
+      readable: Boolean(health.readable),
+      writable: Boolean(health.writable),
+      valid: Boolean(health.valid)
+    };
+  } catch {
+    return { readable: false, writable: false, valid: false };
   }
 }
 
