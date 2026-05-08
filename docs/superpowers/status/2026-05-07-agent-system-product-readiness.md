@@ -45,3 +45,15 @@ Current `data/agent-im-db.json` counts at baseline:
 - Verified `package.json` parses successfully.
 - Attempted local browser-smoke setup with a temporary API database at `tmp/readiness-agent-im-db.json`.
 - Cleaned up the residual `8791` API process after the Vite startup failure.
+
+## 2026-05-08 Product Kernel Slice
+
+Implemented the first Product Kernel slice:
+
+- Agent runs now emit canonical Product Kernel events.
+- A local JSONL AgentEventStore provides durable replay for controlled pilot usage.
+- `/api/agent-runs/:runId/events` returns cursor-based event replay.
+- `/api/traces/:runId` returns trace replay payloads.
+- `/api/readiness` includes Agent event log health.
+
+This is not the final Postgres event store. It establishes the interface and API contract that the Postgres adapter will implement in the next storage-focused slice.
