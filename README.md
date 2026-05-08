@@ -69,6 +69,8 @@ Controlled server pilot requirements:
 curl -H "x-agent-im-token: <server-token>" https://your-agentbridge-host.example.com/api/readiness
 ```
 
+The server runbook is in `docs/deployment/agentbridge-controlled-server-pilot.md`.
+
 ## Verified Flow
 
 1. 发送一条真实用户消息，后端写入 `messages`。
