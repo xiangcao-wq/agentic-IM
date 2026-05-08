@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { blockAgentAction, completeAgentAction, rejectAgentAction } from '../domain/actionQueue';
 import {
   answerDeadlineQuestion,
@@ -33,7 +33,9 @@ import {
   type PendingAgentAutopilotResult,
   type PendingTaskFollowUpResult
 } from './agentAutopilotRuntime';
-import { runAgentIntent } from './agentRunRuntime';
+import { buildAgentTrace } from './agentCore/agentTrace';
+import { JsonlAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
+import { runProductAgentSession } from './agentCore/productHarness';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
 import { createRuntimeDemoAssets, type DemoAsset } from './demoAssets';
@@ -58,6 +60,7 @@ interface ServerOptions {
   host?: string;
   matrixBootstrapPath?: string | null;
   stateStore?: StateStore;
+  agentEventStore?: AgentEventStore;
   aiProvider?: AiProvider | null;
   apiToken?: string | null;
   allowedOrigins?: string[];
@@ -142,6 +145,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   const host = options.host ?? '127.0.0.1';
   const db = options.stateStore ?? new JsonStateStore(options.dbPath);
   await db.init();
+  const agentEventStore =
+    options.agentEventStore ?? new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl'));
+  await agentEventStore.init();
   const matrixPath =
     options.matrixBootstrapPath === undefined
       ? normalizeMatrixBootstrapPath(process.env.MATRIX_BOOTSTRAP_PATH)
@@ -598,6 +604,34 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         });
       }
 
+      const agentRunEventsMatch = url.pathname.match(/^\/api\/agent-runs\/([^/]+)\/events$/);
+      if (request.method === 'GET' && agentRunEventsMatch) {
+        const runId = decodeURIComponent(agentRunEventsMatch[1]);
+        const limitInput = Number(url.searchParams.get('limit') ?? 100);
+        const page = await agentEventStore.list({
+          runId,
+          after: url.searchParams.get('cursor'),
+          limit: Number.isFinite(limitInput) ? limitInput : 100
+        });
+        return sendJson(response, page);
+      }
+
+      const traceMatch = url.pathname.match(/^\/api\/traces\/([^/]+)$/);
+      if (request.method === 'GET' && traceMatch) {
+        const runId = decodeURIComponent(traceMatch[1]);
+        const traceLimit = 500;
+        const page = await agentEventStore.list({ runId, limit: traceLimit });
+        if (page.events.length === 0) {
+          return sendJson(response, { error: 'trace not found' }, 404);
+        }
+        const lastCursor = page.events.at(-1)?.cursor;
+        const hasMoreEvents =
+          page.events.length === traceLimit && lastCursor
+            ? (await agentEventStore.list({ runId, after: lastCursor, limit: 1 })).events.length > 0
+            : false;
+        return sendJson(response, buildAgentTrace(page.events, { truncated: hasMoreEvents }));
+      }
+
       if (request.method === 'GET' && url.pathname === '/api/events') {
         response.writeHead(200, {
           'cache-control': 'no-cache',
@@ -923,12 +957,17 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           toolCalls: []
         });
 
-        let runtime: Awaited<ReturnType<typeof runAgentIntent>>;
+        let runtime: Awaited<ReturnType<typeof runProductAgentSession>>;
         try {
-          runtime = await runAgentIntent(runtimeState, body, aiProvider, {
+          runtime = await runProductAgentSession({
+            state: runtimeState,
+            input: body,
+            eventStore: agentEventStore,
+            aiProvider,
             runId,
-            onProgress: publishProgress
-          }, { webSearchProvider });
+            onProgress: publishProgress,
+            tools: { webSearchProvider }
+          });
         } catch (error) {
           publishProgress({
             runId,
@@ -964,7 +1003,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }
         await updateStoredState((baseState) => mergeRuntimeState(baseState, runtime.state, message));
         await publishRuntimeState();
-        return sendJson(response, runtime.response);
+        return sendJson(response, {
+          ...runtime.response,
+          runId: runtime.runId,
+          sessionId: runtime.sessionId,
+          eventCursor: runtime.events.at(-1)?.cursor
+        });
       }
 
       if (request.method === 'POST' && url.pathname === '/api/agent/coordinate') {

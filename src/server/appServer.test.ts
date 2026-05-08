@@ -192,6 +192,72 @@ describe('real local agent IM server', () => {
     expect(state.messages.some((message: { id: string }) => message.id === result.message.id)).toBe(true);
   });
 
+  it('records replayable product events for /api/agent/run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
+
+    const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
+    expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.created');
+    expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.completed');
+    expect(replay.nextCursor).toMatch(/^seq:/);
+  });
+
+  it('returns a trace replay payload for an agent run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    const trace = await requestJson(`${app.url}/api/traces/${result.runId}`);
+    expect(trace.runId).toBe(result.runId);
+    expect(trace.status).toBe('completed');
+    expect(trace.events.length).toBeGreaterThanOrEqual(2);
+    expect(trace.truncated).toBeUndefined();
+  });
+
+  it('returns trace not found for a missing agent run trace', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/traces/missing-run`);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'trace not found' });
+  });
+
   it('adds a calendar event when a user explicitly confirms a schedule from recent room chat', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
