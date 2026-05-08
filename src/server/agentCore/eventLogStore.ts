@@ -43,10 +43,12 @@ const AGENT_EVENT_TYPES = new Set([
 ]);
 
 const AGENT_EVENT_VISIBILITIES = new Set(['user', 'internal', 'audit']);
+const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 
 export class MemoryAgentEventStore implements AgentEventStore {
   private events: AgentEvent[] = [];
   private nextSequence = 1;
+  private appendQueue: Promise<void> = Promise.resolve();
 
   async init(): Promise<void> {
     return Promise.resolve();
@@ -58,10 +60,12 @@ export class MemoryAgentEventStore implements AgentEventStore {
   }
 
   async appendMany(drafts: AgentEventDraft[]): Promise<AgentEvent[]> {
-    const events = drafts.map((draft, index) => materializeEvent(draft, this.nextSequence + index));
-    this.nextSequence += events.length;
-    this.events.push(...events.map(cloneEvent));
-    return events.map(cloneEvent);
+    return this.enqueueAppend(async () => {
+      const events = drafts.map((draft, index) => materializeEvent(draft, this.nextSequence + index));
+      this.nextSequence += events.length;
+      this.events.push(...events.map(cloneEvent));
+      return events.map(cloneEvent);
+    });
   }
 
   async list(options: AgentEventListOptions = {}): Promise<AgentEventPage> {
@@ -75,11 +79,21 @@ export class MemoryAgentEventStore implements AgentEventStore {
       valid: true
     });
   }
+
+  private enqueueAppend<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.appendQueue.then(operation, operation);
+    this.appendQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
 }
 
 export class JsonlAgentEventStore implements AgentEventStore {
   private initialized = false;
   private nextSequence = 1;
+  private appendQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly path: string) {}
 
@@ -99,18 +113,20 @@ export class JsonlAgentEventStore implements AgentEventStore {
   }
 
   async appendMany(drafts: AgentEventDraft[]): Promise<AgentEvent[]> {
-    await this.ensureInitialized();
+    return this.enqueueAppend(async () => {
+      await this.ensureInitialized();
 
-    if (drafts.length === 0) {
-      return [];
-    }
+      if (drafts.length === 0) {
+        return [];
+      }
 
-    const startSequence = this.nextSequence;
-    const events = drafts.map((draft, index) => materializeEvent(draft, startSequence + index));
-    const lines = events.map((event) => JSON.stringify(event)).join('\n');
-    await appendFile(this.path, `${lines}\n`, 'utf8');
-    this.nextSequence = startSequence + events.length;
-    return events.map(cloneEvent);
+      const startSequence = this.nextSequence;
+      const events = drafts.map((draft, index) => materializeEvent(draft, startSequence + index));
+      const lines = events.map((event) => JSON.stringify(event)).join('\n');
+      await appendFile(this.path, `${lines}\n`, 'utf8');
+      this.nextSequence = startSequence + events.length;
+      return events.map(cloneEvent);
+    });
   }
 
   async list(options: AgentEventListOptions = {}): Promise<AgentEventPage> {
@@ -137,6 +153,15 @@ export class JsonlAgentEventStore implements AgentEventStore {
     if (!this.initialized) {
       await this.init();
     }
+  }
+
+  private enqueueAppend<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.appendQueue.then(operation, operation);
+    this.appendQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
   }
 }
 
@@ -183,6 +208,7 @@ function normalizeLimit(limit: number | undefined): number {
 async function readEventFile(path: string): Promise<{ events: AgentEvent[]; valid: boolean }> {
   const raw = await readFile(path, 'utf8');
   const events: AgentEvent[] = [];
+  let lastSequence = 0;
   let valid = true;
 
   for (const line of raw.split(/\r?\n/)) {
@@ -193,7 +219,12 @@ async function readEventFile(path: string): Promise<{ events: AgentEvent[]; vali
     try {
       const value = JSON.parse(line) as unknown;
       if (isAgentEvent(value)) {
-        events.push(cloneEvent(value));
+        if (value.sequence > lastSequence) {
+          events.push(cloneEvent(value));
+          lastSequence = value.sequence;
+        } else {
+          valid = false;
+        }
       } else {
         valid = false;
       }
@@ -203,7 +234,7 @@ async function readEventFile(path: string): Promise<{ events: AgentEvent[]; vali
   }
 
   return {
-    events: events.sort((left, right) => left.sequence - right.sequence),
+    events,
     valid
   };
 }
@@ -224,7 +255,7 @@ function isAgentEvent(value: unknown): value is AgentEvent {
 
   const sequence = value.sequence;
 
-  return (
+  if (
     isKnownEventType(value.type) &&
     isString(value.tenantId) &&
     isString(value.sessionId) &&
@@ -235,16 +266,26 @@ function isAgentEvent(value: unknown): value is AgentEvent {
     isRecord(value.payload) &&
     isString(value.id) &&
     typeof sequence === 'number' &&
+    Number.isFinite(sequence) &&
     Number.isInteger(sequence) &&
-    sequence >= 0 &&
+    sequence >= 1 &&
     isString(value.cursor) &&
     isString(value.createdAt) &&
     optionalString(value.agentId) &&
     optionalString(value.roomId) &&
     optionalString(value.phase) &&
     optionalString(value.label) &&
-    optionalString(value.detail)
-  );
+    optionalString(value.detail) &&
+    optionalRiskLevel(value.riskLevel)
+  ) {
+    return (
+      value.cursor === encodeEventCursor(sequence) &&
+      value.id === createAgentEventId(value.runId, sequence) &&
+      isValidTimestamp(value.createdAt)
+    );
+  }
+
+  return false;
 }
 
 function isKnownEventType(value: unknown): boolean {
@@ -257,6 +298,14 @@ function isKnownVisibility(value: unknown): boolean {
 
 function optionalString(value: unknown): boolean {
   return value === undefined || isString(value);
+}
+
+function optionalRiskLevel(value: unknown): boolean {
+  return value === undefined || (isString(value) && RISK_LEVELS.has(value));
+}
+
+function isValidTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value));
 }
 
 function isString(value: unknown): value is string {
