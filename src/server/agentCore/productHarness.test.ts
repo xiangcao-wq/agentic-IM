@@ -32,6 +32,9 @@ describe('runProductAgentSession', () => {
     const page = await store.list({ runId: 'agent-run-test' });
     expect(page.events.map((event) => event.type)).toContain('agent.run.created');
     expect(page.events.map((event) => event.type)).toContain('agent.progress');
+    expect(page.events.filter((event) => event.type === 'agent.progress').map((event) => event.phase)).toContain(
+      'started'
+    );
     expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.completed' });
   });
 
@@ -58,7 +61,43 @@ describe('runProductAgentSession', () => {
     ).rejects.toThrow('unknown agent');
 
     const page = await store.list({ runId: 'agent-run-failed' });
-    expect(page.events.map((event) => event.type)).toEqual(['agent.run.created', 'agent.run.failed']);
+    expect(page.events.map((event) => event.type)).toEqual([
+      'agent.run.created',
+      'agent.progress',
+      'agent.run.failed'
+    ]);
+    expect(page.events[1]).toMatchObject({ type: 'agent.progress', phase: 'started' });
     expect(page.events.at(-1)?.payload).toMatchObject({ error: 'unknown agent: missing-agent' });
+  });
+
+  it('records accumulated progress before failed events when permission checks fail', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+
+    await expect(
+      runProductAgentSession({
+        state: createDemoState(),
+        input: {
+          agentId: 'agent-chen',
+          roomId: 'room-class',
+          intent: 'chat',
+          userText: 'hello'
+        },
+        eventStore: store,
+        runId: 'agent-run-denied',
+        sessionId: 'agent-session-denied',
+        aiProvider: undefined,
+        tools: {}
+      })
+    ).rejects.toThrow('cannot read room-class');
+
+    const page = await store.list({ runId: 'agent-run-denied' });
+    expect(page.events.map((event) => event.type)).toEqual([
+      'agent.run.created',
+      'agent.progress',
+      'agent.run.failed'
+    ]);
+    expect(page.events[1]).toMatchObject({ type: 'agent.progress', phase: 'started' });
+    expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.failed' });
   });
 });

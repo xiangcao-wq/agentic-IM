@@ -65,18 +65,16 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
         runId,
         onProgress: (event) => {
           input.onProgress?.(event);
-          if (event.phase !== 'started') {
-            progressDrafts.push(
-              agentProgressToEventDraft(
-                {
-                  tenantId,
-                  sessionId,
-                  runId
-                },
-                event
-              )
-            );
-          }
+          progressDrafts.push(
+            agentProgressToEventDraft(
+              {
+                tenantId,
+                sessionId,
+                runId
+              },
+              event
+            )
+          );
         }
       },
       input.tools ?? {}
@@ -125,7 +123,7 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
         error: error instanceof Error ? error.message : 'unknown agent runtime error'
       }
     });
-    await input.eventStore.appendMany([createdDraft, failedDraft]);
+    await input.eventStore.appendMany([createdDraft, ...progressDrafts, failedDraft]);
     throw error;
   }
 }
