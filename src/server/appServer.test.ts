@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
 import type { AgentAutopilotAction, DemoState } from '../domain/types';
+import type { AgentEvent, AgentEventDraft } from './agentCore/agentEvents';
+import type { AgentEventStore } from './agentCore/eventLogStore';
 import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
 import type { StateStore } from './stateStore';
@@ -256,6 +258,76 @@ describe('real local agent IM server', () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'trace not found' });
+  });
+
+  it('does not create a repo-root event log for custom in-memory state stores', async () => {
+    const repoEventLogPath = join(process.cwd(), 'agent-events.jsonl');
+    await rm(repoEventLogPath, { force: true });
+
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        aiProvider: null,
+        stateStore: createMemoryStateStore(createDemoState())
+      });
+      servers.push(app);
+
+      const state = await requestJson(`${app.url}/api/state`);
+      expect(state.rooms.some((room: { id: string }) => room.id === 'room-team')).toBe(true);
+      await expect(readFile(repoEventLogPath, 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(repoEventLogPath, { force: true });
+    }
+  });
+
+  it('returns successful agent response without eventCursor when event log append fails', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      agentEventStore: createFailingAppendEventStore()
+    });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    expect(result.intent).toBe('chat');
+    expect(result.result.reply).toBeTruthy();
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
+    expect(result.eventCursor).toBeUndefined();
+  });
+
+  it('returns bad request for malformed encoded agent run event and trace ids', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const replay = await fetch(`${app.url}/api/agent-runs/%E0%A4%A/events`);
+    const trace = await fetch(`${app.url}/api/traces/%E0%A4%A`);
+
+    expect(replay.status).toBe(400);
+    expect(await replay.json()).toEqual({ error: 'malformed run id' });
+    expect(trace.status).toBe(400);
+    expect(await trace.json()).toEqual({ error: 'malformed run id' });
   });
 
   it('adds a calendar event when a user explicitly confirms a schedule from recent room chat', async () => {
@@ -2297,6 +2369,25 @@ function createBarrierFailingAiProvider(waitForCalls: number): AiProvider {
   };
 }
 
+function createMemoryStateStore(initial: DemoState): StateStore {
+  let state = cloneState(initial);
+
+  return {
+    async init() {},
+    async read() {
+      return cloneState(state);
+    },
+    async write(nextState) {
+      state = cloneState(nextState);
+    },
+    async update(updater) {
+      const nextState = await updater(cloneState(state));
+      state = cloneState(nextState);
+      return cloneState(state);
+    }
+  };
+}
+
 function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number): StateStore {
   let state = cloneState(initial);
   let writeCount = 0;
@@ -2329,6 +2420,24 @@ function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number
       });
       updateQueue = pending.catch(() => undefined);
       return pending;
+    }
+  };
+}
+
+function createFailingAppendEventStore(): AgentEventStore {
+  return {
+    async init() {},
+    async append(_draft: AgentEventDraft): Promise<AgentEvent> {
+      throw new Error('event append failed');
+    },
+    async appendMany(_drafts: AgentEventDraft[]): Promise<AgentEvent[]> {
+      throw new Error('event append failed');
+    },
+    async list() {
+      return { events: [] };
+    },
+    async health() {
+      return { readable: true, writable: false, valid: true };
     }
   };
 }

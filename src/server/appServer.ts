@@ -34,7 +34,7 @@ import {
   type PendingTaskFollowUpResult
 } from './agentAutopilotRuntime';
 import { buildAgentTrace } from './agentCore/agentTrace';
-import { JsonlAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
+import { JsonlAgentEventStore, MemoryAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
 import { runProductAgentSession } from './agentCore/productHarness';
 import { runFileShareAction } from './agentRuntime';
 import { createAiDemoSeedProvider } from './aiDemoSeed';
@@ -146,8 +146,13 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   const db = options.stateStore ?? new JsonStateStore(options.dbPath);
   await db.init();
   const agentEventStore =
-    options.agentEventStore ?? new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl'));
+    options.agentEventStore ??
+    (options.stateStore
+      ? new MemoryAgentEventStore()
+      : new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl')));
   await agentEventStore.init();
+  // Kept in-process for diagnostics; replay reads and store initialization still fail normally.
+  let lastAgentEventPersistenceError: string | undefined;
   const matrixPath =
     options.matrixBootstrapPath === undefined
       ? normalizeMatrixBootstrapPath(process.env.MATRIX_BOOTSTRAP_PATH)
@@ -606,7 +611,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       const agentRunEventsMatch = url.pathname.match(/^\/api\/agent-runs\/([^/]+)\/events$/);
       if (request.method === 'GET' && agentRunEventsMatch) {
-        const runId = decodeURIComponent(agentRunEventsMatch[1]);
+        const runId = decodePathSegment(agentRunEventsMatch[1]);
+        if (!runId) {
+          return sendJson(response, { error: 'malformed run id' }, 400);
+        }
         const limitInput = Number(url.searchParams.get('limit') ?? 100);
         const page = await agentEventStore.list({
           runId,
@@ -618,7 +626,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       const traceMatch = url.pathname.match(/^\/api\/traces\/([^/]+)$/);
       if (request.method === 'GET' && traceMatch) {
-        const runId = decodeURIComponent(traceMatch[1]);
+        const runId = decodePathSegment(traceMatch[1]);
+        if (!runId) {
+          return sendJson(response, { error: 'malformed run id' }, 400);
+        }
         const traceLimit = 500;
         const page = await agentEventStore.list({ runId, limit: traceLimit });
         if (page.events.length === 0) {
@@ -962,7 +973,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           runtime = await runProductAgentSession({
             state: runtimeState,
             input: body,
-            eventStore: agentEventStore,
+            eventStore: createBestEffortAppendManyEventStore(agentEventStore, (error) => {
+              lastAgentEventPersistenceError = error instanceof Error ? error.message : 'unknown event persistence error';
+            }),
             aiProvider,
             runId,
             onProgress: publishProgress,
@@ -2197,6 +2210,34 @@ function getContentType(request: IncomingMessage): string {
 
 function getHeaderValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function decodePathSegment(raw: string): string | undefined {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function createBestEffortAppendManyEventStore(
+  store: AgentEventStore,
+  rememberError: (error: unknown) => void
+): AgentEventStore {
+  return {
+    init: () => store.init(),
+    append: (draft) => store.append(draft),
+    async appendMany(drafts) {
+      try {
+        return await store.appendMany(drafts);
+      } catch (error) {
+        rememberError(error);
+        return [];
+      }
+    },
+    list: (options) => store.list(options),
+    health: () => store.health()
+  };
 }
 
 function createUserMessage(state: DemoState, input: { roomId: string; senderId: string; body: string }): Message {
