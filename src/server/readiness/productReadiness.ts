@@ -18,6 +18,7 @@ export interface ProductReadiness {
       allowedOrigins: string[];
     };
     storage: ReadinessCheck & { mode: string; readable: boolean; writable: boolean };
+    eventLog: ReadinessCheck & { mode: string; readable: boolean; writable: boolean; valid: boolean };
     worker: ReadinessCheck & { autopilotEnabled: boolean; running: boolean };
     connector: ReadinessCheck & { matrixEnabled: boolean; bootstrapMode: string };
     provider: ReadinessCheck & { configured: boolean; provider: string; health: string };
@@ -33,6 +34,7 @@ export interface ProductReadinessInput {
     allowedOrigins: string[];
   };
   storage: { mode: string; readable: boolean; writable: boolean };
+  eventLog: { mode: string; readable: boolean; writable: boolean; valid: boolean };
   worker: { autopilotEnabled: boolean; running: boolean; lastError?: string };
   connector: { matrixEnabled: boolean; bootstrapMode: string };
   provider: { configured: boolean; provider: string; health: string };
@@ -42,6 +44,7 @@ export function buildProductReadiness(input: ProductReadinessInput): ProductRead
   const checks: ProductReadiness['checks'] = {
     auth: buildAuthCheck(input.auth),
     storage: buildStorageCheck(input.storage),
+    eventLog: buildEventLogCheck(input.eventLog),
     worker: buildWorkerCheck(input.worker),
     connector: buildConnectorCheck(input.connector),
     provider: buildProviderCheck(input.provider)
@@ -163,6 +166,21 @@ function buildStorageMessage(input: ProductReadinessInput['storage']): string {
     return 'Local JSON storage is not readable.';
   }
   return 'Local JSON storage is not writable.';
+}
+
+function buildEventLogCheck(input: ProductReadinessInput['eventLog']): ProductReadiness['checks']['eventLog'] {
+  const ready = input.readable && input.writable && input.valid;
+  return {
+    ok: ready,
+    status: ready ? 'ready' : 'blocked',
+    message: ready
+      ? 'Agent event log is readable, writable, and valid.'
+      : 'Agent event log is not product-ready; check readability, writability, and JSONL validity.',
+    mode: input.mode,
+    readable: input.readable,
+    writable: input.writable,
+    valid: input.valid
+  };
 }
 
 function buildWorkerCheck(input: ProductReadinessInput['worker']): ProductReadiness['checks']['worker'] {

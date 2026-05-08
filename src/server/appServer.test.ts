@@ -1564,6 +1564,12 @@ describe('real local agent IM server', () => {
         tokenConfigured: true,
         allowedOrigins: ['https://agentbridge.example.com']
       });
+      expect(body.checks.eventLog).toMatchObject({
+        mode: 'jsonl-local',
+        readable: true,
+        writable: true,
+        valid: true
+      });
       expect(JSON.stringify(body)).not.toContain('local-secret');
     } finally {
       if (previousPublicMode === undefined) {

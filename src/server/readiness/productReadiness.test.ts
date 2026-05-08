@@ -26,6 +26,14 @@ describe('buildProductReadiness', () => {
       allowedOrigins: ['https://agentbridge.example.com']
     });
     expect(readiness.checks.storage).toMatchObject({ ok: true, status: 'ready', mode: 'json-local' });
+    expect(readiness.checks.eventLog).toMatchObject({
+      ok: true,
+      status: 'ready',
+      mode: 'jsonl-local',
+      readable: true,
+      writable: true,
+      valid: true
+    });
     expect(readiness.checks.worker).toMatchObject({
       ok: true,
       status: 'ready',
@@ -224,6 +232,29 @@ describe('buildProductReadiness', () => {
       writable: false
     });
   });
+
+  it('marks product readiness blocked when the event log is not writable', () => {
+    const readiness = buildProductReadiness({
+      auth: {
+        mode: 'public',
+        requireAuth: true,
+        allowQueryToken: false,
+        tokenConfigured: true,
+        allowedOrigins: ['https://agentbridge.example.com']
+      },
+      storage: { mode: 'json-local', readable: true, writable: true },
+      eventLog: { mode: 'jsonl-local', readable: true, writable: false, valid: true },
+      worker: { autopilotEnabled: false, running: false },
+      connector: { matrixEnabled: false, bootstrapMode: 'local' },
+      provider: { configured: true, provider: 'deepseek', health: 'ok' }
+    });
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.checks.eventLog).toMatchObject({
+      ok: false,
+      status: 'blocked'
+    });
+  });
 });
 
 function readyInput(): ProductReadinessInput {
@@ -236,6 +267,7 @@ function readyInput(): ProductReadinessInput {
       allowedOrigins: ['https://agentbridge.example.com']
     },
     storage: { mode: 'json-local', readable: true, writable: true },
+    eventLog: { mode: 'jsonl-local', readable: true, writable: true, valid: true },
     worker: { autopilotEnabled: true, running: true },
     connector: { matrixEnabled: false, bootstrapMode: 'local' },
     provider: { configured: true, provider: 'deepseek', health: 'connected' }

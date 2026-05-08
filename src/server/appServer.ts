@@ -150,6 +150,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     (options.stateStore
       ? new MemoryAgentEventStore()
       : new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl')));
+  const agentEventLogMode = options.agentEventStore || options.stateStore ? 'memory' : 'jsonl-local';
   await agentEventStore.init();
   // Kept in-process for diagnostics; replay reads and store initialization still fail normally.
   let lastAgentEventPersistenceError: string | undefined;
@@ -402,6 +403,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }
 
         const storageHealth = await checkStateStoreHealth(db);
+        const eventLogHealth = await agentEventStore.health();
 
         return sendJson(
           response,
@@ -414,6 +416,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
               allowedOrigins: corsConfig.allowedOrigins
             },
             storage: { mode: 'json-local', ...storageHealth },
+            eventLog: { mode: agentEventLogMode, ...eventLogHealth },
             worker: {
               autopilotEnabled: autopilotWorkerStatus.enabled,
               running: autopilotWorkerStatus.running,
