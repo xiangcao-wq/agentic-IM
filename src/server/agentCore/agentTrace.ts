@@ -13,7 +13,13 @@ export interface AgentTrace {
   finishedAt?: string;
   phases: string[];
   toolCalls: string[];
+  eventCount: number;
+  truncated?: boolean;
   events: AgentEvent[];
+}
+
+export interface AgentTraceOptions {
+  truncated?: boolean;
 }
 
 const TERMINAL_STATUS_BY_TYPE: Partial<Record<AgentEventType, AgentTraceStatus>> = {
@@ -22,13 +28,15 @@ const TERMINAL_STATUS_BY_TYPE: Partial<Record<AgentEventType, AgentTraceStatus>>
   'agent.run.cancelled': 'cancelled'
 };
 
-export function buildAgentTrace(events: AgentEvent[]): AgentTrace {
+export function buildAgentTrace(events: AgentEvent[], options: AgentTraceOptions = {}): AgentTrace {
   const orderedEvents = [...events].sort((left, right) => left.sequence - right.sequence);
   const firstEvent = orderedEvents[0];
 
   if (!firstEvent) {
     throw new Error('agent trace requires at least one event');
   }
+
+  validateTraceContext(orderedEvents, firstEvent);
 
   const phases = collectUnique(orderedEvents.flatMap((event) => (event.phase ? [event.phase] : [])));
   const toolCalls = collectUnique(orderedEvents.flatMap((event) => event.toolCalls));
@@ -46,8 +54,26 @@ export function buildAgentTrace(events: AgentEvent[]): AgentTrace {
     finishedAt: terminalEvent?.createdAt,
     phases,
     toolCalls,
+    eventCount: orderedEvents.length,
+    ...(options.truncated ? { truncated: true } : {}),
     events: orderedEvents
   };
+}
+
+function validateTraceContext(events: AgentEvent[], firstEvent: AgentEvent): void {
+  for (const event of events) {
+    if (event.runId !== firstEvent.runId) {
+      throw new Error('agent trace events must belong to one run');
+    }
+
+    if (event.sessionId !== firstEvent.sessionId) {
+      throw new Error('agent trace events must belong to one session');
+    }
+
+    if (event.tenantId !== firstEvent.tenantId) {
+      throw new Error('agent trace events must belong to one tenant');
+    }
+  }
 }
 
 function findLastTerminalEvent(events: AgentEvent[]): AgentEvent | undefined {
