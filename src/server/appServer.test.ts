@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
 import type { AgentAutopilotAction, DemoState } from '../domain/types';
-import type { AgentEvent, AgentEventDraft } from './agentCore/agentEvents';
-import type { AgentEventStore } from './agentCore/eventLogStore';
+import { createRunEventDraft, type AgentEvent, type AgentEventDraft } from './agentCore/agentEvents';
+import { MemoryAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
 import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
 import type { StateStore } from './stateStore';
@@ -214,11 +214,21 @@ describe('real local agent IM server', () => {
 
     expect(result.runId).toMatch(/^agent-run-/);
     expect(result.sessionId).toMatch(/^agent-session-/);
+    expect(result.eventCursor).toMatch(/^seq:/);
 
     const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
     expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.created');
     expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.completed');
     expect(replay.nextCursor).toMatch(/^seq:/);
+
+    const firstPage = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events?limit=1`);
+    const secondPage = await requestJson(
+      `${app.url}/api/agent-runs/${result.runId}/events?limit=1&cursor=${encodeURIComponent(firstPage.nextCursor)}`
+    );
+    expect(firstPage.events).toHaveLength(1);
+    expect(secondPage.events).toHaveLength(1);
+    expect(firstPage.events[0].id).not.toBe(secondPage.events[0].id);
+    expect(firstPage.events[0].sequence).toBeLessThan(secondPage.events[0].sequence);
   });
 
   it('returns a trace replay payload for an agent run', async () => {
@@ -258,6 +268,32 @@ describe('real local agent IM server', () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'trace not found' });
+  });
+
+  it('marks traces truncated only after the trace event limit', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+    await store.appendMany(createTraceEventDrafts('run-500', 500));
+    await store.appendMany(createTraceEventDrafts('run-501', 501));
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      stateStore: createMemoryStateStore(createDemoState()),
+      agentEventStore: store
+    });
+    servers.push(app);
+
+    const exactLimit = await requestJson(`${app.url}/api/traces/run-500`);
+    const overLimit = await requestJson(`${app.url}/api/traces/run-501`);
+
+    expect(exactLimit.truncated).toBeUndefined();
+    expect(exactLimit.events).toHaveLength(500);
+    expect(exactLimit.eventCount).toBe(500);
+    expect(overLimit.truncated).toBe(true);
+    expect(overLimit.events).toHaveLength(500);
+    expect(overLimit.eventCount).toBe(500);
   });
 
   it('does not create a repo-root event log for custom in-memory state stores', async () => {
@@ -2386,6 +2422,21 @@ function createMemoryStateStore(initial: DemoState): StateStore {
       return cloneState(state);
     }
   };
+}
+
+function createTraceEventDrafts(runId: string, count: number): AgentEventDraft[] {
+  return Array.from({ length: count }, (_, index) =>
+    createRunEventDraft({
+      type: 'agent.run.created',
+      tenantId: 'local',
+      sessionId: `session-${runId}`,
+      runId,
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      entrypoint: 'test',
+      payload: { index }
+    })
+  );
 }
 
 function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number): StateStore {
