@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agentProgressToEventDraft,
+  createAgentEventId,
   createRunEventDraft,
   encodeEventCursor,
   parseEventCursor
@@ -12,6 +13,11 @@ describe('agent event helpers', () => {
     expect(parseEventCursor('seq:42')).toBe(42);
     expect(parseEventCursor(undefined)).toBe(0);
     expect(parseEventCursor('bad-cursor')).toBe(0);
+  });
+
+  it('creates event ids from the raw sequence value', () => {
+    expect(createAgentEventId('run-1', 42)).toBe('run-1-event-00000042');
+    expect(createAgentEventId('run-1', 3.5)).toBe('run-1-event-000003.5');
   });
 
   it('creates a run event draft with product identity context', () => {
@@ -70,6 +76,14 @@ describe('agent event helpers', () => {
       visibility: 'user'
     });
     expect(draft.toolCalls).toEqual(['file.search']);
-    expect(draft.payload).toMatchObject({ detail: 'looking for slides' });
+    expect(draft.riskLevel).toBe('low');
+    expect(draft.payload).toMatchObject({
+      phase: 'executing',
+      label: 'Execute file search',
+      detail: 'looking for slides',
+      toolCalls: ['file.search'],
+      riskLevel: 'low'
+    });
+    expect(draft.payload.riskLevel).toBe('low');
   });
 });

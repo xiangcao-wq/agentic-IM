@@ -83,7 +83,7 @@ export function parseEventCursor(cursor?: string | null): number {
 }
 
 export function createAgentEventId(runId: string, sequence: number): string {
-  return `${runId}-event-${String(normalizeSequence(sequence)).padStart(8, '0')}`;
+  return `${runId}-event-${String(sequence).padStart(8, '0')}`;
 }
 
 export function createRunEventDraft(input: AgentRunEventDraftInput): AgentEventDraft {
