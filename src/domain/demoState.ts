@@ -66,8 +66,8 @@ export function createDemoState(): DemoState {
         ownerId: 'user-lin',
         displayName: '林雯的 Agent',
         autonomy: 'risk_evaluated',
-        allowedRoomIds: ['room-class', 'room-team'],
-        allowedToolIds: ['room_search', 'file_share', 'task_update', 'calendar_suggest']
+        allowedRoomIds: ['room-class', 'room-team', 'room-agent'],
+        allowedToolIds: ['room_search', 'file_share', 'message_send', 'task_update', 'calendar_suggest']
       },
       {
         id: 'agent-chen',

@@ -16,6 +16,7 @@ import type {
 } from '../domain/types';
 
 type Fetcher = typeof fetch;
+export const eventStreamReconnectDelayMs = 1_000;
 
 export interface SendMessageInput {
   roomId: string;
@@ -118,6 +119,24 @@ export interface AutopilotWorkerRunResponse extends RunPendingAutopilotResponse 
   skippedReason?: 'disabled' | 'already_running';
 }
 
+export interface DownloadedFile {
+  blob: Blob;
+  filename: string;
+  contentType: string;
+}
+
+export interface StateStreamMessageEvent {
+  type: string;
+  data: string;
+}
+
+export interface StateEventStream {
+  ready: Promise<void>;
+  addEventListener(type: string, listener: (event: StateStreamMessageEvent) => void): void;
+  removeEventListener(type: string, listener: (event: StateStreamMessageEvent) => void): void;
+  close(): void;
+}
+
 export function fetchState(baseUrl = '', fetcher: Fetcher = fetch): Promise<DemoState> {
   return requestJson<DemoState>(fetcher, endpoint(baseUrl, '/api/state'));
 }
@@ -150,8 +169,24 @@ export function uploadFile(baseUrl: string, input: UploadFileInput, fetcher: Fet
   });
 }
 
-export function fileDownloadUrl(baseUrl: string, fileId: string): string {
-  return withApiTokenQuery(endpoint(baseUrl, `/api/files/${encodeURIComponent(fileId)}/download`));
+export async function downloadFile(
+  baseUrl: string,
+  fileId: string,
+  fetcher: Fetcher = fetch
+): Promise<DownloadedFile> {
+  const response = await fetcher(endpoint(baseUrl, `/api/files/${encodeURIComponent(fileId)}/download`), {
+    method: 'GET',
+    headers: withApiToken({})
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: parseDownloadFilename(response.headers.get('content-disposition')) ?? `${fileId}.bin`,
+    contentType: response.headers.get('content-type') ?? 'application/octet-stream'
+  };
 }
 
 export function summarize(
@@ -300,8 +335,8 @@ export function rejectAgentAction(
   );
 }
 
-export function createStateEventSource(baseUrl = ''): EventSource {
-  return new EventSource(withApiTokenQuery(endpoint(baseUrl, '/api/events')));
+export function createStateEventSource(baseUrl = '', fetcher: Fetcher = fetch): StateEventStream {
+  return createFetchSseStream(endpoint(baseUrl, '/api/events'), fetcher);
 }
 
 function post(body: unknown): RequestInit {
@@ -335,6 +370,210 @@ async function readErrorMessage(response: Response): Promise<string> {
   return `Request failed: ${response.status}`;
 }
 
+function createFetchSseStream(url: string, fetcher: Fetcher): StateEventStream {
+  const listeners = new Map<string, Set<(event: StateStreamMessageEvent) => void>>();
+  let closed = false;
+  let activeAbortController: AbortController | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let readySettled = false;
+  let resolveReady!: () => void;
+  let rejectReady!: (error: unknown) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = () => {
+      if (!readySettled) {
+        readySettled = true;
+        resolve();
+      }
+    };
+    rejectReady = (error: unknown) => {
+      if (!readySettled) {
+        readySettled = true;
+        reject(error);
+      }
+    };
+  });
+
+  const scheduleReconnect = () =>
+    new Promise<void>((resolve) => {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        resolve();
+      }, eventStreamReconnectDelayMs);
+    });
+
+  const connect = async () => {
+    activeAbortController = new AbortController();
+    try {
+      const response = await fetcher(url, {
+        method: 'GET',
+        headers: withApiToken({ accept: 'text/event-stream' }),
+        signal: activeAbortController.signal
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      if (!response.body) {
+        throw new Error('Event stream response did not include a body');
+      }
+      await readSseBody(response.body, (frame) => {
+        const event = parseSseFrame(frame);
+        if (event) {
+          if (event.type === 'ready') {
+            resolveReady();
+          }
+          dispatchEvent(listeners, event);
+        }
+      });
+      if (!closed) {
+        dispatchEvent(listeners, {
+          type: 'error',
+          data: 'Event stream disconnected'
+        });
+      }
+    } catch (error) {
+      if (closed && isAbortError(error)) {
+        resolveReady();
+        return;
+      }
+      if (!readySettled) {
+        rejectReady(error);
+      }
+      if (!closed) {
+        dispatchEvent(listeners, {
+          type: 'error',
+          data: error instanceof Error ? error.message : 'Event stream disconnected'
+        });
+      }
+    } finally {
+      activeAbortController = null;
+    }
+  };
+
+  void (async () => {
+    while (!closed) {
+      await connect();
+      if (!closed) {
+        await scheduleReconnect();
+      }
+    }
+  })();
+
+  return {
+    ready,
+    addEventListener(type, listener) {
+      const typeListeners = listeners.get(type) ?? new Set<(event: StateStreamMessageEvent) => void>();
+      typeListeners.add(listener);
+      listeners.set(type, typeListeners);
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener);
+    },
+    close() {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      activeAbortController?.abort();
+      listeners.clear();
+    }
+  };
+}
+
+async function readSseBody(
+  body: ReadableStream<Uint8Array>,
+  onFrame: (frame: string) => void
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      let separator = buffer.indexOf('\n\n');
+      while (separator >= 0) {
+        onFrame(buffer.slice(0, separator));
+        buffer = buffer.slice(separator + 2);
+        separator = buffer.indexOf('\n\n');
+      }
+    }
+    buffer += decoder.decode();
+    buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (buffer.trim()) {
+      onFrame(buffer);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseSseFrame(frame: string): StateStreamMessageEvent | null {
+  let type = 'message';
+  const data: string[] = [];
+  for (const line of frame.split('\n')) {
+    if (!line || line.startsWith(':')) {
+      continue;
+    }
+    const separator = line.indexOf(':');
+    const field = separator >= 0 ? line.slice(0, separator) : line;
+    let value = separator >= 0 ? line.slice(separator + 1) : '';
+    if (value.startsWith(' ')) {
+      value = value.slice(1);
+    }
+    if (field === 'event') {
+      type = value || 'message';
+    } else if (field === 'data') {
+      data.push(value);
+    }
+  }
+  if (data.length === 0) {
+    return null;
+  }
+  return { type, data: data.join('\n') };
+}
+
+function dispatchEvent(
+  listeners: Map<string, Set<(event: StateStreamMessageEvent) => void>>,
+  event: StateStreamMessageEvent
+): void {
+  for (const listener of Array.from(listeners.get(event.type) ?? [])) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error('Event stream listener failed', error);
+    }
+  }
+}
+
+function parseDownloadFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) {
+    return null;
+  }
+  const encodedFilename = /(?:^|;)\s*filename\*\s*=\s*(?:UTF-8'')?("?)([^";]+)\1/i.exec(contentDisposition);
+  if (encodedFilename?.[2]) {
+    try {
+      return decodeURIComponent(encodedFilename[2]);
+    } catch {
+      return encodedFilename[2];
+    }
+  }
+  const quotedFilename = /(?:^|;)\s*filename\s*=\s*"([^"]+)"/i.exec(contentDisposition);
+  if (quotedFilename?.[1]) {
+    return quotedFilename[1].replace(/\\"/g, '"');
+  }
+  const filename = /(?:^|;)\s*filename\s*=\s*([^;]+)/i.exec(contentDisposition);
+  return filename?.[1]?.trim() || null;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/$/, '')}${path}`;
 }
@@ -342,15 +581,6 @@ function endpoint(baseUrl: string, path: string): string {
 function withApiToken(headers: Record<string, string>): Record<string, string> {
   const token = getApiToken();
   return token ? { ...headers, 'x-agent-im-token': token } : headers;
-}
-
-function withApiTokenQuery(url: string): string {
-  const token = getApiToken();
-  if (!token) {
-    return url;
-  }
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}agent_im_token=${encodeURIComponent(token)}`;
 }
 
 function getApiToken(): string {

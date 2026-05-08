@@ -39,7 +39,17 @@ import { createAiDemoSeedProvider } from './aiDemoSeed';
 import { createRuntimeDemoAssets, type DemoAsset } from './demoAssets';
 import { extractTextChunks } from './fileTextIndex';
 import { MatrixStore } from './matrixClient';
-import { JsonStateStore, type StateStore } from './stateStore';
+import { buildProductReadiness } from './readiness/productReadiness';
+import {
+  authorizeRequest,
+  isCorsOriginAllowed,
+  isProductMode,
+  resolveAuthConfig,
+  resolveCorsConfig,
+  type CorsConfig
+} from './security/auth';
+import { assertUploadContentAllowed, createDownloadHeaders } from './security/downloadPolicy';
+import { JsonStateStore, type StateStore, type StateStoreHealth } from './stateStore';
 import { createConfiguredWebSearchProvider, type WebSearchProvider } from './webSearch';
 
 interface ServerOptions {
@@ -124,10 +134,7 @@ const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8'
 };
 
-const defaultAllowedOrigins = [5175, 5176, 5177, 5178, 5179].flatMap((port) => [
-  `http://127.0.0.1:${port}`,
-  `http://localhost:${port}`
-]);
+const defaultMaxJsonBytes = 256 * 1024;
 const defaultMaxUploadBytes = 10 * 1024 * 1024;
 const defaultAutopilotWorkerIntervalMs = 60_000;
 
@@ -148,8 +155,15 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     options.webSearchProvider === null
       ? undefined
       : options.webSearchProvider ?? createConfiguredWebSearchProvider(process.env);
-  const apiToken = options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN?.trim() : options.apiToken;
-  const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(process.env.AGENT_IM_ALLOWED_ORIGINS);
+  const authConfig = resolveAuthConfig({
+    ...process.env,
+    AGENT_IM_API_TOKEN:
+      options.apiToken === undefined ? process.env.AGENT_IM_API_TOKEN : (options.apiToken ?? undefined)
+  });
+  const productMode = isProductMode(process.env);
+  const corsConfig = resolveCorsConfig(process.env, {
+    allowedOrigins: options.allowedOrigins
+  });
   const maxUploadBytes =
     options.maxUploadBytes ?? Number(process.env.AGENT_IM_MAX_UPLOAD_BYTES ?? defaultMaxUploadBytes);
   const mediaDir = options.mediaDir ?? process.env.AGENT_IM_MEDIA_DIR ?? join(process.cwd(), 'data', 'media');
@@ -354,7 +368,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
   const server = createServer(async (request, response) => {
     try {
-      if (!applyCorsHeaders(request, response, allowedOrigins)) {
+      if (!applyCorsHeaders(request, response, corsConfig)) {
         return sendJson(response, { error: 'origin not allowed' }, 403);
       }
 
@@ -366,8 +380,41 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
 
       const url = new URL(request.url ?? '/', `http://${request.headers.host ?? `${host}:${options.port}`}`);
 
-      if (!authorizeRequest(request, url, apiToken)) {
+      if (!authorizeRequest(request, url, authConfig)) {
         return sendJson(response, { error: 'unauthorized' }, 401);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/readiness') {
+        response.setHeader('cache-control', 'no-store');
+        if (authConfig.mode === 'production-open') {
+          return sendJson(response, { error: 'readiness requires authenticated product mode' }, 403);
+        }
+
+        const storageHealth = await checkStateStoreHealth(db);
+
+        return sendJson(
+          response,
+          buildProductReadiness({
+            auth: {
+              mode: authConfig.mode,
+              requireAuth: authConfig.requireAuth,
+              allowQueryToken: authConfig.allowQueryToken,
+              tokenConfigured: Boolean(authConfig.apiToken),
+              allowedOrigins: corsConfig.allowedOrigins
+            },
+            storage: { mode: 'json-local', ...storageHealth },
+            worker: {
+              autopilotEnabled: autopilotWorkerStatus.enabled,
+              running: autopilotWorkerStatus.running,
+              lastError: autopilotWorkerStatus.lastError
+            },
+            connector: {
+              matrixEnabled: Boolean(matrixStore),
+              bootstrapMode: matrixStore ? 'matrix' : 'local'
+            },
+            provider: createAiRuntimeStatus(aiProvider, aiStatusProbe)
+          })
+        );
       }
 
       if (request.method === 'GET' && url.pathname === '/api/state') {
@@ -688,9 +735,12 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const agentCanShare = url.searchParams.get('agentCanShare') === 'true';
         const filename = parseUploadFileName(request);
         const contentType = getContentType(request);
-        const bytes = await readRawBody(request);
+        const bytes = await readRawBody(request, {
+          maxBytes: maxUploadBytes,
+          tooLargeMessage: 'file too large'
+        });
         const state = await readRuntimeState();
-        validateFileUpload(state, { roomId, senderId, filename, bytes, contentType, maxUploadBytes });
+        validateFileUpload(state, { roomId, senderId, filename, bytes, contentType, maxUploadBytes, productMode });
 
         const baseState = await db.read();
         let file = createUploadedFile(baseState, {
@@ -757,7 +807,8 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           filename: 'demo-assets',
           bytes: Buffer.from('demo'),
           contentType: 'application/octet-stream',
-          maxUploadBytes
+          maxUploadBytes,
+          productMode
         });
         const baseState = await db.read();
         const generated = await generateDemoAssetsForRoom(baseState, state, {
@@ -1610,6 +1661,30 @@ async function executeConfirmedAgentAction(
     };
   }
 
+  if (action.kind === 'send_message') {
+    let message = createConfirmedDelegatedMessage(state, action);
+    if (matrixStore) {
+      message = await matrixStore.sendMessage(
+        state,
+        {
+          roomId: message.roomId,
+          senderId: message.senderId,
+          body: message.body
+        },
+        {
+          agentLabel: message.agentLabel,
+          sourceAgentId: message.sourceAgentId
+        }
+      );
+    }
+    return {
+      state: {
+        ...state,
+        messages: appendMessage(state.messages, message)
+      }
+    };
+  }
+
   if (action.kind !== 'share_file') {
     return { state };
   }
@@ -1715,13 +1790,14 @@ function getConfirmedFileBinding(
 function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRequest, file: FileItem): Message {
   const agent = state.agents.find((candidate) => candidate.id === action.agentId);
   const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  const targetRoomId = typeof action.input.targetRoomId === 'string' ? action.input.targetRoomId : action.roomId;
   if (!agent || !owner) {
     throw new Error(`unknown agent: ${action.agentId}`);
   }
 
   return {
     id: `msg-agent-share-${file.id}`,
-    roomId: action.roomId,
+    roomId: targetRoomId,
     senderId: agent.ownerId,
     senderName: agent.displayName,
     body: `我代表${owner.name}发送最新文件：${file.name}`,
@@ -1733,6 +1809,28 @@ function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRe
     mxcUri: file.mxcUri,
     contentType: file.contentType,
     size: file.size
+  };
+}
+
+function createConfirmedDelegatedMessage(state: DemoState, action: AgentActionRequest): Message {
+  const agent = state.agents.find((candidate) => candidate.id === action.agentId);
+  const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  const targetRoomId = typeof action.input.targetRoomId === 'string' ? action.input.targetRoomId : action.roomId;
+  const messageBody = typeof action.input.messageBody === 'string' ? action.input.messageBody.trim() : '';
+  const targetRoom = state.rooms.find((room) => room.id === targetRoomId);
+  if (!agent || !owner || !targetRoom || !messageBody || !agent.allowedRoomIds.includes(targetRoomId)) {
+    throw new Error(`invalid delegated message action: ${action.id}`);
+  }
+  return {
+    id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: targetRoomId,
+    senderId: agent.ownerId,
+    senderName: agent.displayName,
+    body: messageBody,
+    sentAt: new Date().toISOString(),
+    type: 'agent',
+    agentLabel: `${owner.name}的 Agent 代发`,
+    sourceAgentId: agent.id
   };
 }
 
@@ -1752,6 +1850,9 @@ function confirmedActionToolCalls(kind: AgentActionRequest['kind'], blockedRisk?
   }
   if (kind === 'share_file') {
     return ['file.share'];
+  }
+  if (kind === 'send_message') {
+    return ['message.send'];
   }
   return [];
 }
@@ -1773,6 +1874,9 @@ function actionReviewMutationLabel(
     if (action.kind === 'share_file') {
       return '文件代发被阻止';
     }
+    if (action.kind === 'send_message') {
+      return '消息代发被阻止';
+    }
     return '确认动作被阻止';
   }
   if (action.kind === 'coordinate') {
@@ -1783,6 +1887,9 @@ function actionReviewMutationLabel(
   }
   if (action.kind === 'share_file') {
     return '执行文件代发';
+  }
+  if (action.kind === 'send_message') {
+    return '执行消息代发';
   }
   return '执行确认动作';
 }
@@ -1799,6 +1906,9 @@ function actionReviewMutationDetail(action: AgentActionRequest): string | undefi
   if (action.kind === 'share_file') {
     const fileName = action.input.fileName ?? action.input.requestText;
     return typeof fileName === 'string' ? fileName : undefined;
+  }
+  if (action.kind === 'send_message') {
+    return typeof action.input.messageBody === 'string' ? action.input.messageBody : undefined;
   }
   return undefined;
 }
@@ -1900,6 +2010,32 @@ class HttpError extends Error {
   }
 }
 
+async function checkStateStoreHealth(db: StateStore): Promise<StateStoreHealth> {
+  if (db.health) {
+    try {
+      const health = await db.health();
+      return {
+        readable: Boolean(health.readable),
+        writable: Boolean(health.writable)
+      };
+    } catch {
+      return { readable: false, writable: false };
+    }
+  }
+
+  try {
+    const currentState = await db.read();
+    try {
+      await db.write(currentState);
+      return { readable: true, writable: true };
+    } catch {
+      return { readable: true, writable: false };
+    }
+  } catch {
+    return { readable: false, writable: false };
+  }
+}
+
 function statusForUnhandledError(message: string): number {
   if (message.includes('cannot read')) {
     return 403;
@@ -1910,53 +2046,27 @@ function statusForUnhandledError(message: string): number {
   return 500;
 }
 
-function parseAllowedOrigins(raw: string | undefined): string[] {
-  if (!raw?.trim()) {
-    return defaultAllowedOrigins;
-  }
-  return raw
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-}
-
 function applyCorsHeaders(
   request: IncomingMessage,
   response: ServerResponse,
-  allowedOrigins: string[]
+  config: CorsConfig
 ): boolean {
   const origin = getHeaderValue(request.headers.origin);
   if (!origin) {
+    if (!isCorsOriginAllowed(undefined, config)) {
+      return false;
+    }
     response.setHeader('access-control-allow-origin', '*');
     return true;
   }
 
-  if (!allowedOrigins.includes(origin)) {
+  if (!isCorsOriginAllowed(origin, config)) {
     return false;
   }
 
   response.setHeader('access-control-allow-origin', origin);
   response.setHeader('vary', 'origin');
   return true;
-}
-
-function authorizeRequest(request: IncomingMessage, url: URL, apiToken: string | null | undefined): boolean {
-  if (!apiToken || request.method === 'OPTIONS') {
-    return true;
-  }
-
-  const token =
-    getHeaderValue(request.headers['x-agent-im-token']) ??
-    parseBearerToken(request) ??
-    url.searchParams.get('agent_im_token') ??
-    undefined;
-  return token === apiToken;
-}
-
-function parseBearerToken(request: IncomingMessage): string | undefined {
-  const authorization = getHeaderValue(request.headers.authorization);
-  const match = authorization?.match(/^Bearer\s+(.+)$/i);
-  return match?.[1];
 }
 
 const uploadPolicy = {
@@ -1984,6 +2094,7 @@ function validateFileUpload(
     bytes: Uint8Array;
     contentType: string;
     maxUploadBytes: number;
+    productMode: boolean;
   }
 ): void {
   if (!state.rooms.some((room) => room.id === input.roomId)) {
@@ -2000,6 +2111,16 @@ function validateFileUpload(
   }
   if (input.bytes.byteLength > input.maxUploadBytes) {
     throw new HttpError(413, 'file too large');
+  }
+
+  try {
+    assertUploadContentAllowed({
+      filename: input.filename,
+      contentType: input.contentType,
+      productMode: input.productMode
+    });
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : 'unsupported file type');
   }
 
   if (input.filename !== 'demo-assets') {
@@ -2283,14 +2404,30 @@ function getRoomName(state: DemoState, roomId: string): string {
 }
 
 async function readJson<T>(request: IncomingMessage): Promise<T> {
-  const raw = (await readRawBody(request)).toString('utf8');
-  return raw ? (JSON.parse(raw) as T) : ({} as T);
+  const raw = (await readRawBody(request, { maxBytes: defaultMaxJsonBytes })).toString('utf8');
+  if (!raw) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new HttpError(400, 'invalid JSON body');
+  }
 }
 
-async function readRawBody(request: IncomingMessage): Promise<Buffer> {
+async function readRawBody(
+  request: IncomingMessage,
+  options: { maxBytes: number; tooLargeMessage?: string }
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  let byteLength = 0;
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += buffer.byteLength;
+    if (byteLength > options.maxBytes) {
+      throw new HttpError(413, options.tooLargeMessage ?? 'request body too large');
+    }
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks);
 }
@@ -2305,17 +2442,15 @@ function sendBytes(
   bytes: Uint8Array,
   input: { contentType: string; filename: string }
 ): void {
-  response.writeHead(200, {
-    'content-disposition': contentDisposition(input.filename),
-    'content-length': String(bytes.byteLength),
-    'content-type': input.contentType
-  });
+  response.writeHead(
+    200,
+    createDownloadHeaders({
+      filename: input.filename,
+      contentType: input.contentType,
+      byteLength: bytes.byteLength
+    })
+  );
   response.end(Buffer.from(bytes));
-}
-
-function contentDisposition(filename: string): string {
-  const asciiName = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 function publish(clients: Set<EventClient>, event: string, body: unknown): void {

@@ -25,8 +25,8 @@ import {
   checkAiStatus,
   confirmAgentAction,
   createStateEventSource,
+  downloadFile,
   fetchState,
-  fileDownloadUrl,
   getAutopilotWorkerStatus,
   humanReply,
   runAgent,
@@ -35,12 +35,15 @@ import {
   rejectAgentAction,
   updateAutopilotPolicy,
   uploadFile,
+  type AutopilotWorkerRunResponse,
   type AutopilotWorkerStatus
 } from './client/apiClient';
 import type {
   AgentActionLog,
   AgentActionRequest,
   AgentProgressEvent,
+  AgentRunIntent,
+  AgentRunRequest,
   AgentRunResult,
   AiAutoreplyPolicy,
   AiReplyJob,
@@ -55,6 +58,7 @@ import type {
   MemoryItem,
   Message,
   RoomSummary,
+  SendMessageAction,
   TaskItem,
   WebSearchAnswer
 } from './domain/types';
@@ -66,6 +70,7 @@ type AgentResult =
   | { kind: 'file-share'; value: FileShareAction }
   | { kind: 'coordination'; value: CoordinationResult }
   | { kind: 'agent-run'; value: AgentRunResult }
+  | { kind: 'autopilot-run'; value: AutopilotWorkerRunResponse }
   | { kind: 'human-reply'; value: Message };
 
 type RoomFilter = 'all' | 'group' | 'direct';
@@ -79,7 +84,7 @@ const eventStreamDisconnectedError = '实时连接已断开；请确认本地 AP
 const quickSummaryPrompt = '总结当前群聊：列出关键结论、已确认事项、待办、风险和下一步。';
 const quickDeadlinePrompt = '只根据当前聊天、任务和日程回答：这次作业什么时候截止？还有哪些临近时间点？';
 const quickFindFilePrompt = '在当前聊天可用文件里查找最新行动计划、演示稿、证据包或引用材料，列出文件名和用途。';
-const defaultFileSharePrompt = '把最新行动计划发一下';
+const defaultFileSharePrompt = '把最新行动计划发给陈晨';
 const defaultCoordinatePrompt = '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。';
 
 const softAppear = {
@@ -103,6 +108,7 @@ function App() {
   const [eventStreamStatus, setEventStreamStatus] = useState<EventStreamStatus>('connecting');
   const [autopilotWorker, setAutopilotWorker] = useState<AutopilotWorkerStatus | null>(null);
   const eventStreamErrorVisibleRef = useRef(false);
+  const agentRunSequenceRef = useRef(0);
 
   async function refreshState() {
     const [nextState, workerStatus] = await Promise.all([
@@ -133,7 +139,6 @@ function App() {
         }
       });
 
-    const events = createStateEventSource(apiBaseUrl);
     function clearEventStreamError() {
       setError((currentError) => {
         if (!eventStreamErrorVisibleRef.current) {
@@ -144,30 +149,21 @@ function App() {
       });
     }
 
-    events.onopen = () => {
+    function handleStreamReady() {
       if (!disposed) {
         setEventStreamStatus('connected');
         clearEventStreamError();
       }
-    };
-    events.addEventListener('state', (event) => {
-      if (!disposed) {
-        setEventStreamStatus('connected');
-        clearEventStreamError();
-        setState(JSON.parse((event as MessageEvent).data) as DemoState);
-      }
-    });
-    events.addEventListener('agent-progress', (event) => {
-      if (!disposed) {
-        setEventStreamStatus('connected');
-        const progress = JSON.parse((event as MessageEvent).data) as AgentProgressEvent;
-        setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
-      }
-    });
-    events.onerror = () => {
+    }
+
+    function handleStreamFailure() {
       if (!disposed) {
         setEventStreamStatus('disconnected');
         setError((currentError) => {
+          if (currentError === eventStreamDisconnectedError) {
+            eventStreamErrorVisibleRef.current = true;
+            return currentError;
+          }
           if (currentError) {
             eventStreamErrorVisibleRef.current = false;
             return currentError;
@@ -176,7 +172,30 @@ function App() {
           return eventStreamDisconnectedError;
         });
       }
+    }
+
+    const events = createStateEventSource(apiBaseUrl);
+    void events.ready.then(handleStreamReady).catch(handleStreamFailure);
+
+    const handleStateEvent = (event: { data: string }) => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+        clearEventStreamError();
+        setState(JSON.parse(event.data) as DemoState);
+      }
     };
+    const handleAgentProgressEvent = (event: { data: string }) => {
+      if (!disposed) {
+        setEventStreamStatus('connected');
+        clearEventStreamError();
+        const progress = JSON.parse(event.data) as AgentProgressEvent;
+        setAgentProgressEvents((current) => [progress, ...current.filter((candidate) => candidate.id !== progress.id)].slice(0, 12));
+      }
+    };
+    events.addEventListener('ready', handleStreamReady);
+    events.addEventListener('state', handleStateEvent);
+    events.addEventListener('agent-progress', handleAgentProgressEvent);
+    events.addEventListener('error', handleStreamFailure);
 
     const workerStatusTimer = window.setInterval(() => {
       void refreshAutopilotWorkerStatus();
@@ -185,6 +204,10 @@ function App() {
     return () => {
       disposed = true;
       window.clearInterval(workerStatusTimer);
+      events.removeEventListener('ready', handleStreamReady);
+      events.removeEventListener('state', handleStateEvent);
+      events.removeEventListener('agent-progress', handleAgentProgressEvent);
+      events.removeEventListener('error', handleStreamFailure);
       events.close();
     };
   }, []);
@@ -226,70 +249,95 @@ function App() {
     }
   }
 
+  async function handleDownloadFile(file: FileItem) {
+    try {
+      const downloaded = await downloadFile(apiBaseUrl, file.id);
+      const objectUrl = URL.createObjectURL(downloaded.blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = downloaded.filename;
+      link.rel = 'noreferrer';
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      }
+    } catch (downloadError) {
+      eventStreamErrorVisibleRef.current = false;
+      setError(downloadError instanceof Error ? downloadError.message : '文件下载失败');
+    }
+  }
+
+  async function runAgentWorkbenchAction(label: string, request: AgentRunRequest): Promise<AgentRunResult | undefined> {
+    const runId = agentRunSequenceRef.current + 1;
+    agentRunSequenceRef.current = runId;
+    setBusyAction(label);
+    setError(null);
+    eventStreamErrorVisibleRef.current = false;
+    try {
+      const response = await runAgent(apiBaseUrl, request);
+      if (agentRunSequenceRef.current === runId) {
+        setAgentResult({ kind: 'agent-run', value: response });
+      }
+      await refreshState();
+      return response;
+    } catch (actionError) {
+      if (agentRunSequenceRef.current === runId) {
+        eventStreamErrorVisibleRef.current = false;
+        setError(actionError instanceof Error ? actionError.message : '操作失败');
+      }
+      return undefined;
+    } finally {
+      if (agentRunSequenceRef.current === runId) {
+        setBusyAction(null);
+      }
+    }
+  }
+
   async function handleSummarize() {
-    await runAction('summary', async () => {
-      const response = await runAgent(apiBaseUrl, {
+    await runAgentWorkbenchAction('summary', {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'summary',
         userText: quickSummaryPrompt
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
     });
   }
 
   async function handleDeadlineQuestion() {
-    await runAction('deadline', async () => {
-      const response = await runAgent(apiBaseUrl, {
+    await runAgentWorkbenchAction('deadline', {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'deadline',
         userText: quickDeadlinePrompt
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
     });
   }
 
   async function handleFileShare() {
-    await runAction('file-share', async () => {
-      const response = await runAgent(apiBaseUrl, {
+    await runAgentWorkbenchAction('file-share', {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'share_file',
-        userText: defaultFileSharePrompt,
-        targetUserId: 'user-chen'
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
+        userText: defaultFileSharePrompt
     });
   }
 
   async function handleCoordinate() {
-    await runAction('coordination', async () => {
-      const response = await runAgent(apiBaseUrl, {
+    await runAgentWorkbenchAction('coordination', {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'coordinate',
-        userText: defaultCoordinatePrompt,
-        targetUserId: 'user-chen'
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
+        userText: defaultCoordinatePrompt
     });
   }
 
   async function handleFindFile() {
-    await runAction('find-file', async () => {
-      const response = await runAgent(apiBaseUrl, {
+    await runAgentWorkbenchAction('find-file', {
         agentId: currentAgentId,
         roomId: selectedRoom.id,
         intent: 'find_file',
         userText: quickFindFilePrompt
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
     });
   }
 
@@ -298,15 +346,15 @@ function App() {
     if (!userText) {
       return;
     }
-    await runAction('chat', async () => {
-      const response = await runAgent(apiBaseUrl, {
-        agentId: currentAgentId,
-        roomId: selectedRoom.id,
-        userText
-      });
-      setAgentResult({ kind: 'agent-run', value: response });
-      return response;
-    });
+    const inferredIntent = inferWorkbenchIntent(userText);
+    const messageBody = inferredIntent === 'send_message' ? extractWorkbenchMessageBody(userText) : undefined;
+    await runAgentWorkbenchAction('chat', compactAgentRunRequest({
+      agentId: currentAgentId,
+      roomId: selectedRoom.id,
+      intent: inferredIntent,
+      userText,
+      messageBody
+    }));
   }
 
   async function handleCheckAiStatus() {
@@ -424,6 +472,7 @@ function App() {
     await runAction('autopilot-worker', async () => {
       const response = await runAutopilotWorkerOnce(apiBaseUrl);
       setAutopilotWorker(response.worker);
+      setAgentResult({ kind: 'autopilot-run', value: response });
       return response;
     });
   }
@@ -433,6 +482,7 @@ function App() {
       <main className="app-shell">
         <Sidebar
           currentUserName={currentUser.name}
+          allRooms={state.rooms}
           rooms={filteredRooms}
           roomSearch={roomSearch}
           roomFilter={roomFilter}
@@ -455,13 +505,13 @@ function App() {
           onComposerChange={setComposer}
           onSend={handleSendMessage}
           onFileUpload={handleUploadFile}
+          onDownloadFile={handleDownloadFile}
           onSummarize={handleSummarize}
           onRefreshTasks={handleRefreshState}
         />
         <AgentWorkbench
           agent={currentAgent}
           selectedRoom={selectedRoom}
-          rooms={state.rooms}
           prompt={agentPrompt}
           error={error}
           busyAction={busyAction}
@@ -493,6 +543,7 @@ function App() {
 
 function Sidebar(props: {
   currentUserName: string;
+  allRooms: DemoState['rooms'];
   rooms: DemoState['rooms'];
   roomSearch: string;
   roomFilter: RoomFilter;
@@ -501,8 +552,9 @@ function Sidebar(props: {
   onSearchChange: (value: string) => void;
   onSelectRoom: (roomId: string) => void;
 }) {
-  const groupCount = props.rooms.filter((room) => room.type !== 'direct').length;
-  const directCount = props.rooms.filter((room) => room.type === 'direct').length;
+  const countableRooms = filterRooms(props.allRooms, props.roomSearch, 'all');
+  const groupCount = countableRooms.filter((room) => room.type !== 'direct').length;
+  const directCount = countableRooms.filter((room) => room.type === 'direct').length;
 
   return (
     <aside className="sidebar">
@@ -593,6 +645,7 @@ function ChatPanel(props: {
   onComposerChange: (value: string) => void;
   onSend: () => void;
   onFileUpload: (file: File) => void;
+  onDownloadFile: (file: FileItem) => void;
   onSummarize: () => void;
   onRefreshTasks: () => void;
 }) {
@@ -673,6 +726,7 @@ function ChatPanel(props: {
             members={roomMembers}
             messages={props.sourceMessages}
             users={props.users}
+            onDownloadFile={props.onDownloadFile}
             onRefreshTasks={props.onRefreshTasks}
           />
         </motion.div>
@@ -698,7 +752,9 @@ function ChatPanel(props: {
                   <time>{formatTime(message.sentAt)}</time>
                 </div>
                 <p>{message.body}</p>
-                {message.fileId ? <FileAttachment file={attachedFile} fallbackName={message.body} /> : null}
+                {message.fileId ? (
+                  <FileAttachment file={attachedFile} fallbackName={message.body} onDownload={props.onDownloadFile} />
+                ) : null}
               </div>
             </motion.article>
           );
@@ -749,6 +805,7 @@ function RoomDetailPanel(props: {
   members: DemoState['users'];
   messages: Message[];
   users: DemoState['users'];
+  onDownloadFile: (file: FileItem) => void;
   onRefreshTasks: () => void;
 }) {
   if (props.activeTab === 'tasks') {
@@ -763,7 +820,7 @@ function RoomDetailPanel(props: {
   }
 
   if (props.activeTab === 'files') {
-    return <RoomFilesPanel files={props.files} users={props.users} />;
+    return <RoomFilesPanel files={props.files} users={props.users} onDownloadFile={props.onDownloadFile} />;
   }
 
   if (props.activeTab === 'calendar') {
@@ -773,7 +830,7 @@ function RoomDetailPanel(props: {
   return <RoomMembersPanel members={props.members} />;
 }
 
-function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] }) {
+function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users']; onDownloadFile: (file: FileItem) => void }) {
   return (
     <section className="room-detail-panel">
       <div className="room-detail-header">
@@ -796,7 +853,15 @@ function RoomFilesPanel(props: { files: FileItem[]; users: DemoState['users'] })
                 </span>
               </div>
               {downloadable ? (
-                <a href={fileDownloadUrl(apiBaseUrl, file.id)} download={file.name} aria-label={`download ${file.name}`}>
+                <a
+                  href="#"
+                  download={file.name}
+                  aria-label={`download ${file.name}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    props.onDownloadFile(file);
+                  }}
+                >
                   <Download size={15} />
                 </a>
               ) : null}
@@ -941,11 +1006,20 @@ function StatusPill({ status }: { status: TaskItem['status'] }) {
   );
 }
 
-function FileAttachment(props: { file?: FileItem; fallbackName: string }) {
+function FileAttachment(props: { file?: FileItem; fallbackName: string; onDownload: (file: FileItem) => void }) {
   const label = props.file?.name ?? props.fallbackName;
-  if (isDownloadableFile(props.file)) {
+  const file = props.file;
+  if (isDownloadableFile(file)) {
     return (
-      <a className="file-chip" href={fileDownloadUrl(apiBaseUrl, props.file.id)} download={props.file.name}>
+      <a
+        className="file-chip"
+        href="#"
+        download={file.name}
+        onClick={(event) => {
+          event.preventDefault();
+          props.onDownload(file);
+        }}
+      >
         <FileText size={16} />
         <span>{label}</span>
         <Download size={14} />
@@ -968,7 +1042,6 @@ function isDownloadableFile(file: FileItem | undefined): file is FileItem {
 function AgentWorkbench(props: {
   agent: DemoState['agents'][number];
   selectedRoom: DemoState['rooms'][number];
-  rooms: DemoState['rooms'];
   prompt: string;
   error: string | null;
   busyAction: string | null;
@@ -1032,6 +1105,7 @@ function AgentWorkbench(props: {
             {props.error}
           </motion.div>
         ) : null}
+        <AgentBusyPanel busyAction={props.busyAction} />
         <AnimatePresence mode="popLayout">
           {props.result ? (
             <motion.div className="agent-result-motion" key={resultKey} {...softAppear}>
@@ -1117,11 +1191,11 @@ function AgentWorkbench(props: {
 
       <div className="agent-dock">
         <div className="action-grid">
-          <ActionButton icon={<PanelRightOpen size={17} />} label="总结群聊" onClick={props.onSummarize} disabled={Boolean(props.busyAction)} />
-          <ActionButton icon={<Clock3 size={17} />} label="问截止" onClick={props.onDeadlineQuestion} disabled={Boolean(props.busyAction)} />
-          <ActionButton icon={<Search size={17} />} label="Agent 找文件" onClick={props.onFindFile} disabled={Boolean(props.busyAction)} />
-          <ActionButton icon={<FileText size={17} />} label="请求代发" onClick={props.onFileShare} disabled={Boolean(props.busyAction)} />
-          <ActionButton icon={<Users size={17} />} label="Agent 协调" onClick={props.onCoordinate} disabled={Boolean(props.busyAction)} />
+          <ActionButton icon={<PanelRightOpen size={17} />} label="总结群聊" onClick={props.onSummarize} disabled={props.busyAction === 'summary'} />
+          <ActionButton icon={<Clock3 size={17} />} label="问截止" onClick={props.onDeadlineQuestion} disabled={props.busyAction === 'deadline'} />
+          <ActionButton icon={<Search size={17} />} label="Agent 找文件" onClick={props.onFindFile} disabled={props.busyAction === 'find-file'} />
+          <ActionButton icon={<FileText size={17} />} label="请求代发" onClick={props.onFileShare} disabled={props.busyAction === 'file-share'} />
+          <ActionButton icon={<Users size={17} />} label="Agent 协调" onClick={props.onCoordinate} disabled={props.busyAction === 'coordination'} />
         </div>
 
         {autopilotPolicy ? (
@@ -1164,13 +1238,28 @@ function AgentWorkbench(props: {
               value={props.prompt}
               onChange={(event) => props.onPromptChange(event.target.value)}
             />
-            <button type="button" onClick={props.onAgentChat} aria-label="send agent prompt" disabled={Boolean(props.busyAction)}>
+            <button type="button" onClick={props.onAgentChat} aria-label="send agent prompt" disabled={props.busyAction === 'chat'}>
               <Send size={17} />
             </button>
           </div>
         </div>
       </div>
     </aside>
+  );
+}
+
+function AgentBusyPanel({ busyAction }: { busyAction: string | null }) {
+  if (!busyAction) {
+    return null;
+  }
+  return (
+    <section className="agent-busy-panel" role="status" aria-live="polite">
+      <RefreshCw size={16} />
+      <div>
+        <strong>正在执行</strong>
+        <span>{busyActionLabel(busyAction)}</span>
+      </div>
+    </section>
   );
 }
 
@@ -1419,6 +1508,10 @@ function ResultPanel({
     return <AgentRunResultPanel result={result.value} sourceMessages={sourceMessages} sourceFiles={sourceFiles} />;
   }
 
+  if (result.kind === 'autopilot-run') {
+    return <AutopilotRunResultPanel result={result.value} />;
+  }
+
   if (result.kind === 'human-reply') {
     return (
       <section className="result-panel">
@@ -1490,10 +1583,51 @@ function getAgentResultKey(result: AgentResult): string {
   if (result.kind === 'agent-run') {
     return `${result.kind}:${result.value.log.id}`;
   }
+  if (result.kind === 'autopilot-run') {
+    return `${result.kind}:${result.value.worker.runCount}:${result.value.worker.lastFinishedAt ?? ''}`;
+  }
   if (result.kind === 'human-reply') {
     return `${result.kind}:${result.value.id}`;
   }
   return `${result.kind}:${JSON.stringify(result.value).slice(0, 80)}`;
+}
+
+function AutopilotRunResultPanel({ result }: { result: AutopilotWorkerRunResponse }) {
+  const processedMessages = result.processedMessageIds.length;
+  const processedTasks = result.processedTaskIds?.length ?? 0;
+  const actionRequests = result.actionRequests ?? [];
+  const didWork = processedMessages + processedTasks + result.sessions.length + result.messages.length + actionRequests.length > 0;
+  return (
+    <section className="result-panel">
+      <div className="result-heading">
+        <ShieldCheck size={18} />
+        <h3>托管巡检结果</h3>
+      </div>
+      <FinalAnswer>
+        {didWork ? (
+          <ul>
+            <li>处理消息 {processedMessages} 条，处理任务 {processedTasks} 条。</li>
+            <li>生成 Agent 协作 {result.sessions.length} 条，代发消息 {result.messages.length} 条。</li>
+            <li>新增待确认动作 {actionRequests.length} 条。</li>
+          </ul>
+        ) : (
+          <p>{result.skippedReason === 'disabled' ? '托管 worker 未启用。' : '本次没有新的待处理消息或临期任务。'}</p>
+        )}
+      </FinalAnswer>
+      {actionRequests.length > 0 ? (
+        <div className="agent-thought">
+          <strong>等待确认</strong>
+          <p>
+            {actionRequests
+              .slice(0, 3)
+              .map((action) => `${agentActionKindLabel(action.kind)}：${String(action.input.requestText ?? action.input.messageBody ?? action.id)}`)
+              .join('；')}
+          </p>
+        </div>
+      ) : null}
+      <RiskLine riskLevel="low" reason={`后台巡检已完成，worker 已运行 ${result.worker.runCount} 次。`} />
+    </section>
+  );
 }
 
 function AgentRunResultPanel({
@@ -1615,6 +1749,22 @@ function AgentRunResultPanel({
     );
   }
 
+  if (isSendMessageAction(structured)) {
+    return (
+      <section className="result-panel">
+        <div className="result-heading">
+          <Send size={18} />
+          <h3>{title}</h3>
+        </div>
+        <PlanLine plan={result.plan} reasoning={result.reasoning} />
+        <FinalAnswer>
+          <p>{structured.status === 'executed' ? `已代发：${structured.messageBody}` : `未自动发送：${structured.messageBody}`}</p>
+        </FinalAnswer>
+        <RiskLine riskLevel={structured.risk.level} reason={structured.risk.reason} />
+      </section>
+    );
+  }
+
   if (isCoordinationResult(structured)) {
     return (
       <section className="result-panel">
@@ -1668,6 +1818,7 @@ function agentIntentTitle(intent: AgentRunResult['intent']) {
     deadline: 'Agent 问答',
     find_file: 'Agent 找文件',
     share_file: 'Agent 代发文件',
+    send_message: 'Agent 代发消息',
     coordinate: 'Agent 协调',
     task_update_suggest: '任务更新建议',
     web_search: 'Agent 搜索',
@@ -1677,13 +1828,27 @@ function agentIntentTitle(intent: AgentRunResult['intent']) {
 }
 
 function PlanLine({ plan, reasoning }: { plan?: string; reasoning?: string }) {
-  const thought = plan ?? reasoning;
+  const thought = compactPlanLine(plan);
   return thought ? (
     <div className="agent-thought">
-      <strong>思考过程</strong>
+      <strong>处理方式</strong>
       <p>{thought}</p>
     </div>
   ) : null;
+}
+
+function compactPlanLine(value?: string): string {
+  const cleaned = value
+    ?.replace(/\s+/g, ' ')
+    .replace(/^(思考过程|思路|reasoning|plan)\s*[:：-]\s*/i, '')
+    .trim();
+  if (!cleaned) {
+    return '';
+  }
+
+  const withoutListMarkers = cleaned.replace(/第\s*\d+\s*条\s*[:：]\s*/g, '');
+  const firstSentence = withoutListMarkers.match(/^.{1,140}?[。！？.!?](?=\s|$)/u)?.[0] ?? withoutListMarkers;
+  return firstSentence.length > 140 ? `${firstSentence.slice(0, 137)}...` : firstSentence;
 }
 
 function FinalAnswer({ children }: { children: ReactNode }) {
@@ -1711,6 +1876,10 @@ function isFileShareAction(value: AgentRunResult['result']): value is FileShareA
   return Boolean(value && 'file' in value && 'risk' in value && !('proposedPlan' in value));
 }
 
+function isSendMessageAction(value: AgentRunResult['result']): value is SendMessageAction {
+  return Boolean(value && 'messageBody' in value && 'targetRoomId' in value && 'risk' in value);
+}
+
 function isCoordinationResult(value: AgentRunResult['result']): value is CoordinationResult {
   return Boolean(value && 'proposedPlan' in value);
 }
@@ -1734,6 +1903,7 @@ function agentActionKindLabel(kind: AgentActionRequest['kind']) {
     deadline: '问截止',
     find_file: '查找文件',
     share_file: '文件代发',
+    send_message: '消息代发',
     coordinate: 'Agent 协调',
     task_update: '任务更新',
     calendar_update: '日程更新',
@@ -1837,10 +2007,51 @@ function toolIdLabel(toolId: string): string {
   const labels: Record<string, string> = {
     room_search: '读群聊',
     file_share: '文件代发',
+    message_send: '消息代发',
     task_update: '任务更新',
     calendar_suggest: '日程建议'
   };
   return labels[toolId] ?? toolId;
+}
+
+function compactAgentRunRequest(input: AgentRunRequest): AgentRunRequest {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined && value !== '')
+  ) as AgentRunRequest;
+}
+
+function inferWorkbenchIntent(text: string): AgentRunIntent | undefined {
+  const lowered = text.toLowerCase();
+  if (
+    includesAnyText(text, ['能代谁', '可以代谁', '你是谁', '你的权限', '能做什么']) ||
+    includesAnyText(lowered, ['who can you act for', 'what can you do'])
+  ) {
+    return undefined;
+  }
+  const asksFileShare = includesAnyText(text, ['发文件', '代发', '转发', '分享', '发一下', '发给']) &&
+    includesAnyText(text, ['文件', '演示稿', '行动计划', '材料', '图片', '海报']);
+  if (asksFileShare || includesAnyText(lowered, ['share file', 'send file', 'send the deck', 'send slides'])) {
+    return 'share_file';
+  }
+
+  const asksMessageSend =
+    includesAnyText(text, ['发消息', '发送消息', '帮我发', '代我发', '告诉', '通知', '转告']) ||
+    includesAnyText(lowered, ['send a message', 'send message', 'tell ', 'notify ']);
+  if (asksMessageSend) {
+    return 'send_message';
+  }
+
+  return undefined;
+}
+
+function extractWorkbenchMessageBody(text: string): string {
+  const explicit = text.match(/(?:发消息|发送消息|帮我发|代我发|告诉|通知|转告|send(?: a)? message|tell|notify)[^:：，,。]*[:：,，]\s*(.+)$/i);
+  const say = text.match(/(?:说|内容是)\s*[“"']?(.+?)[”"']?$/);
+  return (explicit?.[1] ?? say?.[1] ?? text).trim();
+}
+
+function includesAnyText(text: string, needles: string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
 }
 
 function busyActionLabel(action: string): string {
@@ -1853,6 +2064,8 @@ function busyActionLabel(action: string): string {
     chat: '正在生成 Agent 回答',
     send: '正在发送消息',
     'upload-file': '正在上传并索引文件',
+    'autopilot-policy': '正在更新托管授权',
+    'autopilot-worker': '正在巡检待处理消息和任务',
     'ai-status-check': '正在检查 LLM 连接',
     'refresh-state': '正在刷新本地状态'
   };

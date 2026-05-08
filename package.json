@@ -19,6 +19,7 @@
     "eval:agent:real": "tsx src/server/agentEvalCli.ts --real",
     "assets:seed": "tsx scripts/upload-demo-materials.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs",
+    "readiness:product": "node scripts/product-readiness.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -39,7 +39,43 @@ describe('agent runtime', () => {
     });
     expect(result.state.actionRequests[0]).toBe(result.actionRequest);
     expect(result.state.actionLogs[0]).toBe(result.result.log);
+    expect(result.result.risk.model).toBe('policy-engine-v1');
+    expect(result.state.actionLogs[0].toolCalls).toContain('tool_executor.file.share');
     expect(result.state.actionLogs[0].toolCalls).toContain('file_library.lookup_latest');
+  });
+
+  it('shares an explicitly selected authorized file instead of guessing the newest match', async () => {
+    const baseState = createDemoState();
+    const state = {
+      ...baseState,
+      files: baseState.files.map((file) =>
+        file.id === 'file-slides-v3'
+          ? {
+              ...file,
+              mxcUri: 'mxc://localhost/slides-v3',
+              contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              size: 4096
+            }
+          : file
+      )
+    };
+
+    const result = await runFileShareAction(state, {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      requesterId: 'user-chen',
+      requestText: '请把这个文件发给陈晨',
+      fileId: 'file-slides-v3',
+      fileVersion: 3
+    });
+
+    expect(result.result.status).toBe('executed');
+    expect(result.result.file?.id).toBe('file-slides-v3');
+    expect(result.result.message?.fileId).toBe('file-slides-v3');
+    expect(result.actionRequest.input).toMatchObject({
+      fileId: 'file-slides-v3',
+      fileVersion: 3
+    });
   });
 
   it('keeps high-risk file share actions in the confirmation queue', async () => {

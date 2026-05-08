@@ -4,9 +4,9 @@ import {
   checkAiStatus,
   confirmAgentAction,
   createStateEventSource,
+  downloadFile,
   generateDemoAssets,
   fetchState,
-  fileDownloadUrl,
   getAutopilotWorkerStatus,
   humanReply,
   listAgentActions,
@@ -86,37 +86,217 @@ describe('api client', () => {
     );
   });
 
-  it('builds encoded file download URLs', () => {
-    expect(fileDownloadUrl('/api-root/', 'file uploaded/report')).toBe(
-      '/api-root/api/files/file%20uploaded%2Freport/download'
+  it('downloads encoded files and returns response metadata', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response('report body', {
+        headers: {
+          'content-disposition': 'attachment; filename="report.txt"',
+          'content-type': 'text/plain'
+        }
+      })
     );
+
+    const downloaded = await downloadFile('/api-root/', 'file uploaded/report', fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api-root/api/files/file%20uploaded%2Freport/download',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(downloaded.filename).toBe('report.txt');
+    expect(downloaded.contentType).toBe('text/plain');
+    expect(await readBlobAsText(downloaded.blob)).toBe('report body');
   });
 
-  it('adds the configured API token to browser-only GET URLs', async () => {
+  it('adds the configured API token header to browser-only GET requests without URL tokens', async () => {
     vi.stubEnv('VITE_AGENT_API_TOKEN', 'local-secret');
     vi.resetModules();
-    const { createStateEventSource: createStateEventSourceWithToken, fileDownloadUrl: fileDownloadUrlWithToken } =
+    const { createStateEventSource: createStateEventSourceWithToken, downloadFile: downloadFileWithToken } =
       await import('./apiClient');
-    const created: string[] = [];
-    vi.stubGlobal(
-      'EventSource',
-      class {
-        constructor(url: string) {
-          created.push(url);
-        }
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).endsWith('/api/events')) {
+        const encoder = new TextEncoder();
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+            controller.close();
+          }
+        }), {
+          headers: { 'content-type': 'text/event-stream' }
+        });
       }
+      return new Response('report body');
+    });
+
+    await downloadFileWithToken('/api-root/', 'file uploaded/report', fetchMock);
+    const events = createStateEventSourceWithToken('/api-root/', fetchMock);
+    await events.ready;
+    events.close();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api-root/api/files/file%20uploaded%2Freport/download',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-agent-im-token': 'local-secret'
+        })
+      })
     );
-
-    fileDownloadUrlWithToken('/api-root/', 'file uploaded/report');
-    createStateEventSourceWithToken('/api-root/');
-
-    expect(fileDownloadUrlWithToken('/api-root/', 'file uploaded/report')).toBe(
-      '/api-root/api/files/file%20uploaded%2Freport/download?agent_im_token=local-secret'
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api-root/api/events',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-agent-im-token': 'local-secret'
+        })
+      })
     );
-    expect(created).toEqual(['/api-root/api/events?agent_im_token=local-secret']);
-
-    vi.unstubAllGlobals();
+    for (const [url] of fetchMock.mock.calls) {
+      expect(String(url)).not.toContain('agent_im_token');
+    }
     vi.unstubAllEnvs();
+  });
+
+  it('parses fetch-based SSE frames and supports close', async () => {
+    const encoder = new TextEncoder();
+    const streamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+        controller.enqueue(encoder.encode('event: state\ndata: {"rooms":[]}\n\n'));
+        controller.close();
+      }
+    });
+    const fetchMock = vi.fn(async () => new Response(streamBody, { headers: { 'content-type': 'text/event-stream' } }));
+    const received: Array<{ type: string; data: string }> = [];
+    let resolveReceived!: () => void;
+    const receivedAllEvents = new Promise<void>((resolve) => {
+      resolveReceived = resolve;
+    });
+    const recordEvent = (event: { type: string; data: string }) => {
+      received.push({ type: event.type, data: event.data });
+      if (received.length === 2) {
+        resolveReceived();
+      }
+    };
+
+    const events = createStateEventSource('/api-root/', fetchMock);
+    events.addEventListener('ready', recordEvent);
+    events.addEventListener('state', recordEvent);
+    await events.ready;
+    await receivedAllEvents;
+    events.close();
+
+    expect(received).toEqual([
+      { type: 'ready', data: '{"ok":true}' },
+      { type: 'state', data: '{"rooms":[]}' }
+    ]);
+  });
+
+  it('dispatches an error when an established SSE stream ends without close', async () => {
+    const encoder = new TextEncoder();
+    const streamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+        controller.close();
+      }
+    });
+    const fetchMock = vi.fn(async () => new Response(streamBody, { headers: { 'content-type': 'text/event-stream' } }));
+    const errors: Array<{ type: string; data: string }> = [];
+
+    const events = createStateEventSource('/api-root/', fetchMock);
+    events.addEventListener('error', (event) => errors.push({ type: event.type, data: event.data }));
+    await events.ready;
+
+    await vi.waitFor(() => {
+      expect(errors).toEqual([{ type: 'error', data: 'Event stream disconnected' }]);
+    });
+    events.close();
+  });
+
+  it('reconnects after EOF and dispatches ready on the next stream', async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"attempt":1}\n\n'));
+            controller.close();
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      )
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: ready\ndata: {"attempt":2}\n\n'));
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      );
+    const received: Array<{ type: string; data: string }> = [];
+
+    const events = createStateEventSource('/api-root/', fetchMock);
+    events.addEventListener('ready', (event) => received.push({ type: event.type, data: event.data }));
+    events.addEventListener('error', (event) => received.push({ type: event.type, data: event.data }));
+
+    await events.ready;
+    await vi.waitFor(() => {
+      expect(received).toEqual([
+        { type: 'ready', data: '{"attempt":1}' },
+        { type: 'error', data: 'Event stream disconnected' }
+      ]);
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(received).toEqual([
+        { type: 'ready', data: '{"attempt":1}' },
+        { type: 'error', data: 'Event stream disconnected' },
+        { type: 'ready', data: '{"attempt":2}' }
+      ]);
+    });
+
+    events.close();
+    vi.useRealTimers();
+  });
+
+  it('continues reading when an SSE listener throws', async () => {
+    const encoder = new TextEncoder();
+    const streamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: ready\ndata: {"ok":true}\n\n'));
+        controller.enqueue(encoder.encode('event: state\ndata: {"rooms":[]}\n\n'));
+        controller.enqueue(encoder.encode('event: agent-progress\ndata: {"id":"progress-1"}\n\n'));
+        controller.close();
+      }
+    });
+    const fetchMock = vi.fn(async () => new Response(streamBody, { headers: { 'content-type': 'text/event-stream' } }));
+    const thrown = new Error('listener failed');
+    const progress: string[] = [];
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let resolveProgress!: () => void;
+    const progressReceived = new Promise<void>((resolve) => {
+      resolveProgress = resolve;
+    });
+
+    try {
+      const events = createStateEventSource('/api-root/', fetchMock);
+      events.addEventListener('state', () => {
+        throw thrown;
+      });
+      events.addEventListener('agent-progress', (event) => {
+        progress.push(event.data);
+        resolveProgress();
+      });
+
+      await events.ready;
+      await progressReceived;
+      expect(progress).toEqual(['{"id":"progress-1"}']);
+      expect(consoleError).toHaveBeenCalledWith('Event stream listener failed', thrown);
+      events.close();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('surfaces backend error messages to the UI', async () => {
@@ -227,3 +407,12 @@ describe('api client', () => {
     );
   });
 });
+
+function readBlobAsText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result)));
+    reader.addEventListener('error', () => reject(reader.error ?? new Error('Unable to read blob')));
+    reader.readAsText(blob);
+  });
+}

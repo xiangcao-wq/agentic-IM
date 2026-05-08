@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createDemoState } from './domain/demoState';
+import type { AgentRunResult } from './domain/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -12,8 +13,8 @@ const apiMocks = vi.hoisted(() => ({
   confirmAgentAction: vi.fn(),
   coordinate: vi.fn(),
   createStateEventSource: vi.fn(),
+  downloadFile: vi.fn(),
   fetchState: vi.fn(),
-  fileDownloadUrl: vi.fn(),
   getAutopilotWorkerStatus: vi.fn(),
   generateDemoAssets: vi.fn(),
   humanReply: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('./client/apiClient', () => apiMocks);
 describe('App runtime upgrade controls', () => {
   let host: HTMLDivElement;
   let root: Root;
-  let eventListeners: Record<string, (event: MessageEvent) => void>;
+  let eventListeners: Record<string, (event: { type: string; data: string }) => void>;
 
   beforeEach(() => {
     host = document.createElement('div');
@@ -52,10 +53,28 @@ describe('App runtime upgrade controls', () => {
       messages: [],
       logs: []
     });
-    apiMocks.fileDownloadUrl.mockReturnValue('/api/files/file/download');
+    apiMocks.downloadFile.mockResolvedValue({
+      blob: new Blob(['download body'], { type: 'text/plain' }),
+      filename: 'download.txt',
+      contentType: 'text/plain'
+    });
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:agentbridge-download')
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn()
+    });
     apiMocks.createStateEventSource.mockReturnValue({
-      addEventListener: vi.fn((eventName: string, listener: (event: MessageEvent) => void) => {
+      ready: Promise.resolve(),
+      addEventListener: vi.fn((eventName: string, listener: (event: { type: string; data: string }) => void) => {
         eventListeners[eventName] = listener;
+      }),
+      removeEventListener: vi.fn((eventName: string, listener: (event: { type: string; data: string }) => void) => {
+        if (eventListeners[eventName] === listener) {
+          delete eventListeners[eventName];
+        }
       }),
       close: vi.fn()
     });
@@ -64,6 +83,8 @@ describe('App runtime upgrade controls', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -113,6 +134,77 @@ describe('App runtime upgrade controls', () => {
     });
     expect(host.textContent).toContain('可用文件');
     expect(host.textContent).not.toContain('从当前对话中提取的任务');
+  });
+
+  it('downloads files without entering global busy state or refreshing state', async () => {
+    vi.useFakeTimers();
+    const state = createDemoState();
+    const downloadableFile = state.files.find((file) => file.roomId === 'room-team')!;
+    downloadableFile.localPath = 'uploads/report.txt';
+    apiMocks.fetchState.mockResolvedValue(state);
+    let resolveDownload!: (file: { blob: Blob; filename: string; contentType: string }) => void;
+    apiMocks.downloadFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDownload = resolve;
+      })
+    );
+    const linkClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.fetchState.mockClear();
+
+    const fileTab = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('文件'));
+    expect(fileTab).toBeTruthy();
+    await act(async () => {
+      fileTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const downloadLink = host.querySelector<HTMLAnchorElement>('a[aria-label^="download "]');
+    expect(downloadLink).toBeTruthy();
+
+    await act(async () => {
+      downloadLink!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.downloadFile).toHaveBeenCalledWith('', downloadableFile.id);
+    expect(apiMocks.fetchState).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain('download-file');
+
+    await act(async () => {
+      resolveDownload({
+        blob: new Blob(['download body'], { type: 'text/plain' }),
+        filename: 'report.txt',
+        contentType: 'text/plain'
+      });
+      await Promise.resolve();
+    });
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(linkClick).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agentbridge-download');
+  });
+
+  it('keeps room filter counts based on all rooms after switching filters', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const directTab = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('私聊 1'));
+    expect(directTab).toBeTruthy();
+
+    await act(async () => {
+      directTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('群聊 2');
+    expect(host.textContent).toContain('私聊 1');
+    expect(host.textContent).not.toContain('群聊 0');
   });
 
   it('keeps both chat and Agent composers in bottom dock positions', async () => {
@@ -301,9 +393,8 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as { onerror?: () => void };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
 
     expect(host.textContent).toContain('实时连接已断开');
@@ -315,17 +406,13 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as {
-      onerror?: () => void;
-      onopen?: () => void;
-    };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
     expect(host.textContent).toContain('实时连接已断开');
 
     await act(async () => {
-      eventSource.onopen?.();
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
       await waitForMotionExit();
     });
     expect(host.textContent).not.toContain('实时连接已断开');
@@ -341,9 +428,31 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('operation failed');
 
     await act(async () => {
-      eventSource.onopen?.();
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
     });
     expect(host.textContent).toContain('operation failed');
+  });
+
+  it('clears stale realtime disconnect errors after repeated SSE failures reconnect', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await act(async () => {
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
+    });
+    expect(host.textContent).toContain('实时连接已断开');
+
+    await act(async () => {
+      eventListeners.ready?.({ type: 'ready', data: '{"ok":true}' });
+      await waitForMotionExit();
+    });
+    expect(host.textContent).not.toContain('实时连接已断开');
   });
 
   it('clears stale realtime disconnect errors when a state SSE event arrives', async () => {
@@ -353,9 +462,8 @@ describe('App runtime upgrade controls', () => {
       root.render(<App />);
     });
 
-    const eventSource = apiMocks.createStateEventSource.mock.results[0]?.value as { onerror?: () => void };
     await act(async () => {
-      eventSource.onerror?.();
+      eventListeners.error?.({ type: 'error', data: 'Event stream disconnected' });
     });
     expect(host.textContent).toContain('实时连接已断开');
 
@@ -558,17 +666,88 @@ describe('App runtime upgrade controls', () => {
       agentId: 'agent-lin',
       roomId: 'room-team',
       intent: 'share_file',
-      userText: '把最新行动计划发一下',
-      targetUserId: 'user-chen'
+      userText: '把最新行动计划发给陈晨'
     });
     expect(apiMocks.runAgent).toHaveBeenNthCalledWith(5, '', {
       agentId: 'agent-lin',
       roomId: 'room-team',
       intent: 'coordinate',
-      userText: '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。',
-      targetUserId: 'user-chen'
+      userText: '把周二 20:30 的合稿检查改到周三 23:00，并确认大家是否同意。'
     });
     expect(apiMocks.runAgent.mock.calls.map(([, body]) => body.userText)).not.toContain('这次作业什么时候截止？');
+  });
+
+  it('keeps other Agent shortcuts clickable while one shortcut is running', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    let resolveSummary!: (result: AgentRunResult) => void;
+    apiMocks.runAgent
+      .mockImplementationOnce(
+        () =>
+          new Promise<AgentRunResult>((resolve) => {
+            resolveSummary = resolve;
+          })
+      )
+      .mockResolvedValueOnce(createAgentRunResult({ intent: 'deadline' }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')];
+    const summaryButton = actionButtons.find((button) => button.textContent?.includes('总结群聊'));
+    const deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
+    expect(summaryButton).toBeTruthy();
+    expect(deadlineButton).toBeTruthy();
+
+    await act(async () => {
+      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(summaryButton!.disabled).toBe(true);
+    expect(deadlineButton!.disabled).toBe(false);
+
+    await act(async () => {
+      deadlineButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.runAgent).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveSummary(createAgentRunResult({ intent: 'summary' }));
+      await Promise.resolve();
+    });
+  });
+
+  it('keeps Agent planner text compact instead of rendering raw thinking', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    const longPlan = Array.from(
+      { length: 18 },
+      (_, index) => `item ${index + 1}: current room still has tasks, files, and schedule follow-up.`
+    ).join(' ');
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({ plan: longPlan }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const summaryButton = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')].find((button) =>
+      button.textContent?.includes('总结群聊')
+    );
+    expect(summaryButton).toBeTruthy();
+    await act(async () => {
+      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const planLine = host.querySelector('.agent-thought');
+    expect(planLine).toBeTruthy();
+    expect(planLine!.textContent).toContain('\u5904\u7406\u65b9\u5f0f');
+    expect(planLine!.textContent).not.toContain('\u601d\u8003\u8fc7\u7a0b');
+    expect(planLine!.textContent).not.toContain('item 18');
+    expect(planLine!.textContent!.length).toBeLessThan(180);
   });
 
   it('renders pending Agent actions and lets the current user confirm them', async () => {
@@ -796,10 +975,46 @@ describe('App runtime upgrade controls', () => {
       roomId: 'room-team',
       userText: 'What is this room about?'
     });
-    expect(host.textContent).toContain('思考过程');
+    expect(host.textContent).toContain('处理方式');
+    expect(host.textContent).not.toContain('思考过程');
     expect(host.textContent).toContain('最终回答');
     expect(host.textContent).toContain('This room is coordinating the assignment handoff.');
     expect(host.textContent).toContain('Answer from room context.');
+  });
+
+  it('submits Agent commands from natural language without visible target controls', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(host.querySelector('.agent-command-controls')).toBeNull();
+    expect(host.textContent).not.toContain('目标房间');
+    expect(host.textContent).not.toContain('目标成员');
+    expect(host.textContent).not.toContain('指定文件');
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, '告诉陈晨：我晚点发演示稿');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.runAgent).toHaveBeenCalledWith('', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      intent: 'send_message',
+      userText: '告诉陈晨：我晚点发演示稿',
+      messageBody: '我晚点发演示稿'
+    });
   });
 });
 
@@ -817,8 +1032,8 @@ function createAutopilotWorkerStatus(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createAgentRunResult() {
-  return {
+function createAgentRunResult(overrides: Partial<AgentRunResult> = {}): AgentRunResult {
+  const base: AgentRunResult = {
     intent: 'chat',
     requiresHuman: false,
     result: {
@@ -839,6 +1054,14 @@ function createAgentRunResult() {
       contextIds: [],
       toolCalls: [],
       createdAt: '2026-05-04T08:03:00.000Z'
+    }
+  };
+  return {
+    ...base,
+    ...overrides,
+    log: {
+      ...base.log,
+      ...overrides.log
     }
   };
 }

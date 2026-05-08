@@ -301,7 +301,7 @@ describe('runtime upgrade APIs', () => {
     expect(response.result.risk).toMatchObject({
       level: 'low',
       score: 0.16,
-      model: 'llm-driven'
+      model: 'policy-engine-v1'
     });
     expect(response.result.status).toBe('executed');
   });
@@ -440,9 +440,10 @@ describe('runtime upgrade APIs', () => {
     });
 
     expect(response.intent).toBe('chat');
-    expect(response.result.reply).toContain('陈晨负责访谈材料');
+    expect(response.result.reply).toContain('陈晨');
+    expect(response.result.reply).toContain('访谈纪要');
     expect(response.log.toolCalls).not.toContain('agent_to_agent.negotiate');
-    expect(aiProvider.calls).toHaveLength(2);
+    expect(aiProvider.calls).toHaveLength(1);
   });
 
   it('falls back when the LLM provider fails', async () => {
