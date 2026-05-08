@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoState } from '../../domain/demoState';
 import type { DemoState } from '../../domain/types';
+import type { AgentEventDraft } from './agentEvents';
+import type { AgentEventStore } from './eventLogStore';
 import { MemoryAgentEventStore } from './eventLogStore';
 import { runProductAgentSession } from './productHarness';
 
@@ -32,6 +34,42 @@ describe('runProductAgentSession', () => {
     const page = await store.list({ runId: 'agent-run-test' });
     expect(page.events.map((event) => event.type)).toContain('agent.run.created');
     expect(page.events.map((event) => event.type)).toContain('agent.progress');
+    expect(page.events.filter((event) => event.type === 'agent.progress').map((event) => event.phase)).toContain(
+      'started'
+    );
+    expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.completed' });
+  });
+
+  it('treats onProgress as observational when callbacks throw', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+    const observedPhases: string[] = [];
+
+    const runtime = await runProductAgentSession({
+      state: createDemoState(),
+      input: {
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      },
+      eventStore: store,
+      runId: 'agent-run-observer-throws',
+      sessionId: 'agent-session-observer-throws',
+      aiProvider: undefined,
+      tools: {},
+      onProgress: (event) => {
+        observedPhases.push(event.phase);
+        if (event.phase === 'started') {
+          throw new Error('observer failed');
+        }
+      }
+    });
+
+    expect(runtime.response.intent).toBe('chat');
+    expect(observedPhases).toContain('started');
+
+    const page = await store.list({ runId: 'agent-run-observer-throws' });
     expect(page.events.filter((event) => event.type === 'agent.progress').map((event) => event.phase)).toContain(
       'started'
     );
@@ -100,4 +138,88 @@ describe('runProductAgentSession', () => {
     expect(page.events[1]).toMatchObject({ type: 'agent.progress', phase: 'started' });
     expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.failed' });
   });
+
+  it('preserves ordered progress before later runtime failures', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+
+    await expect(
+      runProductAgentSession({
+        state: createDemoState(),
+        input: {
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          intent: 'coordinate',
+          targetUserId: 'missing-user',
+          userText: 'Coordinate this with an unknown teammate'
+        },
+        eventStore: store,
+        runId: 'agent-run-late-failed',
+        sessionId: 'agent-session-late-failed',
+        aiProvider: undefined,
+        tools: {}
+      })
+    ).rejects.toThrow('unknown target user: missing-user');
+
+    const page = await store.list({ runId: 'agent-run-late-failed' });
+    const progressPhases = page.events
+      .filter((event) => event.type === 'agent.progress')
+      .map((event) => event.phase);
+
+    expect(page.events.map((event) => event.type)).toEqual([
+      'agent.run.created',
+      'agent.progress',
+      'agent.progress',
+      'agent.progress',
+      'agent.progress',
+      'agent.run.failed'
+    ]);
+    expect(progressPhases).toEqual(['started', 'planning', 'planning', 'executing']);
+    expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.failed' });
+  });
+
+  it('rethrows the original runtime error when failed event persistence fails', async () => {
+    const store = createFailingAppendStore();
+
+    await expect(
+      runProductAgentSession({
+        state: createDemoState(),
+        input: {
+          agentId: 'missing-agent',
+          roomId: 'room-team',
+          intent: 'chat',
+          userText: 'hello'
+        },
+        eventStore: store,
+        runId: 'agent-run-store-fails',
+        sessionId: 'agent-session-store-fails',
+        aiProvider: undefined,
+        tools: {}
+      })
+    ).rejects.toThrow('unknown agent: missing-agent');
+  });
 });
+
+function createFailingAppendStore(): AgentEventStore {
+  return {
+    async init() {
+      return undefined;
+    },
+    async append(_draft: AgentEventDraft) {
+      throw new Error('event store append failed');
+    },
+    async appendMany(_drafts: AgentEventDraft[]) {
+      throw new Error('event store append failed');
+    },
+    async list() {
+      return { events: [] };
+    },
+    async health() {
+      return {
+        readable: true,
+        writable: false,
+        valid: false
+      };
+    }
+  };
+}

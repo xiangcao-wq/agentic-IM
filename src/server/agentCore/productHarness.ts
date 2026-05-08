@@ -64,7 +64,6 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
       {
         runId,
         onProgress: (event) => {
-          input.onProgress?.(event);
           progressDrafts.push(
             agentProgressToEventDraft(
               {
@@ -75,6 +74,11 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
               event
             )
           );
+          try {
+            input.onProgress?.(event);
+          } catch {
+            // Progress observers must not alter the agent runtime result.
+          }
         }
       },
       input.tools ?? {}
@@ -123,7 +127,11 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
         error: error instanceof Error ? error.message : 'unknown agent runtime error'
       }
     });
-    await input.eventStore.appendMany([createdDraft, ...progressDrafts, failedDraft]);
+    try {
+      await input.eventStore.appendMany([createdDraft, ...progressDrafts, failedDraft]);
+    } catch {
+      // Preserve the runtime failure; event persistence is best-effort on this path.
+    }
     throw error;
   }
 }
