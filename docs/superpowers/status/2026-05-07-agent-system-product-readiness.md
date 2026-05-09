@@ -68,3 +68,15 @@ Implemented the second Product Kernel slice:
 - Runtime compatibility checks confirm existing delegated message and file share flows still behave as before.
 
 This slice does not persist `tool_invocations` or `permission_requests` to Postgres yet. It establishes the typed backend contract that the future Permission Center UI and database-backed audit ledger can consume.
+
+## 2026-05-09 Tool Audit EventLog Bridge Slice
+
+Implemented the third Product Kernel slice:
+
+- Tool invocation audit records are converted into domain-safe snapshots and carried through Agent progress events.
+- ProductHarness persists tool execution and permission decisions as canonical AgentEvent entries.
+- `/api/agent-runs/:runId/events` replays `agent.tool.*` and `agent.permission.*` events alongside run/progress events.
+- `/api/traces/:runId` includes tool audit events and aggregates audited tool calls for trace replay.
+- JSONL EventLog replay validation now recognizes the canonical tool and permission event types.
+
+Remaining gap: audit events still use the local EventLog adapter. Postgres-backed multi-tenant audit storage remains a future persistence slice.
