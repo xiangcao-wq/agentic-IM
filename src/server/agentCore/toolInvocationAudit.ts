@@ -1,3 +1,4 @@
+import type { RiskAssessment } from '../../domain/types';
 import type { AgentCoreToolName } from './toolRegistry';
 import type { ToolPermissionDecision } from './permissionBroker';
 
@@ -15,6 +16,9 @@ export interface ToolInvocationRecord {
   roomId: string;
   status: ToolInvocationStatus;
   permissionOutcome?: ToolPermissionDecision['outcome'];
+  requiredPermissions: string[];
+  requiresHuman: boolean;
+  risk?: RiskAssessment;
   reviewerIds: string[];
   reasons: string[];
   evidenceIds: string[];
@@ -46,12 +50,33 @@ export function createToolInvocationRecord(input: CreateToolInvocationRecordInpu
     roomId: input.roomId,
     status: input.status,
     permissionOutcome: input.permission?.outcome,
+    requiredPermissions: [...(input.permission?.requiredPermissions ?? [])],
+    requiresHuman: input.permission?.requiresHuman ?? false,
+    risk: input.permission ? { ...input.permission.risk } : undefined,
     reviewerIds: [...(input.permission?.reviewerIds ?? [])],
     reasons: [...(input.permission?.reasons ?? [])],
     evidenceIds: [...(input.evidenceIds ?? [])],
-    inputSummary: { ...(input.inputSummary ?? {}) },
-    outputSummary: { ...(input.outputSummary ?? {}) },
+    inputSummary: cloneSummary(input.inputSummary),
+    outputSummary: cloneSummary(input.outputSummary),
     error: input.error,
     createdAt: input.createdAt ?? new Date().toISOString()
   };
+}
+
+function cloneSummary(summary?: Record<string, unknown>): Record<string, unknown> {
+  const source = summary ?? {};
+
+  if (typeof globalThis.structuredClone === 'function') {
+    try {
+      return globalThis.structuredClone(source) as Record<string, unknown>;
+    } catch {
+      return cloneSummaryWithJson(source);
+    }
+  }
+
+  return cloneSummaryWithJson(source);
+}
+
+function cloneSummaryWithJson(summary: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(summary)) as Record<string, unknown>;
 }
