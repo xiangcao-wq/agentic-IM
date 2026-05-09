@@ -7,9 +7,11 @@ import {
   downloadFile,
   generateDemoAssets,
   fetchState,
+  getAgentTrace,
   getAutopilotWorkerStatus,
   humanReply,
   listAgentActions,
+  listAgentRunEvents,
   listMemories,
   rejectAgentAction,
   runAgent,
@@ -335,6 +337,41 @@ describe('api client', () => {
       3,
       '/api-root/api/agent/actions/action-2/reject',
       expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('uses Agent trace replay endpoints', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      Response.json({
+        events: [],
+        runId: 'agent-run-1',
+        status: 'completed',
+        phases: [],
+        toolCalls: [],
+        eventCount: 0
+      })
+    );
+
+    await listAgentRunEvents(
+      '/api-root/',
+      {
+        runId: 'agent-run/1',
+        cursor: 'seq:2',
+        limit: 10
+      },
+      fetchMock
+    );
+    await getAgentTrace('/api-root/', 'agent-run/1', fetchMock);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api-root/api/agent-runs/agent-run%2F1/events?cursor=seq%3A2&limit=10',
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api-root/api/traces/agent-run%2F1',
+      expect.any(Object)
     );
   });
 

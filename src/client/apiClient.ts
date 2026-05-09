@@ -2,8 +2,10 @@ import type {
   AgentActionLog,
   AgentActionRequest,
   AgentAutopilotPolicy,
+  AgentRunEventPage,
   AgentRunRequest,
   AgentRunResult,
+  AgentTrace,
   AiRuntimeStatus,
   CoordinationResult,
   DeadlineAnswer,
@@ -84,6 +86,12 @@ export interface UpdateAutopilotPolicyInput {
 
 export interface RunPendingAutopilotInput {
   roomId?: string;
+  limit?: number;
+}
+
+export interface ListAgentRunEventsInput {
+  runId: string;
+  cursor?: string;
   limit?: number;
 }
 
@@ -227,6 +235,34 @@ export function runAgent(
   fetcher: Fetcher = fetch
 ): Promise<AgentRunResult> {
   return requestJson(fetcher, endpoint(baseUrl, '/api/agent/run'), post(input));
+}
+
+export function listAgentRunEvents(
+  baseUrl: string,
+  input: ListAgentRunEventsInput,
+  fetcher: Fetcher = fetch
+): Promise<AgentRunEventPage> {
+  const params = new URLSearchParams();
+  if (input.cursor) {
+    params.set('cursor', input.cursor);
+  }
+  if (input.limit !== undefined) {
+    params.set('limit', String(input.limit));
+  }
+  const query = params.toString();
+  const suffix = query ? `?${query}` : '';
+  return requestJson(
+    fetcher,
+    endpoint(baseUrl, `/api/agent-runs/${encodeURIComponent(input.runId)}/events${suffix}`)
+  );
+}
+
+export function getAgentTrace(
+  baseUrl: string,
+  runId: string,
+  fetcher: Fetcher = fetch
+): Promise<AgentTrace> {
+  return requestJson(fetcher, endpoint(baseUrl, `/api/traces/${encodeURIComponent(runId)}`));
 }
 
 export function updateAutopilotPolicy(
