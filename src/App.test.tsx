@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createDemoState } from './domain/demoState';
-import type { AgentRunResult } from './domain/types';
+import type { AgentEvent, AgentRunResult, AgentTrace } from './domain/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   createStateEventSource: vi.fn(),
   downloadFile: vi.fn(),
   fetchState: vi.fn(),
+  getAgentTrace: vi.fn(),
   getAutopilotWorkerStatus: vi.fn(),
   generateDemoAssets: vi.fn(),
   humanReply: vi.fn(),
@@ -44,6 +45,7 @@ describe('App runtime upgrade controls', () => {
     eventListeners = {};
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.getAgentTrace.mockResolvedValue(createAgentTrace());
     apiMocks.getAutopilotWorkerStatus.mockResolvedValue({ worker: createAutopilotWorkerStatus() });
     apiMocks.runAutopilotWorkerOnce.mockResolvedValue({
       worker: createAutopilotWorkerStatus({ runCount: 1 }),
@@ -925,6 +927,399 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('msg-02');
   });
 
+  it('fetches trace replay after an Agent run and renders audit timeline data', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    const baseResult = createAgentRunResult();
+    apiMocks.runAgent.mockResolvedValue({
+      ...baseResult,
+      runId: 'agent-run-ui',
+      sessionId: 'agent-session-ui',
+      eventCursor: 'seq:5',
+      intent: 'send_message',
+      result: {
+        status: 'executed',
+        targetRoomId: 'room-team',
+        messageBody: 'Trace replay message',
+        risk: baseResult.log.risk
+      },
+      log: {
+        ...baseResult.log,
+        toolCalls: ['message.send']
+      }
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'send message Trace replay message');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).toHaveBeenCalledWith('', 'agent-run-ui');
+    expect(host.querySelector('[data-testid="agent-trace-panel"]')).toBeTruthy();
+    expect(host.textContent).toContain('Agent Timeline');
+    expect(host.textContent).toContain('Permission Center');
+    expect(host.textContent).toContain('Tool requested');
+    expect(host.textContent).toContain('Permission allowed');
+    expect(host.textContent).toContain('message.send');
+    expect(host.textContent).toContain('message:send');
+    expect(host.querySelector('.agent-timeline-list .trace-row')).toBeTruthy();
+    expect(host.querySelector('.permission-center-list .permission-row')).toBeTruthy();
+  });
+
+  it('marks trace replay as partial when the server truncated it', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-truncated',
+      eventCursor: 'seq:5',
+      result: {
+        reply: 'Trace may be partial.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTrace({
+      runId: 'agent-run-truncated',
+      truncated: true
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Show a truncated trace');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('partial trace');
+  });
+
+  it('shows only the latest eight permission decisions with a compact summary', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-many-permissions',
+      eventCursor: 'seq:12',
+      result: {
+        reply: 'Many permission decisions.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTraceWithPermissionEvents(10));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Show many permissions');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const permissionRows = [...host.querySelectorAll('.permission-center-list .permission-row')];
+    expect(permissionRows).toHaveLength(8);
+    expect(host.textContent).toContain('Showing latest 8 of 10');
+    expect(permissionRows[0]?.textContent).toContain('permission reason 3');
+    expect(permissionRows.some((row) => row.textContent?.includes('permission reason 2'))).toBe(false);
+    expect(host.textContent).toContain('permission reason 10');
+  });
+
+  it('uses a neutral fallback when a trace has no permission decisions', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-no-permissions',
+      eventCursor: 'seq:2',
+      result: {
+        reply: 'No permissions needed.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTraceWithoutPermissionEvents());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'No permission path');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const fallback = host.querySelector('.permission-center-list .permission-row');
+    expect(fallback?.textContent).toContain('No permission decision');
+    expect(fallback?.classList.contains('outcome-neutral')).toBe(true);
+    expect(fallback?.classList.contains('outcome-allow')).toBe(false);
+  });
+
+  it('keeps the Agent result visible when trace replay is unavailable', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-missing-trace',
+      eventCursor: 'seq:5',
+      result: {
+        reply: 'The answer still renders.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockRejectedValueOnce(new Error('trace not found'));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'What still renders?');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('The answer still renders.');
+    expect(host.textContent).toContain('Trace unavailable');
+    expect(host.textContent).not.toContain('trace not found');
+  });
+
+  it('does not keep the Agent action busy or block refresh while trace replay is loading', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-slow-trace',
+      eventCursor: 'seq:5',
+      result: {
+        reply: 'Primary answer rendered.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockReturnValue(new Promise(() => undefined));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Will trace block?');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.fetchState).toHaveBeenCalledTimes(2);
+    expect(sendButton!.disabled).toBe(false);
+    expect(host.querySelector('.agent-busy-panel')).toBeNull();
+    expect(host.textContent).toContain('Primary answer rendered.');
+    expect(host.textContent).toContain('Loading trace');
+  });
+
+  it('does not fetch trace replay when the Agent result has no run id', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.getAgentTrace.mockClear();
+
+    const summaryButton = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')].find((button) =>
+      button.textContent?.includes('总结群聊')
+    );
+    expect(summaryButton).toBeTruthy();
+    await act(async () => {
+      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch trace replay when the Agent result has a run id but no event cursor', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-without-cursor',
+      result: {
+        reply: 'Result without persisted events.'
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.getAgentTrace.mockClear();
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Run without event cursor');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Result without persisted events.');
+    expect(host.textContent).not.toContain('Trace unavailable');
+  });
+
+  it('keeps stale trace replay responses from overwriting a newer Agent run', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    let resolveFirstTrace!: (trace: AgentTrace) => void;
+    let resolveSecondTrace!: (trace: AgentTrace) => void;
+    apiMocks.runAgent
+      .mockResolvedValueOnce(createAgentRunResult({
+        runId: 'first-run',
+        eventCursor: 'seq:5',
+        result: {
+          reply: 'First run answer.'
+        }
+      }))
+      .mockResolvedValueOnce(createAgentRunResult({
+        runId: 'second-run',
+        eventCursor: 'seq:5',
+        result: {
+          reply: 'Second run answer.'
+        }
+      }));
+    apiMocks.getAgentTrace
+      .mockReturnValueOnce(new Promise<AgentTrace>((resolve) => {
+        resolveFirstTrace = resolve;
+      }))
+      .mockReturnValueOnce(new Promise<AgentTrace>((resolve) => {
+        resolveSecondTrace = resolve;
+      }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+
+    await act(async () => {
+      setInputValue(prompt!, 'first run');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      setInputValue(prompt!, 'second run');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveSecondTrace(createAgentTrace({
+        runId: 'second-run',
+        toolName: 'second.tool',
+        permissionReason: 'Second trace reason'
+      }));
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('Second trace reason');
+    expect(host.textContent).toContain('second.tool');
+
+    await act(async () => {
+      resolveFirstTrace(createAgentTrace({
+        runId: 'first-run',
+        toolName: 'first.tool',
+        permissionReason: 'First stale trace reason'
+      }));
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Second trace reason');
+    expect(host.textContent).toContain('second.tool');
+    expect(host.textContent).not.toContain('First stale trace reason');
+    expect(host.textContent).not.toContain('first.tool');
+  });
+
+  it('refreshes state after trace replay rejection', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-rejected-trace',
+      eventCursor: 'seq:5',
+      result: {
+        reply: 'Refresh still happens.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockRejectedValueOnce(new Error('trace not found'));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Reject trace');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.fetchState).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toContain('Refresh still happens.');
+    expect(host.textContent).toContain('Trace unavailable');
+  });
+
   it('submits the Agent input as free chat and renders the chat reply', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
@@ -1063,6 +1458,170 @@ function createAgentRunResult(overrides: Partial<AgentRunResult> = {}): AgentRun
       ...base.log,
       ...overrides.log
     }
+  };
+}
+
+function createAgentTrace(overrides: {
+  runId?: string;
+  toolName?: string;
+  permissionReason?: string;
+  truncated?: boolean;
+  events?: AgentEvent[];
+  eventCount?: number;
+} = {}): AgentTrace {
+  const createdAt = '2026-05-04T08:03:00.000Z';
+  const runId = overrides.runId ?? 'agent-run-ui';
+  const toolName = overrides.toolName ?? 'message.send';
+  const permissionReason = overrides.permissionReason ?? 'Allowed by room policy';
+  const baseEvent = {
+    tenantId: 'tenant-ui',
+    sessionId: 'agent-session-ui',
+    runId,
+    agentId: 'agent-lin',
+    roomId: 'room-team',
+    visibility: 'audit' as const,
+    riskLevel: 'low' as const,
+    createdAt
+  };
+
+  return {
+    runId,
+    sessionId: 'agent-session-ui',
+    tenantId: 'tenant-ui',
+    agentId: 'agent-lin',
+    roomId: 'room-team',
+    status: 'completed',
+    startedAt: createdAt,
+    finishedAt: '2026-05-04T08:03:05.000Z',
+    phases: ['created', 'tool', 'permission', 'completed'],
+    toolCalls: [toolName],
+    eventCount: overrides.eventCount ?? overrides.events?.length ?? 5,
+    ...(overrides.truncated === undefined ? {} : { truncated: overrides.truncated }),
+    events: overrides.events ?? [
+      {
+        ...baseEvent,
+        id: 'trace-event-1',
+        sequence: 1,
+        cursor: 'seq:1',
+        type: 'agent.run.created',
+        label: 'Run created',
+        detail: 'Agent run accepted',
+        toolCalls: [],
+        payload: {}
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-2',
+        sequence: 2,
+        cursor: 'seq:2',
+        type: 'agent.tool.requested',
+        label: 'Tool requested',
+        detail: 'Preparing to send a message',
+        toolCalls: [toolName],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName,
+          requiredPermissions: ['message:send']
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-3',
+        sequence: 3,
+        cursor: 'seq:3',
+        type: 'agent.permission.allowed',
+        label: 'Permission allowed',
+        detail: permissionReason,
+        toolCalls: [toolName],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName,
+          requiredPermissions: ['message:send'],
+          requiresHuman: false,
+          reasons: [permissionReason]
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-4',
+        sequence: 4,
+        cursor: 'seq:4',
+        type: 'agent.tool.completed',
+        label: 'Tool completed',
+        detail: `${toolName} completed`,
+        toolCalls: [toolName],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName,
+          status: 'completed'
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-5',
+        sequence: 5,
+        cursor: 'seq:5',
+        type: 'agent.run.completed',
+        label: 'Run completed',
+        detail: 'Agent run completed',
+        toolCalls: [toolName],
+        payload: {
+          status: 'completed'
+        }
+      }
+    ]
+  };
+}
+
+function createAgentTraceWithPermissionEvents(permissionCount: number): AgentTrace {
+  const baseTrace = createAgentTrace();
+  const createdAt = '2026-05-04T08:03:00.000Z';
+  const permissionEvents: AgentEvent[] = Array.from({ length: permissionCount }, (_, index) => {
+    const sequence = index + 1;
+    return {
+      tenantId: 'tenant-ui',
+      sessionId: 'agent-session-ui',
+      runId: 'agent-run-many-permissions',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      visibility: 'audit',
+      riskLevel: sequence % 2 === 0 ? 'medium' : 'low',
+      createdAt: `2026-05-04T08:03:${String(sequence).padStart(2, '0')}.000Z`,
+      id: `permission-event-${sequence}`,
+      sequence,
+      cursor: `seq:${sequence}`,
+      type: sequence % 3 === 0 ? 'agent.permission.requested' : 'agent.permission.allowed',
+      label: `Permission ${sequence}`,
+      detail: `permission reason ${sequence}`,
+      toolCalls: [`tool.${sequence}`],
+      payload: {
+        invocationId: `invoke-${sequence}`,
+        toolName: `tool.${sequence}`,
+        requiredPermissions: [`permission:${sequence}`],
+        requiresHuman: sequence % 3 === 0,
+        reasons: [`permission reason ${sequence}`]
+      }
+    };
+  });
+
+  return {
+    ...baseTrace,
+    runId: 'agent-run-many-permissions',
+    eventCount: permissionEvents.length,
+    startedAt: createdAt,
+    finishedAt: permissionEvents.at(-1)?.createdAt,
+    toolCalls: permissionEvents.flatMap((event) => event.toolCalls),
+    events: permissionEvents
+  };
+}
+
+function createAgentTraceWithoutPermissionEvents(): AgentTrace {
+  const baseTrace = createAgentTrace();
+  const events = baseTrace.events.filter((event) => !event.type.startsWith('agent.permission.'));
+  return {
+    ...baseTrace,
+    eventCount: events.length,
+    events
   };
 }
 

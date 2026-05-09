@@ -80,3 +80,15 @@ Implemented the third Product Kernel slice:
 - JSONL EventLog replay validation now recognizes the canonical tool and permission event types.
 
 Remaining gap: audit events still use the local EventLog adapter. Postgres-backed multi-tenant audit storage remains a future persistence slice.
+
+## 2026-05-09 Workbench Timeline + Permission Center Slice
+
+Implemented the fourth Product Kernel slice:
+
+- Browser client now has typed contracts for Agent run event replay and trace replay.
+- Agent Workbench fetches `/api/traces/:runId` after product Agent runs.
+- Workbench renders a compact Agent Timeline from replayed run, tool, and permission events.
+- Workbench renders a first Permission Center from `agent.permission.*` events.
+- Raw SSE progress remains hidden from the compact Workbench; replayed EventLog data is the product-facing source.
+
+Remaining gap: this is a per-run Workbench surface. Cross-run trace search, policy editing, and Postgres-backed audit querying remain future product slices.

@@ -252,6 +252,67 @@ export interface AgentProgressEvent {
   createdAt: string;
 }
 
+export type AgentEventVisibility = 'user' | 'internal' | 'audit';
+
+export type AgentEventType =
+  | 'agent.run.created'
+  | 'agent.run.started'
+  | 'agent.progress'
+  | 'agent.tool.requested'
+  | 'agent.permission.allowed'
+  | 'agent.permission.denied'
+  | 'agent.permission.requested'
+  | 'agent.tool.completed'
+  | 'agent.tool.failed'
+  | 'agent.run.completed'
+  | 'agent.run.failed'
+  | 'agent.run.cancelled';
+
+export type AgentEventPayload = Record<string, unknown>;
+
+export interface AgentEvent {
+  id: string;
+  sequence: number;
+  cursor: string;
+  type: AgentEventType;
+  tenantId: string;
+  sessionId: string;
+  runId: string;
+  agentId?: string;
+  roomId?: string;
+  visibility: AgentEventVisibility;
+  phase?: string;
+  label?: string;
+  detail?: string;
+  toolCalls: string[];
+  riskLevel?: RiskLevel;
+  payload: AgentEventPayload;
+  createdAt: string;
+}
+
+export interface AgentRunEventPage {
+  events: AgentEvent[];
+  nextCursor?: string;
+}
+
+export type AgentTraceStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface AgentTrace {
+  runId: string;
+  sessionId?: string;
+  tenantId?: string;
+  agentId?: string;
+  roomId?: string;
+  status: AgentTraceStatus;
+  startedAt?: string;
+  finishedAt?: string;
+  phases: string[];
+  toolCalls: string[];
+  eventCount: number;
+  truncated?: boolean;
+  events: AgentEvent[];
+}
+
 export interface AgentActionRequest {
   id: string;
   agentId: string;
@@ -430,6 +491,9 @@ export interface WebSearchAnswer {
 }
 
 export interface AgentRunResult {
+  runId?: string;
+  sessionId?: string;
+  eventCursor?: string;
   intent: AgentRunIntent;
   requiresHuman: boolean;
   plan?: string;

@@ -1614,6 +1614,105 @@ button:disabled {
   font-weight: 700;
 }
 
+.agent-trace-section {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-trace-section .trace-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #d7e5e7;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fbfdfd;
+}
+
+.agent-trace-section .trace-summary-row strong {
+  color: #213235;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.agent-trace-section .trace-summary-row span {
+  color: #657477;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-trace-section .permission-title {
+  margin-top: 4px;
+}
+
+.agent-trace-section .trace-list-summary {
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #617276;
+  background: #f7fafb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-trace-section .trace-row,
+.agent-trace-section .permission-row {
+  border: 1px solid #d8e4e6;
+}
+
+.agent-trace-section .permission-row.outcome-neutral {
+  border-color: #d8e4e6;
+  background: #f7fafb;
+}
+
+.agent-trace-section .trace-row.tone-success,
+.agent-trace-section .permission-row.outcome-allow {
+  border-color: #bee1cd;
+  background: #f0faf4;
+}
+
+.agent-trace-section .trace-row.tone-warning,
+.agent-trace-section .permission-row.outcome-ask {
+  border-color: #efd69c;
+  background: #fff8e8;
+}
+
+.agent-trace-section .trace-row.tone-danger,
+.agent-trace-section .permission-row.outcome-deny {
+  border-color: #e8c6ce;
+  background: #fff1f3;
+}
+
+.agent-trace-section .trace-row em,
+.agent-trace-section .permission-row em {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #0f6970;
+  background: #e7f3f2;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.agent-trace-section .permission-row.outcome-deny em {
+  color: #a23a4f;
+  background: #ffe8ed;
+}
+
+.agent-trace-section .permission-row.outcome-ask em {
+  color: #986315;
+  background: #fff3d7;
+}
+
+.agent-trace-section .permission-row small {
+  display: block;
+  margin-top: 5px;
+  color: #657477;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .autopilot-policy {
   display: grid;
   grid-template-columns: 1fr auto auto;
