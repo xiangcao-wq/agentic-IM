@@ -68,6 +68,7 @@ type ContextFocus = 'summary' | 'deadline' | 'file_share' | 'coordinate' | 'chat
 
 interface StructuredContextOptions {
   focus?: ContextFocus;
+  userText?: string;
 }
 
 export interface AgentContextBundleInput {
@@ -139,6 +140,14 @@ export interface AgentContextBundle {
   }>;
   files: AgentContextFile[];
   fileTextChunks: AgentContextFileTextChunk[];
+  calendar: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    roomId: string;
+    attendees: string[];
+    attendeeNames: string[];
+  }>;
   members: Array<{
     id: string;
     name: string;
@@ -167,6 +176,7 @@ export function buildStructuredContext(
     return buildAgentContextBundle(state, {
       roomId,
       agentId,
+      userText: options?.userText,
       focus: options?.focus ?? 'chat'
     }).text;
   }
@@ -205,7 +215,10 @@ export function buildAgentContextBundle(state: DemoState, input: AgentContextBun
     throw new Error(`${agent.displayName} cannot read ${input.roomId}`);
   }
 
-  const visibleRoomIds = new Set([input.roomId, ...agent.allowedRoomIds]);
+  const includeGlobalContext = wantsGlobalContext(input.userText ?? '');
+  const visibleRoomIds = includeGlobalContext
+    ? new Set([input.roomId, ...agent.allowedRoomIds])
+    : new Set([input.roomId]);
   const roomMessages = sortMessagesChronologically(state.messages.filter((message) => message.roomId === input.roomId));
   const recentLimit = focus === 'summary' ? roomMessages.length : 30;
   const recentMessages = roomMessages.slice(-recentLimit).map((message) => toContextMessage(state, message));
@@ -242,6 +255,22 @@ export function buildAgentContextBundle(state: DemoState, input: AgentContextBun
       role: user!.role,
       status: user!.status,
       agentId: user!.agentId
+    }));
+  const memberIds = new Set(room.memberIds);
+  const calendar = state.calendar
+    .filter((item) =>
+      item.attendees.some((attendeeId) => memberIds.has(attendeeId)) &&
+      (includeGlobalContext || item.roomId === input.roomId || item.attendees.some((attendeeId) => memberIds.has(attendeeId)))
+    )
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+    .slice(0, 12)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      startsAt: item.startsAt,
+      roomId: item.roomId,
+      attendees: item.attendees,
+      attendeeNames: item.attendees.map((attendeeId) => state.users.find((user) => user.id === attendeeId)?.name ?? attendeeId)
     }));
 
   const memories = (state.memories ?? [])
@@ -281,6 +310,7 @@ export function buildAgentContextBundle(state: DemoState, input: AgentContextBun
     tasks,
     files,
     fileTextChunks,
+    calendar,
     members,
     memories,
     actionLogs
@@ -335,6 +365,17 @@ function buildContextTerms(userText: string, focus: ContextFocus): string[] {
   return [...new Set([...terms, ...cjkPairs].map((term) => term.toLowerCase()))];
 }
 
+function wantsGlobalContext(userText: string): boolean {
+  const lowered = userText.toLowerCase();
+  return (
+    /全局|所有会话|全部会话|所有群|全部群|所有房间|跨群|整个项目|全部内容/.test(userText) ||
+    /\bglobal\s+(?:context|scope|search|lookup|rooms?|chats?|conversations?)\b/.test(lowered) ||
+    lowered.includes('all rooms') ||
+    lowered.includes('all chats') ||
+    lowered.includes('across rooms')
+  );
+}
+
 function toContextMessage(state: DemoState, message: Message): AgentContextMessage {
   const user = state.users.find((candidate) => candidate.id === message.senderId);
   return {
@@ -379,10 +420,13 @@ function selectRelevantFileTextChunks(
   const terms = buildContextTerms(userText, focus);
   const filesById = new Map(state.files.map((file) => [file.id, file]));
   const limit = focus === 'file_share' ? 8 : 4;
+  const visibleRoomIds = wantsGlobalContext(userText)
+    ? new Set([roomId, ...agent.allowedRoomIds])
+    : new Set([roomId]);
   return (state.fileTextChunks ?? [])
     .flatMap((chunk) => {
       const file = filesById.get(chunk.fileId);
-      if (!file || !agentCanReadFileText(agent, roomId, file)) {
+      if (!file || !agentCanReadFileText(agent, visibleRoomIds, file)) {
         return [];
       }
       const score = scoreChunkText(chunk, terms);
@@ -407,8 +451,8 @@ function selectRelevantFileTextChunks(
     }));
 }
 
-function agentCanReadFileText(agent: PersonalAgent, roomId: string, file: DemoState['files'][number]): boolean {
-  if (file.roomId !== roomId || !agent.allowedRoomIds.includes(file.roomId)) {
+function agentCanReadFileText(agent: PersonalAgent, visibleRoomIds: Set<string>, file: DemoState['files'][number]): boolean {
+  if (!visibleRoomIds.has(file.roomId) || !agent.allowedRoomIds.includes(file.roomId)) {
     return false;
   }
   return file.visibility === 'room' || file.uploaderId === agent.ownerId;
@@ -459,6 +503,13 @@ function renderAgentContextBundle(bundle: Omit<AgentContextBundle, 'text'>): str
     ...(bundle.fileTextChunks.length > 0
       ? bundle.fileTextChunks.map((chunk) =>
           `- ${chunk.id}: file=${chunk.fileName} (${chunk.fileId}); index=${chunk.index}; text=${chunk.text}`
+        )
+      : ['- none']),
+    '',
+    '## Calendar availability',
+    ...(bundle.calendar.length > 0
+      ? bundle.calendar.map((item) =>
+          `- ${item.id}: ${item.title}; startsAt=${item.startsAt}; room=${item.roomId}; attendees=${item.attendees.join(', ')}; names=${item.attendeeNames.join(', ')}`
         )
       : ['- none']),
     '',

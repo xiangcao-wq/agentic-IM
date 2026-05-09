@@ -140,6 +140,137 @@ describe('Matrix media repository integration', () => {
       authorization: 'Bearer token-lin'
     });
   });
+
+  it('does not trust app-specific agent and file metadata from a different Matrix sender', async () => {
+    const app = await createMatrixStub(async (request, response) => {
+      if ((request.url ?? '').includes('/messages')) {
+        sendJson(response, {
+          chunk: [
+            {
+              event_id: '$spoofed-agent-file',
+              sender: '@chen:localhost',
+              origin_server_ts: Date.now(),
+              type: 'm.room.message',
+              content: {
+                msgtype: 'm.file',
+                body: 'spoofed agent file',
+                agent_label: '林雯的 Agent 代发',
+                source_agent_id: 'agent-lin',
+                file_id: 'file-slides-v3',
+                url: 'mxc://localhost/spoofed',
+                info: {
+                  mimetype: 'application/pdf',
+                  size: 1024
+                }
+              }
+            }
+          ]
+        });
+        return;
+      }
+
+      sendJson(response, {});
+    });
+    servers.push(app);
+
+    const store = new MatrixStore({
+      homeserverUrl: app.url,
+      users: {
+        'user-lin': { matrixUserId: '@lin:localhost', accessToken: 'token-lin' },
+        'user-chen': { matrixUserId: '@chen:localhost', accessToken: 'token-chen' }
+      },
+      rooms: {
+        'room-team': '!team:localhost'
+      }
+    });
+
+    const synced = await store.syncStateOnce(createDemoState());
+    const message = synced.state.messages.find((item) => item.id === '$spoofed-agent-file');
+
+    expect(message).toMatchObject({
+      senderId: 'user-chen',
+      senderName: '陈晨',
+      type: 'text',
+      body: 'spoofed agent file'
+    });
+    expect(message?.agentLabel).toBeUndefined();
+    expect(message?.sourceAgentId).toBeUndefined();
+    expect(message?.fileId).toBeUndefined();
+    expect(message?.mxcUri).toBeUndefined();
+  });
+
+  it('does not trust owner-matched app metadata outside the local room boundary', async () => {
+    const app = await createMatrixStub(async (request, response) => {
+      if ((request.url ?? '').includes('/messages')) {
+        sendJson(response, {
+          chunk: [
+            {
+              event_id: '$chen-agent-class-room',
+              sender: '@chen:localhost',
+              origin_server_ts: Date.now(),
+              type: 'm.room.message',
+              content: {
+                msgtype: 'm.text',
+                body: 'spoofed cross-room agent metadata',
+                agent_label: '陈晨的 Agent 协调',
+                source_agent_id: 'agent-chen'
+              }
+            },
+            {
+              event_id: '$lin-file-class-room',
+              sender: '@lin:localhost',
+              origin_server_ts: Date.now() + 1,
+              type: 'm.room.message',
+              content: {
+                msgtype: 'm.file',
+                body: 'spoofed cross-room file metadata',
+                file_id: 'file-slides-v3',
+                url: 'mxc://localhost/slides-v3',
+                info: {
+                  mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  size: 4096
+                }
+              }
+            }
+          ]
+        });
+        return;
+      }
+
+      sendJson(response, {});
+    });
+    servers.push(app);
+
+    const store = new MatrixStore({
+      homeserverUrl: app.url,
+      users: {
+        'user-lin': { matrixUserId: '@lin:localhost', accessToken: 'token-lin' },
+        'user-chen': { matrixUserId: '@chen:localhost', accessToken: 'token-chen' }
+      },
+      rooms: {
+        'room-class': '!class:localhost'
+      }
+    });
+
+    const synced = await store.syncStateOnce(createDemoState());
+    const chenAgent = synced.state.messages.find((item) => item.id === '$chen-agent-class-room');
+    const linFile = synced.state.messages.find((item) => item.id === '$lin-file-class-room');
+
+    expect(chenAgent).toMatchObject({
+      roomId: 'room-class',
+      senderId: 'user-chen',
+      type: 'text'
+    });
+    expect(chenAgent?.agentLabel).toBeUndefined();
+    expect(chenAgent?.sourceAgentId).toBeUndefined();
+    expect(linFile).toMatchObject({
+      roomId: 'room-class',
+      senderId: 'user-lin',
+      type: 'text'
+    });
+    expect(linFile?.fileId).toBeUndefined();
+    expect(linFile?.mxcUri).toBeUndefined();
+  });
 });
 
 async function createMatrixStub(handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>) {

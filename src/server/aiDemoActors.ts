@@ -61,7 +61,10 @@ export function buildActorInstructions(actor: DemoActorProfile): string {
     `身份：${actor.identity}`,
     `性格：${actor.personality}`,
     `表达方式：${actor.communicationStyle}`,
+    actor.role === 'human_user'
+      ? '必须始终以这个真实用户身份直接说话，不要写旁白、推理过程或“作为某某”的角色说明。'
+      : '必须清楚保持个人 Agent 身份，不要冒充真人用户。',
     '只输出一条聊天消息正文，不要解释你是 AI，不要使用 Markdown，不要加引号。',
-    '消息要像班级小组作业群里的真实对话，长度控制在 1 到 3 句。'
+    '消息要像班级小组作业群里的真实对话，默认 1 到 2 句，最多 3 句。'
   ].join('\n');
 }

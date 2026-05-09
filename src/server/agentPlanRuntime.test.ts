@@ -59,6 +59,8 @@ describe('agent plan runtime', () => {
       expect.objectContaining({ role: 'user', content: expect.stringContaining('# Authorized Agent Context') }),
       expect.objectContaining({ role: 'user', content: expect.stringContaining('## Current User Request') })
     ]);
+    expect(String(aiProvider.calls[0].instructions)).toContain('Default internal context scope is the current room/chat only');
+    expect(String(aiProvider.calls[0].instructions)).toContain('DeepSeek search');
     expect(String((aiProvider.calls[0].messages as Array<{ content: string }>)[1].content)).not.toContain('## Agent memory');
   });
 
@@ -174,6 +176,182 @@ describe('agent plan runtime', () => {
     expect(response.result.reply).toContain('browser-context-notes.txt');
     expect(response.result.reply).toContain('引用一致性');
     expect(response.log.contextIds).toContain('file-text-evidence-chunk-0');
+  });
+
+  it('does not trust LLM chat answers about internal facts when citations are missing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...createDemoState(),
+          messages: [],
+          files: [],
+          fileTextChunks: [],
+          tasks: []
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'answer',
+        intent: 'chat',
+        userVisiblePlan: 'Answer from project context.',
+        answer: '访谈材料由陈晨负责。',
+        toolCalls: [{ tool: 'chat.answer', args: {} }],
+        risk: { level: 'low', score: 0.1, reason: 'Read-only answer.', model: 'planner-test' },
+        citations: []
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '访谈材料现在谁负责？'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('没有找到');
+    expect(response.result.reply).not.toContain('陈晨负责');
+    expect(response.log.contextIds).not.toContain('msg-made-up');
+  });
+
+  it('blocks unauthorized delegated messages through the policy engine', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'execute',
+        intent: 'send_message',
+        userVisiblePlan: 'Send the delegated message only if policy allows it.',
+        toolCalls: [
+          {
+            tool: 'message.send',
+            args: {
+              targetRoomId: 'room-class',
+              targetUserId: 'user-teacher',
+              messageBody: 'Please post this on my behalf.'
+            }
+          }
+        ],
+        risk: { level: 'low', score: 0.1, reason: 'Planner only proposes the action.', model: 'planner-test' },
+        citations: []
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-chen',
+        roomId: 'room-team',
+        userText: 'send message to the class room.'
+      })
+    });
+
+    expect(response.intent).toBe('send_message');
+    expect(response.requiresHuman).toBe(false);
+    expect(response.actionRequest).toBeUndefined();
+    expect(response.message).toBeUndefined();
+    expect(response.result.status).toBe('blocked');
+    expect(response.result.message).toBeUndefined();
+    expect(response.result.risk.model).toBe('policy-engine-v1');
+    expect(response.log.status).toBe('blocked');
+    expect(response.log.toolCalls).toContain('tool_executor.message.send');
+    expect(response.log.toolCalls).toContain('message.send');
+    expect(response.log.toolCalls).not.toContain('matrix.send_event');
+  });
+
+  it('includes request-matched file text excerpts in the LLM planner prompt', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    const file = {
+      id: 'file-many-chunks',
+      name: 'many-context-notes.txt',
+      uploaderId: 'user-lin',
+      version: 1,
+      roomId: 'room-team',
+      updatedAt: '2026-05-04T12:00:00+08:00',
+      visibility: 'room' as const,
+      agentCanShare: true,
+      tags: ['notes'],
+      summary: 'Long notes with one relevant excerpt.',
+      mxcUri: 'mxc://demo/many-context-notes.txt',
+      contentType: 'text/plain',
+      size: 512
+    };
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          files: [file, ...state.files],
+          fileTextChunks: [
+            ...Array.from({ length: 6 }, (_, index) => ({
+              id: `many-context-generic-${index}`,
+              fileId: file.id,
+              roomId: 'room-team',
+              uploaderId: 'user-lin',
+              index,
+              text: `generic context filler ${index}`,
+              createdAt: '2026-05-04T12:00:00+08:00'
+            })),
+            {
+              id: 'many-context-target',
+              fileId: file.id,
+              roomId: 'room-team',
+              uploaderId: 'user-lin',
+              index: 99,
+              text: 'rare retrieval marker: sodium-router migration owner is Lin.',
+              createdAt: '2026-05-04T12:00:00+08:00'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'answer',
+        intent: 'chat',
+        userVisiblePlan: 'Answer from the matched file excerpt.',
+        answer: 'Lin owns the sodium-router migration.',
+        toolCalls: [{ tool: 'chat.answer', args: {} }],
+        risk: { level: 'low', score: 0.1, reason: 'Read-only answer.', model: 'planner-test' },
+        citations: ['many-context-target']
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'Who owns the sodium-router migration?'
+      })
+    });
+
+    expect(String(aiProvider.calls[0].input)).toContain('many-context-target');
+    expect(String(aiProvider.calls[0].input)).toContain('sodium-router migration owner is Lin');
   });
 
   it('queues medium or high risk coordination instead of sending it directly', async () => {

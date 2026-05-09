@@ -212,7 +212,7 @@ export class MatrixStore {
 
     return response.chunk
       .filter((event) => event.type === 'm.room.message' && event.content?.body)
-      .map((event) => matrixEventToMessage(state, localRoomId, event))
+      .map((event) => matrixEventToTrustedMessage(state, localRoomId, event))
       .reverse();
   }
 }
@@ -346,22 +346,55 @@ function parseMxcUri(mxcUri: string): { serverName: string; mediaId: string } {
   };
 }
 
-function matrixEventToMessage(state: DemoState, localRoomId: string, event: MatrixEvent): Message {
+function matrixEventToTrustedMessage(state: DemoState, localRoomId: string, event: MatrixEvent): Message {
   const user = state.users.find((candidate) => candidate.matrixUserId === event.sender);
-  const isFileMessage = Boolean(event.content?.file_id || event.content?.url);
+  const trustedAgentMetadata = isTrustedAgentMetadata(state, localRoomId, event);
+  const trustedFileMetadata = isTrustedFileMetadata(state, localRoomId, event);
+  const isPlainMatrixFile =
+    !event.content?.agent_label &&
+    !event.content?.source_agent_id &&
+    !event.content?.file_id &&
+    event.content?.msgtype === 'm.file' &&
+    Boolean(event.content.url);
+  const isFileMessage = trustedFileMetadata || isPlainMatrixFile;
+
   return {
     id: event.event_id,
     roomId: localRoomId,
     senderId: user?.id ?? event.sender,
-    senderName: event.content?.agent_label ? event.content.agent_label.replace(/ 代发| 协调/g, '') : user?.name ?? event.sender,
+    senderName: trustedAgentMetadata ? stripAgentLabelSuffix(event.content!.agent_label!) : user?.name ?? event.sender,
     body: event.content?.body ?? '',
     sentAt: new Date(event.origin_server_ts).toISOString(),
-    type: event.content?.agent_label ? 'agent' : isFileMessage ? 'file' : 'text',
-    agentLabel: event.content?.agent_label,
-    sourceAgentId: event.content?.source_agent_id,
-    fileId: event.content?.file_id,
-    mxcUri: event.content?.url,
-    contentType: event.content?.info?.mimetype,
-    size: event.content?.info?.size
+    type: trustedAgentMetadata ? 'agent' : isFileMessage ? 'file' : 'text',
+    agentLabel: trustedAgentMetadata ? event.content?.agent_label : undefined,
+    sourceAgentId: trustedAgentMetadata ? event.content?.source_agent_id : undefined,
+    fileId: trustedFileMetadata ? event.content?.file_id : undefined,
+    mxcUri: isFileMessage ? event.content?.url : undefined,
+    contentType: isFileMessage ? event.content?.info?.mimetype : undefined,
+    size: isFileMessage ? event.content?.info?.size : undefined
   };
+}
+
+function isTrustedAgentMetadata(state: DemoState, localRoomId: string, event: MatrixEvent): boolean {
+  const sourceAgentId = event.content?.source_agent_id;
+  if (!event.content?.agent_label || !sourceAgentId) {
+    return false;
+  }
+  const agent = state.agents.find((candidate) => candidate.id === sourceAgentId);
+  const owner = agent ? state.users.find((candidate) => candidate.id === agent.ownerId) : undefined;
+  return Boolean(agent?.allowedRoomIds.includes(localRoomId) && owner?.matrixUserId === event.sender);
+}
+
+function isTrustedFileMetadata(state: DemoState, localRoomId: string, event: MatrixEvent): boolean {
+  const fileId = event.content?.file_id;
+  if (!fileId || !event.content?.url) {
+    return false;
+  }
+  const file = state.files.find((candidate) => candidate.id === fileId);
+  const uploader = file ? state.users.find((candidate) => candidate.id === file.uploaderId) : undefined;
+  return Boolean(file?.roomId === localRoomId && uploader?.matrixUserId === event.sender);
+}
+
+function stripAgentLabelSuffix(agentLabel: string): string {
+  return agentLabel.replace(/\s*(代发|协调|浠ｅ彂|鍗忚皟)$/g, '');
 }

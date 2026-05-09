@@ -1,6 +1,9 @@
 import { chromium } from 'playwright';
 
 const baseUrl = process.env.AGENT_IM_WEB_URL ?? 'http://127.0.0.1:5175';
+const apiBaseUrl = process.env.AGENT_IM_API_URL ?? baseUrl;
+const apiToken = process.env.AGENT_IM_API_TOKEN?.trim();
+const apiRequestHeaders = apiToken ? { 'x-agent-im-token': apiToken } : undefined;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const pageErrors = [];
@@ -21,9 +24,35 @@ async function waitForWorkbenchReady() {
   await page.locator('#agent-prompt').waitFor({ timeout: 120_000 });
 }
 
+function withApiAuth(options) {
+  if (!apiRequestHeaders) {
+    return options;
+  }
+  return {
+    ...options,
+    headers: {
+      ...apiRequestHeaders,
+      ...(options.headers ?? {})
+    }
+  };
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await waitForWorkbenchReady();
+
+  const [findFileResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/run') && response.request().method() === 'POST',
+      { timeout: 120_000 }
+    ),
+    page.getByRole('button', { name: /Agent 找文件/ }).click()
+  ]);
+  const findFilePayload = await findFileResponse.json();
+  if (findFilePayload.intent !== 'find_file') {
+    throw new Error(`Expected Agent find_file intent from shortcut, received ${findFilePayload.intent}`);
+  }
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
 
   const [policyPatchResponse] = await Promise.all([
     page.waitForResponse(
@@ -35,14 +64,14 @@ try {
   if (!policyPatchResponse.ok()) {
     throw new Error(`Autopilot policy toggle failed with HTTP ${policyPatchResponse.status()}`);
   }
-  const restorePolicy = await page.request.patch(`${baseUrl}/api/agent/autopilot-policy`, {
+  const restorePolicy = await page.request.patch(`${apiBaseUrl}/api/agent/autopilot-policy`, withApiAuth({
     data: {
       agentId: 'agent-lin',
       enabled: true,
       roomId: 'room-team',
       roomEnabled: true
     }
-  });
+  }));
   if (!restorePolicy.ok()) {
     throw new Error(`Autopilot policy restore failed with HTTP ${restorePolicy.status()}`);
   }
@@ -75,15 +104,31 @@ try {
   if (agentRunPayload.intent !== 'chat') {
     throw new Error(`Expected Agent chat intent, received ${agentRunPayload.intent}`);
   }
-  await page.locator('.result-panel').waitFor({ timeout: 120_000 });
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
 
-  const a2aResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const [sendMessageResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/agent/run') && response.request().method() === 'POST',
+      { timeout: 120_000 }
+    ),
+    (async () => {
+      await page.locator('#agent-prompt').fill('tell Chen: I will join later');
+      await page.getByRole('button', { name: 'send agent prompt' }).click();
+    })()
+  ]);
+  const sendMessagePayload = await sendMessageResponse.json();
+  if (sendMessagePayload.intent !== 'send_message' || sendMessagePayload.result?.status !== 'executed') {
+    throw new Error(`Expected executed send_message payload, received ${JSON.stringify(sendMessagePayload)}`);
+  }
+  await page.locator('.agent-result-motion .result-panel').last().waitFor({ timeout: 120_000 });
+
+  const a2aResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
       body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
     }
-  });
+  }));
   if (!a2aResponse.ok()) {
     throw new Error(`A2A trigger failed with HTTP ${a2aResponse.status()}`);
   }
@@ -92,13 +137,13 @@ try {
     throw new Error('Expected /api/messages to return an autopilot A2A session.');
   }
 
-  const a2aChatResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const a2aChatResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
       body: 'Lin Agent, who is responsible for interview materials?'
     }
-  });
+  }));
   if (!a2aChatResponse.ok()) {
     throw new Error(`A2A chat trigger failed with HTTP ${a2aChatResponse.status()}`);
   }
@@ -107,13 +152,13 @@ try {
     throw new Error('Expected explicit Agent mention to return an autopilot chat message.');
   }
 
-  const a2aNegotiationResponse = await page.request.post(`${baseUrl}/api/messages`, {
+  const a2aNegotiationResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
       senderId: 'user-zhao',
       body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
     }
-  });
+  }));
   if (!a2aNegotiationResponse.ok()) {
     throw new Error(`A2A schedule negotiation failed with HTTP ${a2aNegotiationResponse.status()}`);
   }
@@ -135,8 +180,11 @@ try {
     JSON.stringify({
       ok: true,
       url: baseUrl,
+      apiUrl: apiBaseUrl,
       screenshot: 'tmp/agent-im-browser-smoke.png',
+      shortcutIntent: findFilePayload.intent,
       agentIntent: agentRunPayload.intent,
+      delegatedMessageIntent: sendMessagePayload.intent,
       a2aSessions: a2aPayload.autopilotSessions.length,
       a2aChatMessages: a2aChatPayload.autopilotMessages.length,
       a2aNegotiationTurns: negotiationSession.turns?.length ?? 0,

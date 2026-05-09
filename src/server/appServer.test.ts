@@ -5,9 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoState } from '../domain/demoState';
-import type { AgentAutopilotAction } from '../domain/types';
+import type { AgentAutopilotAction, DemoState } from '../domain/types';
+import { createRunEventDraft, type AgentEvent, type AgentEventDraft } from './agentCore/agentEvents';
+import { MemoryAgentEventStore, type AgentEventStore } from './agentCore/eventLogStore';
 import type { AiProvider, AiUsageSnapshot } from './aiProvider';
 import { createAppServer } from './appServer';
+import type { StateStore } from './stateStore';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 const tempDirs: string[] = [];
@@ -155,6 +158,342 @@ describe('real local agent IM server', () => {
 
     const state = await requestJson(`${app.url}/api/state`);
     expect(state.messages.some((message: { id: string }) => message.id === sentMessage.autopilotMessages[0].id)).toBe(true);
+  });
+
+  it('runs an Agent delegated message to a selected direct room through /api/agent/run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        userText: '告诉陈晨：我晚点发演示稿',
+        messageBody: '我晚点发演示稿'
+      })
+    });
+
+    expect(result.intent).toBe('send_message');
+    expect(result.result.status).toBe('executed');
+    expect(result.message).toMatchObject({
+      roomId: 'room-agent',
+      senderId: 'user-lin',
+      senderName: '林雯的 Agent',
+      body: '我晚点发演示稿',
+      type: 'agent',
+      agentLabel: '林雯的 Agent 代发'
+    });
+    expect(result.log.toolCalls).toContain('message.send');
+    expect(result.requiresHuman).toBe(false);
+    expect(result.actionRequest).toBeUndefined();
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
+
+    const state = await requestJson(`${app.url}/api/state`);
+    expect(state.messages.some((message: { id: string }) => message.id === result.message.id)).toBe(true);
+  });
+
+  it('records replayable product events for /api/agent/run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
+    expect(result.eventCursor).toMatch(/^seq:/);
+
+    const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
+    expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.created');
+    expect(replay.events.map((event: { type: string }) => event.type)).toContain('agent.run.completed');
+    expect(replay.nextCursor).toMatch(/^seq:/);
+
+    const firstPage = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events?limit=1`);
+    const secondPage = await requestJson(
+      `${app.url}/api/agent-runs/${result.runId}/events?limit=1&cursor=${encodeURIComponent(firstPage.nextCursor)}`
+    );
+    expect(firstPage.events).toHaveLength(1);
+    expect(secondPage.events).toHaveLength(1);
+    expect(firstPage.events[0].id).not.toBe(secondPage.events[0].id);
+    expect(firstPage.events[0].sequence).toBeLessThan(secondPage.events[0].sequence);
+  });
+
+  it('replays tool and permission audit events for agent runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send Chen a review request.'
+      })
+    });
+
+    const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
+    const types = replay.events.map((event: { type: string }) => event.type);
+
+    expect(types).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
+    expect(replay.events.find((event: { type: string }) => event.type === 'agent.tool.completed')).toMatchObject({
+      visibility: 'audit',
+      toolCalls: ['message.send'],
+      payload: {
+        toolName: 'message.send',
+        status: 'completed',
+        permissionOutcome: 'allow'
+      }
+    });
+  });
+
+  it('returns a trace replay payload for an agent run', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    const trace = await requestJson(`${app.url}/api/traces/${result.runId}`);
+    expect(trace.runId).toBe(result.runId);
+    expect(trace.status).toBe('completed');
+    expect(trace.events.length).toBeGreaterThanOrEqual(2);
+    expect(trace.truncated).toBeUndefined();
+  });
+
+  it('includes tool audit events in trace replay payloads', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send Chen a review request.'
+      })
+    });
+
+    const trace = await requestJson(`${app.url}/api/traces/${result.runId}`);
+
+    expect(trace.status).toBe('completed');
+    expect(trace.toolCalls).toContain('message.send');
+    expect(trace.events.map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
+  });
+
+  it('returns trace not found for a missing agent run trace', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/traces/missing-run`);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'trace not found' });
+  });
+
+  it('marks traces truncated only after the trace event limit', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+    await store.appendMany(createTraceEventDrafts('run-500', 500));
+    await store.appendMany(createTraceEventDrafts('run-501', 501));
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      stateStore: createMemoryStateStore(createDemoState()),
+      agentEventStore: store
+    });
+    servers.push(app);
+
+    const exactLimit = await requestJson(`${app.url}/api/traces/run-500`);
+    const overLimit = await requestJson(`${app.url}/api/traces/run-501`);
+
+    expect(exactLimit.truncated).toBeUndefined();
+    expect(exactLimit.events).toHaveLength(500);
+    expect(exactLimit.eventCount).toBe(500);
+    expect(overLimit.truncated).toBe(true);
+    expect(overLimit.events).toHaveLength(500);
+    expect(overLimit.eventCount).toBe(500);
+  });
+
+  it('does not create a repo-root event log for custom in-memory state stores', async () => {
+    const repoEventLogPath = join(process.cwd(), 'agent-events.jsonl');
+    await rm(repoEventLogPath, { force: true });
+
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        aiProvider: null,
+        stateStore: createMemoryStateStore(createDemoState())
+      });
+      servers.push(app);
+
+      const state = await requestJson(`${app.url}/api/state`);
+      expect(state.rooms.some((room: { id: string }) => room.id === 'room-team')).toBe(true);
+      await expect(readFile(repoEventLogPath, 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(repoEventLogPath, { force: true });
+    }
+  });
+
+  it('returns successful agent response without eventCursor when event log append fails', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      agentEventStore: createFailingAppendEventStore()
+    });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'chat',
+        userText: 'Who owns the interview materials?'
+      })
+    });
+
+    expect(result.intent).toBe('chat');
+    expect(result.result.reply).toBeTruthy();
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
+    expect(result.eventCursor).toBeUndefined();
+  });
+
+  it('returns bad request for malformed encoded agent run event and trace ids', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const replay = await fetch(`${app.url}/api/agent-runs/%E0%A4%A/events`);
+    const trace = await fetch(`${app.url}/api/traces/%E0%A4%A`);
+
+    expect(replay.status).toBe(400);
+    expect(await replay.json()).toEqual({ error: 'malformed run id' });
+    expect(trace.status).toBe(400);
+    expect(await trace.json()).toEqual({ error: 'malformed run id' });
+  });
+
+  it('adds a calendar event when a user explicitly confirms a schedule from recent room chat', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    await writeFile(
+      dbPath,
+      JSON.stringify(
+        {
+          ...state,
+          messages: [
+            ...state.messages,
+            {
+              id: 'msg-schedule-context',
+              roomId: 'room-team',
+              senderId: 'user-chen',
+              senderName: '陈晨',
+              body: '我 5 月 13 日周三晚上有空，可以一起合稿检查。',
+              sentAt: '2026-05-06T12:48:00+08:00',
+              type: 'text'
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const sentMessage = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: '好的，那么就加入日程吧'
+      })
+    });
+    const currentState = await requestJson(`${app.url}/api/state`);
+    const added = currentState.calendar.find((item: { sourceTaskId: string }) =>
+      item.sourceTaskId === sentMessage.id
+    );
+
+    expect(added).toMatchObject({
+      roomId: 'room-team',
+      startsAt: '2026-05-13T20:30:00+08:00',
+      attendees: expect.arrayContaining(['user-lin', 'user-chen'])
+    });
+    expect(added.title).toContain('合稿检查');
+    expect(
+      currentState.actionLogs.some((log: { contextIds: string[]; toolCalls: string[] }) =>
+        log.contextIds.includes(sentMessage.id) && log.toolCalls.includes('calendar.add_from_chat')
+      )
+    ).toBe(true);
   });
 
   it('returns a negotiated A2A schedule session and queued calendar patch over HTTP', async () => {
@@ -340,6 +679,112 @@ describe('real local agent IM server', () => {
     expect(automated.autopilotSessions).toHaveLength(1);
   });
 
+  it('preserves logs and memories from concurrent Agent runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createBarrierFailingAiProvider(2)
+    });
+    servers.push(app);
+
+    const [summary, deadline] = await Promise.all([
+      requestJson(`${app.url}/api/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          intent: 'summary',
+          userText: '总结当前群聊'
+        })
+      }),
+      requestJson(`${app.url}/api/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          intent: 'deadline',
+          userText: 'deadline 是？'
+        })
+      })
+    ]);
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.memories.map((memory: { id: string }) => memory.id)).toEqual(
+      expect.arrayContaining([summary.memory.id, deadline.memory.id])
+    );
+    expect(state.actionLogs.map((log: { id: string }) => log.id)).toEqual(
+      expect.arrayContaining([summary.log.id, deadline.log.id])
+    );
+  });
+
+  it('preserves audit logs from concurrent Agent helper endpoints', async () => {
+    const store = createBarrierMemoryStateStore(createDemoState(), 2);
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      stateStore: store
+    });
+    servers.push(app);
+
+    const [summary, deadline] = await Promise.all([
+      requestJson(`${app.url}/api/agent/summary`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team'
+        })
+      }),
+      requestJson(`${app.url}/api/agent/deadline`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          question: 'deadline 是？'
+        })
+      })
+    ]);
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.actionLogs.map((log: { id: string }) => log.id)).toEqual(
+      expect.arrayContaining([summary.log.id, deadline.log.id])
+    );
+  });
+
+  it('does not send a legacy coordinate message when the proposal requires human confirmation', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null });
+    servers.push(app);
+
+    const before = await requestJson(`${app.url}/api/state`);
+    const response = await requestJson(`${app.url}/api/agent/coordinate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        fromAgentId: 'agent-chen',
+        toAgentId: 'agent-lin',
+        roomId: 'room-team',
+        proposal: 'Move the final review to Wednesday 23:00 and assume everyone agrees.'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(response.result).toMatchObject({
+      status: 'needs_confirmation',
+      requiresHuman: true
+    });
+    expect(response.message).toBeUndefined();
+    expect(after.messages).toHaveLength(before.messages.length);
+    expect(after.actionLogs.map((log: { id: string }) => log.id)).toContain(response.result.log.id);
+  });
+
   it('automatically replies as an offline AI user after a real Matrix chat message', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -490,6 +935,10 @@ describe('real local agent IM server', () => {
     const download = await fetch(`${app.url}/api/files/${file.id}/download`);
     expect(download.ok).toBe(true);
     expect(download.headers.get('content-type')).toContain('text/plain');
+    expect(download.headers.get('content-disposition')).toContain('attachment');
+    expect(download.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(download.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(download.headers.get('cache-control')).toBe('private, no-store');
     expect(await download.text()).toBe('访谈对象：校园服务中心');
 
     const state = await requestJson(`${app.url}/api/state`);
@@ -881,6 +1330,10 @@ describe('real local agent IM server', () => {
     const posterResponse = await fetch(`${app.url}/api/files/${poster!.id}/download`);
     expect(posterResponse.ok).toBe(true);
     expect(posterResponse.headers.get('content-type')).toContain('image/svg+xml');
+    expect(posterResponse.headers.get('content-disposition')).toContain('attachment');
+    expect(posterResponse.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(posterResponse.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(posterResponse.headers.get('cache-control')).toBe('private, no-store');
     expect(await posterResponse.text()).toContain('<svg');
 
     const image2 = generated.files.find((file: { name: string; id: string }) => file.name === 'image2-agent-im-a2a-poster.png');
@@ -888,6 +1341,10 @@ describe('real local agent IM server', () => {
     const image2Response = await fetch(`${app.url}/api/files/${image2!.id}/download`);
     expect(image2Response.ok).toBe(true);
     expect(image2Response.headers.get('content-type')).toContain('image/png');
+    expect(image2Response.headers.get('content-disposition')).toContain('attachment');
+    expect(image2Response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(image2Response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(image2Response.headers.get('cache-control')).toBe('private, no-store');
     expect((await image2Response.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
   });
 
@@ -1045,7 +1502,7 @@ describe('real local agent IM server', () => {
     });
   });
 
-  it('requires the configured API token for state-changing requests while keeping reads available', async () => {
+  it('allows local query-authenticated SSE when an API token is configured', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
     const dbPath = join(dir, 'db.json');
@@ -1057,8 +1514,11 @@ describe('real local agent IM server', () => {
     });
     servers.push(app);
 
-    const read = await fetch(`${app.url}/api/state`);
-    const denied = await fetch(`${app.url}/api/messages`, {
+    const deniedRead = await fetch(`${app.url}/api/state`);
+    const allowedRead = await fetch(`${app.url}/api/state`, {
+      headers: { 'x-agent-im-token': 'local-secret' }
+    });
+    const deniedWrite = await fetch(`${app.url}/api/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -1067,7 +1527,7 @@ describe('real local agent IM server', () => {
         body: 'unauthorized write'
       })
     });
-    const allowed = await fetch(`${app.url}/api/messages`, {
+    const allowedWrite = await fetch(`${app.url}/api/messages`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -1079,11 +1539,401 @@ describe('real local agent IM server', () => {
         body: 'authorized write'
       })
     });
+    const allowedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
 
-    expect(read.ok).toBe(true);
-    expect(denied.status).toBe(401);
-    expect(await denied.json()).toMatchObject({ error: 'unauthorized' });
-    expect(allowed.status).toBe(201);
+    expect(deniedRead.status).toBe(401);
+    expect(allowedRead.ok).toBe(true);
+    expect(deniedWrite.status).toBe(401);
+    expect(await deniedWrite.json()).toMatchObject({ error: 'unauthorized' });
+    expect(allowedWrite.status).toBe(201);
+    expect(allowedSse.ok).toBe(true);
+    await allowedSse.body?.cancel();
+  });
+
+  it('requires header auth and rejects query tokens in public mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret'
+      });
+      servers.push(app);
+
+      const deniedRead = await fetch(`${app.url}/api/state`);
+      const deniedSse = await fetch(`${app.url}/api/events?agent_im_token=local-secret`);
+      const allowedRead = await fetch(`${app.url}/api/state`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const allowedSse = await fetch(`${app.url}/api/events`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+
+      expect(deniedRead.status).toBe(401);
+      expect(deniedSse.status).toBe(401);
+      expect(allowedRead.ok).toBe(true);
+      expect(allowedSse.ok).toBe(true);
+      await allowedSse.body?.cancel();
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('returns authenticated product readiness without exposing the API token in public mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        })
+      });
+      servers.push(app);
+
+      const denied = await fetch(`${app.url}/api/readiness`);
+      const allowed = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await allowed.json();
+
+      expect(denied.status).toBe(401);
+      expect(allowed.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.checks.auth).toMatchObject({
+        mode: 'public',
+        requireAuth: true,
+        allowQueryToken: false,
+        tokenConfigured: true,
+        allowedOrigins: ['https://agentbridge.example.com']
+      });
+      expect(body.checks.eventLog).toMatchObject({
+        mode: 'jsonl-local',
+        readable: true,
+        writable: true,
+        valid: true
+      });
+      expect(JSON.stringify(body)).not.toContain('local-secret');
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('does not expose detailed readiness in production-open mode', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowNoAuth = process.env.AGENT_IM_ALLOW_NO_AUTH;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    delete process.env.AGENT_IM_PUBLIC_MODE;
+    process.env.AGENT_IM_ALLOW_NO_AUTH = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: null,
+        aiProvider: null
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`);
+      const body = await response.json();
+
+      expect([401, 403]).toContain(response.status);
+      expect(body).toMatchObject({ error: expect.any(String) });
+      expect(body.checks).toBeUndefined();
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowNoAuth === undefined) {
+        delete process.env.AGENT_IM_ALLOW_NO_AUTH;
+      } else {
+        process.env.AGENT_IM_ALLOW_NO_AUTH = previousAllowNoAuth;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('reports storage readiness blocked when the state store cannot be read', async () => {
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createUsageAiProvider({
+        requestCount: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalTokens: 6,
+        promptCacheHitTokens: 1,
+        promptCacheMissTokens: 3,
+        promptCacheHitRate: 0.25
+      }),
+      stateStore: createUnreadableStateStore()
+    });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/readiness`);
+    const body = await response.json();
+
+    expect(response.ok).toBe(true);
+    expect(body.ok).toBe(false);
+    expect(body.checks.storage).toMatchObject({ ok: false, status: 'blocked', mode: 'json-local' });
+  });
+
+  it('reports storage readiness blocked when the state store can read but is not writable', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createReadOnlyHealthStateStore()
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.ok).toBe(true);
+      expect(body.ok).toBe(false);
+      expect(body.checks.auth).toMatchObject({ ok: true, status: 'ready', mode: 'public' });
+      expect(body.checks.storage).toMatchObject({
+        ok: false,
+        status: 'blocked',
+        mode: 'json-local',
+        readable: true,
+        writable: false
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('reports event log readiness blocked when event store health throws', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createMemoryStateStore(createDemoState()),
+        agentEventStore: createThrowingHealthEventStore()
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(false);
+      expect(body.checks.eventLog).toMatchObject({
+        ok: false,
+        status: 'blocked',
+        mode: 'custom',
+        readable: false,
+        writable: false,
+        valid: false
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('allows an explicit event log readiness mode for injected event stores', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const app = await createAppServer({
+        dbPath: 'memory',
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret',
+        aiProvider: createUsageAiProvider({
+          requestCount: 1,
+          promptTokens: 4,
+          completionTokens: 2,
+          totalTokens: 6,
+          promptCacheHitTokens: 1,
+          promptCacheMissTokens: 3,
+          promptCacheHitRate: 0.25
+        }),
+        stateStore: createMemoryStateStore(createDemoState()),
+        agentEventStore: new MemoryAgentEventStore(),
+        agentEventLogMode: 'external-jsonl'
+      });
+      servers.push(app);
+
+      const response = await fetch(`${app.url}/api/readiness`, {
+        headers: { 'x-agent-im-token': 'local-secret' }
+      });
+      const body = await response.json();
+
+      expect(response.ok).toBe(true);
+      expect(body.checks.eventLog).toMatchObject({
+        ok: true,
+        status: 'ready',
+        mode: 'external-jsonl',
+        readable: true,
+        writable: true,
+        valid: true
+      });
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('fails startup in public mode when no API token is configured', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    let startedApp: Awaited<ReturnType<typeof createAppServer>> | undefined;
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+
+      await expect(
+        createAppServer({
+          dbPath,
+          port: 0,
+          matrixBootstrapPath: null,
+          apiToken: null
+        }).then((app) => {
+          startedApp = app;
+          return app;
+        })
+      ).rejects.toThrow('AGENT_IM_API_TOKEN is required when auth is required');
+    } finally {
+      if (startedApp) {
+        await startedApp.close();
+      }
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
   });
 
   it('rejects browser requests from origins outside the configured allowlist', async () => {
@@ -1139,6 +1989,30 @@ describe('real local agent IM server', () => {
     expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5176');
   });
 
+  it('advertises PATCH support in CORS preflight responses', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const preflight = await fetch(`${app.url}/api/agent/autopilot-policy`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://127.0.0.1:5175',
+        'access-control-request-method': 'PATCH'
+      }
+    });
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5175');
+    expect(preflight.headers.get('access-control-allow-methods')?.split(',')).toContain('PATCH');
+  });
+
   it('rejects unsupported and oversized uploads before persisting state', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -1180,6 +2054,162 @@ describe('real local agent IM server', () => {
     expect(oversized.status).toBe(413);
     expect(await oversized.json()).toMatchObject({ error: 'file too large' });
     expect(state.files.some((file: { name: string }) => file.name === 'malware.exe' || file.name === 'notes.txt')).toBe(false);
+  });
+
+  it('rejects SVG uploads in product mode', async () => {
+    const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.AGENT_IM_PUBLIC_MODE = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: 'local-secret'
+      });
+      servers.push(app);
+
+      const cases = [
+        { contentType: 'image/svg+xml', filename: 'diagram.svg' },
+        { contentType: 'text/plain', filename: 'diagram.svg' },
+        { contentType: 'IMAGE/SVG+XML', filename: 'diagram.txt' },
+        { contentType: 'image/svg+xml; charset=utf-8', filename: 'diagram.txt' }
+      ];
+
+      for (const uploadCase of cases) {
+        const response = await fetch(
+          `${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': uploadCase.contentType,
+              'x-agent-im-token': 'local-secret',
+              'x-file-name': uploadCase.filename
+            },
+            body: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+          }
+        );
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'SVG uploads are disabled in product mode' });
+      }
+    } finally {
+      if (previousPublicMode === undefined) {
+        delete process.env.AGENT_IM_PUBLIC_MODE;
+      } else {
+        process.env.AGENT_IM_PUBLIC_MODE = previousPublicMode;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('rejects SVG uploads in production-open mode', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousAllowNoAuth = process.env.AGENT_IM_ALLOW_NO_AUTH;
+    const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    process.env.AGENT_IM_ALLOW_NO_AUTH = 'true';
+    process.env.AGENT_IM_ALLOWED_ORIGINS = 'https://agentbridge.example.com';
+    try {
+      const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+      tempDirs.push(dir);
+      const dbPath = join(dir, 'db.json');
+      const app = await createAppServer({
+        dbPath,
+        port: 0,
+        matrixBootstrapPath: null,
+        apiToken: null
+      });
+      servers.push(app);
+
+      const response = await fetch(
+        `${app.url}/api/files/upload?roomId=room-team&senderId=user-lin&agentCanShare=true`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'text/plain',
+            'x-file-name': 'diagram.svg'
+          },
+          body: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        }
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'SVG uploads are disabled in product mode' });
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      if (previousAllowNoAuth === undefined) {
+        delete process.env.AGENT_IM_ALLOW_NO_AUTH;
+      } else {
+        process.env.AGENT_IM_ALLOW_NO_AUTH = previousAllowNoAuth;
+      }
+      if (previousAllowedOrigins === undefined) {
+        delete process.env.AGENT_IM_ALLOWED_ORIGINS;
+      } else {
+        process.env.AGENT_IM_ALLOWED_ORIGINS = previousAllowedOrigins;
+      }
+    }
+  });
+
+  it('rejects oversized JSON request bodies before mutating state', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const oversizedBody = `oversized ${'x'.repeat(300_000)}`;
+    const rejected = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: oversizedBody
+      })
+    });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(rejected.status).toBe(413);
+    expect(await rejected.json()).toMatchObject({ error: 'request body too large' });
+    expect(state.messages.some((message: { body: string }) => message.body === oversizedBody)).toBe(false);
+  });
+
+  it('returns a client error for malformed JSON request bodies', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const app = await createAppServer({
+      dbPath,
+      port: 0,
+      matrixBootstrapPath: null
+    });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{bad json'
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid JSON body' });
   });
 
   it('proxies Matrix media downloads for persisted files', async () => {
@@ -1250,6 +2280,10 @@ describe('real local agent IM server', () => {
     expect(response.ok).toBe(true);
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(response.headers.get('content-disposition')).toContain('team-notes.txt');
+    expect(response.headers.get('content-disposition')).toContain('attachment');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(await response.text()).toBe('real matrix media bytes');
   });
 
@@ -1535,6 +2569,158 @@ function createFakeAiProvider(text: string): AiProvider {
       return text;
     }
   };
+}
+
+function createBarrierFailingAiProvider(waitForCalls: number): AiProvider {
+  let callCount = 0;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  return {
+    async generateText() {
+      callCount += 1;
+      if (callCount >= waitForCalls) {
+        release?.();
+      }
+      if (callCount <= waitForCalls) {
+        await ready;
+      }
+      throw new Error('LLM unavailable');
+    }
+  };
+}
+
+function createMemoryStateStore(initial: DemoState): StateStore {
+  let state = cloneState(initial);
+
+  return {
+    async init() {},
+    async read() {
+      return cloneState(state);
+    },
+    async write(nextState) {
+      state = cloneState(nextState);
+    },
+    async update(updater) {
+      const nextState = await updater(cloneState(state));
+      state = cloneState(nextState);
+      return cloneState(state);
+    }
+  };
+}
+
+function createTraceEventDrafts(runId: string, count: number): AgentEventDraft[] {
+  return Array.from({ length: count }, (_, index) =>
+    createRunEventDraft({
+      type: 'agent.run.created',
+      tenantId: 'local',
+      sessionId: `session-${runId}`,
+      runId,
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      entrypoint: 'test',
+      payload: { index }
+    })
+  );
+}
+
+function createBarrierMemoryStateStore(initial: DemoState, waitForWrites: number): StateStore {
+  let state = cloneState(initial);
+  let writeCount = 0;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let updateQueue: Promise<unknown> = Promise.resolve();
+
+  return {
+    async init() {},
+    async read() {
+      return cloneState(state);
+    },
+    async write(nextState) {
+      writeCount += 1;
+      if (writeCount >= waitForWrites) {
+        release?.();
+      }
+      if (writeCount <= waitForWrites) {
+        await ready;
+      }
+      state = cloneState(nextState);
+    },
+    update(updater) {
+      const pending = updateQueue.then(async () => {
+        const nextState = await updater(cloneState(state));
+        state = cloneState(nextState);
+        return cloneState(state);
+      });
+      updateQueue = pending.catch(() => undefined);
+      return pending;
+    }
+  };
+}
+
+function createFailingAppendEventStore(): AgentEventStore {
+  return {
+    async init() {},
+    async append(_draft: AgentEventDraft): Promise<AgentEvent> {
+      throw new Error('event append failed');
+    },
+    async appendMany(_drafts: AgentEventDraft[]): Promise<AgentEvent[]> {
+      throw new Error('event append failed');
+    },
+    async list() {
+      return { events: [] };
+    },
+    async health() {
+      return { readable: true, writable: false, valid: true };
+    }
+  };
+}
+
+function createThrowingHealthEventStore(): AgentEventStore {
+  const store = new MemoryAgentEventStore();
+
+  return {
+    init: () => store.init(),
+    append: (draft) => store.append(draft),
+    appendMany: (drafts) => store.appendMany(drafts),
+    list: (options) => store.list(options),
+    async health() {
+      throw new Error('event log health unavailable');
+    }
+  };
+}
+
+function createUnreadableStateStore(): StateStore {
+  return {
+    async init() {},
+    async read() {
+      throw new Error('state store unavailable');
+    },
+    async write() {}
+  };
+}
+
+function createReadOnlyHealthStateStore(): StateStore {
+  return {
+    async init() {},
+    async read() {
+      return createDemoState();
+    },
+    async write() {
+      throw new Error('state store read-only');
+    },
+    async health() {
+      return { readable: true, writable: false };
+    }
+  };
+}
+
+function cloneState(state: DemoState): DemoState {
+  return JSON.parse(JSON.stringify(state)) as DemoState;
 }
 
 function createRecordingAiProvider(texts: string[]): AiProvider & { calls: Array<Record<string, unknown>> } {

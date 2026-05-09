@@ -8,6 +8,7 @@ import { createDemoState } from '../domain/demoState';
 import type { DemoState } from '../domain/types';
 import type { AiProvider } from './aiProvider';
 import { createAppServer } from './appServer';
+import { createRuntimeDemoAssets } from './demoAssets';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 const tempDirs: string[] = [];
@@ -300,7 +301,7 @@ describe('runtime upgrade APIs', () => {
     expect(response.result.risk).toMatchObject({
       level: 'low',
       score: 0.16,
-      model: 'llm-driven'
+      model: 'policy-engine-v1'
     });
     expect(response.result.status).toBe('executed');
   });
@@ -439,9 +440,10 @@ describe('runtime upgrade APIs', () => {
     });
 
     expect(response.intent).toBe('chat');
-    expect(response.result.reply).toContain('陈晨负责访谈材料');
+    expect(response.result.reply).toContain('陈晨');
+    expect(response.result.reply).toContain('访谈纪要');
     expect(response.log.toolCalls).not.toContain('agent_to_agent.negotiate');
-    expect(aiProvider.calls).toHaveLength(2);
+    expect(aiProvider.calls).toHaveLength(1);
   });
 
   it('falls back when the LLM provider fails', async () => {
@@ -505,17 +507,11 @@ describe('runtime upgrade APIs', () => {
       })
     });
 
-    expect(generated.files).toHaveLength(8);
-    expect(generated.files.map((file: { contentType: string }) => file.contentType)).toEqual([
-      'text/plain; charset=utf-8',
-      'text/plain; charset=utf-8',
-      'application/pdf',
-      'application/pdf',
-      'image/svg+xml',
-      'image/svg+xml',
-      'text/markdown; charset=utf-8',
-      'text/plain; charset=utf-8'
-    ]);
+    const runtimeAssets = createRuntimeDemoAssets();
+    expect(generated.files).toHaveLength(runtimeAssets.length);
+    expect(generated.files.map((file: { contentType: string }) => file.contentType)).toEqual(
+      runtimeAssets.map((asset) => asset.contentType)
+    );
     expect(generated.files.every((file: { mxcUri?: string }) => file.mxcUri?.startsWith('mxc://localhost/'))).toBe(true);
   });
 

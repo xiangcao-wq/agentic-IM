@@ -37,9 +37,54 @@ describe('agent runtime', () => {
       requiresHuman: false,
       logId: result.result.log.id
     });
-    expect(result.state.actionRequests[0]).toBe(result.actionRequest);
-    expect(result.state.actionLogs[0]).toBe(result.result.log);
-    expect(result.state.actionLogs[0].toolCalls).toContain('file_library.lookup_latest');
+    const persistedRequest = result.state.actionRequests.find((request) => request.id === result.actionRequest.id);
+    expect(persistedRequest).toMatchObject({ status: 'executed', logId: result.result.log.id });
+    const persistedLog = result.state.actionLogs.find((log) => log.id === result.result.log.id);
+    expect(result.result.risk.model).toBe('policy-engine-v1');
+    expect(result.result.log.toolCalls).toContain('file.share');
+    expect(persistedLog?.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
+    expect(persistedLog?.toolCalls).toContain('file_library.lookup_latest');
+    expect(result.toolInvocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['file:share'],
+      requiresHuman: false
+    });
+  });
+
+  it('shares an explicitly selected authorized file instead of guessing the newest match', async () => {
+    const baseState = createDemoState();
+    const state = {
+      ...baseState,
+      files: baseState.files.map((file) =>
+        file.id === 'file-slides-v3'
+          ? {
+              ...file,
+              mxcUri: 'mxc://localhost/slides-v3',
+              contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              size: 4096
+            }
+          : file
+      )
+    };
+
+    const result = await runFileShareAction(state, {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      requesterId: 'user-chen',
+      requestText: '请把这个文件发给陈晨',
+      fileId: 'file-slides-v3',
+      fileVersion: 3
+    });
+
+    expect(result.result.status).toBe('executed');
+    expect(result.result.file?.id).toBe('file-slides-v3');
+    expect(result.result.message?.fileId).toBe('file-slides-v3');
+    expect(result.actionRequest.input).toMatchObject({
+      fileId: 'file-slides-v3',
+      fileVersion: 3
+    });
   });
 
   it('keeps high-risk file share actions in the confirmation queue', async () => {
@@ -60,6 +105,14 @@ describe('agent runtime', () => {
     expect(result.actionRequest.requiresHuman).toBe(true);
     expect(result.actionRequest.risk?.level).toBe('high');
     expect(result.actionRequest.logId).toBeUndefined();
-    expect(result.state.actionLogs[0]).toBe(result.result.log);
+    const persistedLog = result.state.actionLogs.find((log) => log.id === result.result.log.id);
+    expect(persistedLog).toBeDefined();
+    expect(result.result.log.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
+    expect(result.toolInvocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'awaiting_permission',
+      permissionOutcome: 'ask',
+      requiresHuman: true
+    });
   });
 });

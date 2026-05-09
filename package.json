@@ -19,6 +19,7 @@
     "eval:agent:real": "tsx src/server/agentEvalCli.ts --real",
     "assets:seed": "tsx scripts/upload-demo-materials.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs",
+    "readiness:product": "node scripts/product-readiness.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -34,6 +35,7 @@
     "vite": "^7.2.4"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
     "jsdom": "^27.2.0",

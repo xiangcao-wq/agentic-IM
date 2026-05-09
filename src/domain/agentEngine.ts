@@ -22,8 +22,11 @@ interface DeadlineQuestionInput {
 interface FileShareInput {
   agentId: string;
   roomId: string;
+  targetRoomId?: string;
   requesterId: string;
   requestText: string;
+  fileId?: string;
+  fileVersion?: number;
 }
 
 interface CoordinationInput {
@@ -83,12 +86,16 @@ export async function summarizeRoom(
       openQuestions?: string[];
       sources?: string[];
     }>(raw);
+    const sources = buildExistingContextIds(state, parsed.sources ?? []);
+    if (sources.length === 0) {
+      return summarizeRoomFallback(state, roomId, agentId);
+    }
 
     return {
       headline: parsed.headline,
       deadlines: parsed.deadlines ?? [],
       todos: parsed.todos ?? parsed.openQuestions ?? [],
-      sources: parsed.sources ?? []
+      sources
     };
   } catch {
     return summarizeRoomFallback(state, roomId, agentId);
@@ -104,6 +111,14 @@ function summarizeRoomFallback(state: DemoState, roomId: string, agentId: string
   const relatedTasks = state.tasks.filter((task) =>
     roomMessages.some((message) => message.id === task.sourceMessageId)
   );
+  if (roomMessages.length === 0 && relatedTasks.length === 0) {
+    return {
+      headline: '我在当前授权上下文里没有找到可用于总结这个房间的消息或任务证据。',
+      deadlines: [],
+      todos: [],
+      sources: []
+    };
+  }
   const requirementMessages = roomMessages.filter((message) =>
     includesAny(message.body, ['截止', '提交', '演示稿', '调研报告', '合稿'])
   );
@@ -150,7 +165,10 @@ export async function answerDeadlineQuestion(
       '{"answer":"你的回答","sources":["引用的消息或文件ID"],"confidence":0.95}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'deadline' });
+    const context = buildStructuredContext(state, input.roomId, input.agentId, {
+      focus: 'deadline',
+      userText: input.question
+    });
     const userPrompt = [
       context,
       '',
@@ -172,10 +190,14 @@ export async function answerDeadlineQuestion(
       sources?: string[];
       confidence?: number;
     }>(raw);
+    const citations = buildExistingContextIds(state, parsed.sources ?? []);
+    if (citations.length === 0) {
+      return answerDeadlineQuestionFallback(state, input);
+    }
 
     return {
       answer: parsed.answer,
-      citations: parsed.sources ?? []
+      citations
     };
   } catch {
     return answerDeadlineQuestionFallback(state, input);
@@ -195,7 +217,20 @@ function answerDeadlineQuestionFallback(state: DemoState, input: DeadlineQuestio
       file.visibility === 'room' &&
       includesAny(file.summary, ['截止', '提交', '调研报告'])
   );
+  if (relevantMessages.length === 0 && relevantFiles.length === 0) {
+    return {
+      answer: '我在当前授权上下文里没有找到明确的截止时间证据，因此不能确认具体提交时间。你可以同步最新群聊或提供课程要求文件后再让我检查。',
+      citations: []
+    };
+  }
+  const citations = unique([...relevantMessages.map((message) => message.id), ...relevantFiles.map((file) => file.id)]);
   const deadline = extractDeadline([...relevantMessages.map((message) => message.body), ...relevantFiles.map((file) => file.summary)]);
+  if (!deadline) {
+    return {
+      answer: '我在当前授权上下文里找到了和提交/截止相关的内容，但没有找到明确的截止时间，因此不能确认具体提交时间。',
+      citations
+    };
+  }
   const baseAnswer = `这次信息系统作业的截止时间是 ${deadline}，需要提交调研报告 PDF 和 8 分钟课堂演示稿。`;
   const remainingDays = estimateRemainingDays(deadline);
   const answer =
@@ -205,7 +240,7 @@ function answerDeadlineQuestionFallback(state: DemoState, input: DeadlineQuestio
 
   return {
     answer,
-    citations: unique([...relevantMessages.map((message) => message.id), ...relevantFiles.map((file) => file.id)])
+    citations
   };
 }
 
@@ -239,7 +274,10 @@ export async function createFileShareAction(
       '{"matchedFileId":"文件ID或null","risk":{"level":"low","score":0.18,"reason":"风险说明"},"reasoning":"决策理由"}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.agentId, { focus: 'file_share' });
+    const context = buildStructuredContext(state, input.roomId, input.agentId, {
+      focus: 'file_share',
+      userText: input.requestText
+    });
     const userPrompt = [
       context,
       '',
@@ -265,24 +303,29 @@ export async function createFileShareAction(
 
     const agent = getAgent(state, input.agentId);
     ensureRoomAccess(agent, input.roomId);
+    const targetRoomId = input.targetRoomId ?? input.roomId;
+    ensureRoomAccess(agent, targetRoomId);
     const owner = state.users.find((user) => user.id === agent.ownerId);
 
-    const file = parsed.matchedFileId
-      ? state.files.find((f) => f.id === parsed.matchedFileId)
-      : findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText);
+    const explicitFile = input.fileId
+      ? findAuthorizedShareableFileById(state, agent.ownerId, input.roomId, input.fileId, input.fileVersion)
+      : undefined;
+    const file = explicitFile ?? (parsed.matchedFileId
+      ? findAuthorizedShareableFileById(state, agent.ownerId, input.roomId, parsed.matchedFileId) ??
+        findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText)
+      : input.fileId
+        ? undefined
+        : findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText));
 
-    const risk: RiskAssessment = {
+    const risk: RiskAssessment = explicitFile && hasDownloadableBacking(explicitFile)
+      ? explicitFileShareRisk()
+      : {
       level: parsed.risk.level,
       score: parsed.risk.score,
       reason: parsed.risk.reason,
       model: 'llm-driven'
     };
 
-    const canExecuteShare =
-      hasDownloadableBacking(file) &&
-      Boolean(file?.agentCanShare) &&
-      (risk.level === 'low' || options.forceExecute);
-    const status = file && canExecuteShare ? 'executed' : 'needs_confirmation';
     const gatedRisk: RiskAssessment = file && !hasDownloadableBacking(file)
       ? {
           ...risk,
@@ -290,10 +333,22 @@ export async function createFileShareAction(
           score: Math.max(risk.score, 0.55),
           reason: `${risk.reason} 文件只有元数据，没有 Matrix 或本地可下载文件备份，不能自动代发。`
         }
+      : file && targetRoomId !== input.roomId
+        ? {
+            ...risk,
+            level: risk.level === 'high' ? 'high' : 'medium',
+            score: Math.max(risk.score, 0.58),
+            reason: `${risk.reason} 目标房间不同于文件来源房间，需要人工确认跨房间代发。`
+          }
       : risk;
+    const canExecuteShare =
+      hasDownloadableBacking(file) &&
+      Boolean(file?.agentCanShare) &&
+      (gatedRisk.level === 'low' || options.forceExecute);
+    const status = file && canExecuteShare ? 'executed' : 'needs_confirmation';
     const message =
       status === 'executed' && file && owner
-        ? createAgentFileMessage({ agent, file, ownerName: owner.name, roomId: input.roomId })
+        ? createAgentFileMessage({ agent, file, ownerName: owner.name, roomId: targetRoomId })
         : undefined;
     const log = createActionLog({
       agentId: agent.id,
@@ -304,7 +359,7 @@ export async function createFileShareAction(
           : '文件代发需要人工确认',
       status,
       risk: gatedRisk,
-      contextIds: unique(['msg-05', 'msg-06', file?.id].filter(Boolean) as string[]),
+      contextIds: buildExistingContextIds(state, [input.fileId, file?.id]),
       toolCalls: ['llm.evaluate', 'room_search', 'file_library.lookup_latest', ...(message ? ['matrix.send_event'] : [])]
     });
 
@@ -321,10 +376,24 @@ function createFileShareActionFallback(
 ): FileShareAction {
   const agent = getAgent(state, input.agentId);
   ensureRoomAccess(agent, input.roomId);
+  const targetRoomId = input.targetRoomId ?? input.roomId;
+  ensureRoomAccess(agent, targetRoomId);
   const owner = state.users.find((user) => user.id === agent.ownerId);
   const requester = state.users.find((user) => user.id === input.requesterId);
-  const file = findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText);
-  const risk = assessFileShareRisk(Boolean(requester), file, input.requestText);
+  const file = input.fileId
+    ? findAuthorizedShareableFileById(state, agent.ownerId, input.roomId, input.fileId, input.fileVersion)
+    : findNewestShareableFile(state, agent.ownerId, input.roomId, input.requestText);
+  const baseRisk = input.fileId && requester && file && hasDownloadableBacking(file)
+    ? explicitFileShareRisk()
+    : assessFileShareRisk(Boolean(requester), file, input.requestText);
+  const risk = file && targetRoomId !== input.roomId
+    ? {
+        ...baseRisk,
+        level: baseRisk.level === 'high' ? 'high' : 'medium',
+        score: Math.max(baseRisk.score, 0.58),
+        reason: `${baseRisk.reason} 目标房间不同于文件来源房间，需要人工确认跨房间代发。`
+      } as RiskAssessment
+    : baseRisk;
   const status = file && (risk.level === 'low' || options.forceExecute) ? 'executed' : 'needs_confirmation';
   const message =
     status === 'executed' && file && owner
@@ -332,7 +401,7 @@ function createFileShareActionFallback(
           agent,
           file,
           ownerName: owner.name,
-          roomId: input.roomId
+          roomId: targetRoomId
         })
       : undefined;
   const log = createActionLog({
@@ -344,7 +413,7 @@ function createFileShareActionFallback(
         : '文件代发需要人工确认',
     status,
     risk,
-    contextIds: unique(['msg-05', 'msg-06', file?.id].filter(Boolean) as string[]),
+    contextIds: buildExistingContextIds(state, [input.fileId, file?.id]),
     toolCalls: ['room_search', 'file_library.lookup_latest', ...(message ? ['matrix.send_event'] : [])]
   });
 
@@ -387,7 +456,10 @@ export async function coordinateAgents(
       '{"hasScheduleChange":true,"risk":{"level":"high","score":0.82,"reason":"风险说明"},"suggestion":"建议方案","reasoning":"分析过程"}'
     ].join('\n');
 
-    const context = buildStructuredContext(state, input.roomId, input.toAgentId, { focus: 'coordinate' });
+    const context = buildStructuredContext(state, input.roomId, input.toAgentId, {
+      focus: 'coordinate',
+      userText: input.proposal
+    });
     const userPrompt = [
       context,
       '',
@@ -432,7 +504,7 @@ export async function coordinateAgents(
       action: `处理来自 ${fromAgent.displayName} 的日程协调提案`,
       status,
       risk,
-      contextIds: ['cal-review', 'task-check'],
+      contextIds: buildExistingContextIds(state, ['cal-review', 'task-check']),
       toolCalls: ['llm.evaluate', 'calendar.inspect', 'agent_to_agent.negotiate']
     });
 
@@ -459,7 +531,7 @@ function coordinateAgentsFallback(state: DemoState, input: CoordinationInput): C
     action: `处理来自 ${fromAgent.displayName} 的日程协调提案`,
     status,
     risk,
-    contextIds: ['cal-review', 'task-check'],
+    contextIds: buildExistingContextIds(state, ['cal-review', 'task-check']),
     toolCalls: ['calendar.inspect', 'agent_to_agent.negotiate']
   });
 
@@ -529,6 +601,24 @@ function findNewestShareableFile(state: DemoState, ownerId: string, roomId: stri
   })[0]?.file;
 }
 
+function findAuthorizedShareableFileById(
+  state: DemoState,
+  ownerId: string,
+  roomId: string,
+  fileId: string,
+  fileVersion?: number
+): FileItem | undefined {
+  return state.files.find(
+    (file) =>
+      file.id === fileId &&
+      (fileVersion === undefined || file.version === fileVersion) &&
+      file.uploaderId === ownerId &&
+      file.roomId === roomId &&
+      file.visibility === 'room' &&
+      file.agentCanShare
+  );
+}
+
 function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined, requestText: string): RiskAssessment {
   if (!requesterKnown || !file) {
     return {
@@ -576,6 +666,15 @@ function assessFileShareRisk(requesterKnown: boolean, file: FileItem | undefined
     reason: asksLatestSharedFile
       ? '请求来自同组成员，目标文件是上传者授权的群内最新版本，动作可控。'
       : '请求意图不够明确，建议确认后执行。',
+    model: lowRiskModel
+  };
+}
+
+function explicitFileShareRisk(): RiskAssessment {
+  return {
+    level: 'low',
+    score: 0.16,
+    reason: '用户已在授权文件列表中明确选择目标文件，且文件具备可下载媒体备份。',
     model: lowRiskModel
   };
 }
@@ -671,10 +770,23 @@ function createActionLog(input: Omit<AgentActionLog, 'id' | 'createdAt'>): Agent
   };
 }
 
-function extractDeadline(texts: string[]): string {
+function buildExistingContextIds(state: DemoState, ids: Array<string | undefined>): string[] {
+  const existingIds = new Set([
+    ...state.messages.map((message) => message.id),
+    ...state.files.map((file) => file.id),
+    ...state.tasks.map((task) => task.id),
+    ...state.calendar.map((item) => item.id),
+    ...state.actionRequests.map((request) => request.id),
+    ...state.actionLogs.map((log) => log.id),
+    ...(state.memories ?? []).map((memory) => memory.id)
+  ]);
+  return unique(ids.filter((id): id is string => typeof id === 'string' && existingIds.has(id)));
+}
+
+function extractDeadline(texts: string[]): string | null {
   const joined = texts.join('\n');
   const match = joined.match(/5月12日\s*23:59/);
-  return match?.[0] ?? '5月12日 23:59';
+  return match?.[0] ?? null;
 }
 
 function asksRemainingTime(question: string): boolean {

@@ -48,7 +48,7 @@ export async function runAiAutoreplies(input: RunAiAutorepliesInput): Promise<{
           '',
           'Reply as this real user in the current chat. Continue the task handoff directly and do not explain that you are AI.'
         ].join('\n\n'),
-        maxOutputTokens: 180
+        maxOutputTokens: 120
       });
       const reply = await input.sendMessage(nextState, {
         roomId: input.triggerMessage.roomId,

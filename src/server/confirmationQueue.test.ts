@@ -17,7 +17,7 @@ afterEach(async () => {
 
 describe('agent confirmation queue API', () => {
   it('lists and confirms queued Agent actions', async () => {
-    const app = await startTestServer();
+    const app = await startTestServer(createStateWithMatrixBackedSlides());
     const queued = await createHighRiskShareAction(app.url);
     const actions = await requestJson(`${app.url}/api/agent/actions`);
     const action = actions.actions.find((candidate: { id: string }) => candidate.id === queued.action.id);
@@ -50,6 +50,82 @@ describe('agent confirmation queue API', () => {
     });
   });
 
+  it('returns 409 without new logs when already resolved actions are reviewed again', async () => {
+    const app = await startTestServer(createStateWithMatrixBackedSlides());
+    const executed = await createHighRiskShareAction(app.url);
+    await requestJson(`${app.url}/api/agent/actions/${executed.action.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Approve once'
+      })
+    });
+
+    const rejected = await createHighRiskShareAction(app.url);
+    await requestJson(`${app.url}/api/agent/actions/${rejected.action.id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Reject once'
+      })
+    });
+    const before = await requestJson(`${app.url}/api/state`);
+
+    for (const action of [executed.action, rejected.action]) {
+      for (const decision of ['confirm', 'reject']) {
+        const response = await requestJsonAllowError(`${app.url}/api/agent/actions/${action.id}/${decision}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            reviewerId: 'user-lin',
+            reason: 'Duplicate review'
+          })
+        });
+        expect(response.status).toBe(409);
+      }
+    }
+
+    const after = await requestJson(`${app.url}/api/state`);
+    expect(after.actionLogs).toHaveLength(before.actionLogs.length);
+    expect(after.actionRequests.find((action: { id: string }) => action.id === executed.action.id)).toEqual(
+      before.actionRequests.find((action: { id: string }) => action.id === executed.action.id)
+    );
+    expect(after.actionRequests.find((action: { id: string }) => action.id === rejected.action.id)).toEqual(
+      before.actionRequests.find((action: { id: string }) => action.id === rejected.action.id)
+    );
+  });
+
+  it('serializes concurrent reviews of the same queued action', async () => {
+    const app = await startTestServer(createStateWithMatrixBackedSlides());
+    const queued = await createHighRiskShareAction(app.url);
+
+    const reviews = await Promise.all([
+      requestJsonAllowError(`${app.url}/api/agent/actions/${queued.action.id}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reviewerId: 'user-lin',
+          reason: 'Approve concurrently A'
+        })
+      }),
+      requestJsonAllowError(`${app.url}/api/agent/actions/${queued.action.id}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reviewerId: 'user-lin',
+          reason: 'Approve concurrently B'
+        })
+      })
+    ]);
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(reviews.map((review) => review.status).sort()).toEqual([200, 409]);
+    expect(state.actionRequests.find((action: { id: string }) => action.id === queued.action.id)).toMatchObject({
+      status: 'executed',
+      requiresHuman: false
+    });
+    expect(
+      state.actionLogs.filter((log: { action: string }) => log.action === `confirm_action:${queued.action.id}`)
+    ).toHaveLength(1);
+  });
+
   it('rejects queued Agent actions and records the reviewer reason', async () => {
     const app = await startTestServer();
     const queued = await createHighRiskShareAction(app.url);
@@ -77,6 +153,41 @@ describe('agent confirmation queue API', () => {
         (request: { id: string; status: string }) => request.id === queued.action.id && request.status === 'rejected'
       )
     ).toBe(true);
+  });
+
+  it('requires the reviewer to exist and belong to the action room', async () => {
+    const app = await startTestServer(createStateWithMatrixBackedSlides());
+    const unknownReviewer = await createHighRiskShareAction(app.url);
+    const outsiderReviewer = await createHighRiskShareAction(app.url);
+    const before = await requestJson(`${app.url}/api/state`);
+
+    const unknownResponse = await requestJsonAllowError(`${app.url}/api/agent/actions/${unknownReviewer.action.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-missing',
+        reason: 'Unknown reviewer'
+      })
+    });
+    const outsiderResponse = await requestJsonAllowError(`${app.url}/api/agent/actions/${outsiderReviewer.action.id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-teacher',
+        reason: 'Not in this room'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(unknownResponse.status).toBe(403);
+    expect(outsiderResponse.status).toBe(403);
+    expect(after.actionLogs).toHaveLength(before.actionLogs.length);
+    expect(after.actionRequests.find((action: { id: string }) => action.id === unknownReviewer.action.id)).toMatchObject({
+      status: 'needs_confirmation',
+      requiresHuman: true
+    });
+    expect(after.actionRequests.find((action: { id: string }) => action.id === outsiderReviewer.action.id)).toMatchObject({
+      status: 'needs_confirmation',
+      requiresHuman: true
+    });
   });
 
   it('executes a queued file share after human confirmation', async () => {
@@ -211,6 +322,88 @@ describe('agent confirmation queue API', () => {
     expect(afterConfirm.tasks.find((task: { id: string }) => task.id === 'task-interview').status).toBe('in_progress');
   });
 
+  it('updates linked A2A session status after confirmed or rejected actions', async () => {
+    const base = createDemoState();
+    const app = await startTestServer({
+      ...base,
+      actionRequests: [
+        {
+          id: 'action-a2a-confirm',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          kind: 'coordinate',
+          status: 'needs_confirmation',
+          input: {
+            calendarPatch: {
+              itemId: 'cal-review',
+              oldStartsAt: '2026-05-05T20:30:00+08:00',
+              newStartsAt: '2026-05-06T23:00:00+08:00'
+            }
+          },
+          risk: {
+            level: 'high',
+            score: 0.82,
+            reason: 'Schedule change requires human review',
+            model: 'test'
+          },
+          createdAt: '2026-05-04T08:00:00.000Z',
+          updatedAt: '2026-05-04T08:00:00.000Z',
+          requiresHuman: true
+        },
+        {
+          id: 'action-a2a-reject',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          kind: 'task_update_suggest',
+          status: 'needs_confirmation',
+          input: {
+            taskPatch: {
+              taskId: 'task-report',
+              oldStatus: 'in_progress',
+              newStatus: 'done'
+            }
+          },
+          risk: {
+            level: 'medium',
+            score: 0.52,
+            reason: 'Task change requires human review',
+            model: 'test'
+          },
+          createdAt: '2026-05-04T08:01:00.000Z',
+          updatedAt: '2026-05-04T08:01:00.000Z',
+          requiresHuman: true
+        }
+      ],
+      a2aSessions: [
+        createA2ASessionForAction('a2a-confirm', 'action-a2a-confirm'),
+        createA2ASessionForAction('a2a-reject', 'action-a2a-reject')
+      ]
+    });
+
+    await requestJson(`${app.url}/api/agent/actions/action-a2a-confirm/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Approve A2A proposal'
+      })
+    });
+    await requestJson(`${app.url}/api/agent/actions/action-a2a-reject/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Reject A2A proposal'
+      })
+    });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(state.a2aSessions.find((session: { id: string }) => session.id === 'a2a-confirm')).toMatchObject({
+      status: 'completed'
+    });
+    expect(state.a2aSessions.find((session: { id: string }) => session.id === 'a2a-reject')).toMatchObject({
+      status: 'blocked'
+    });
+  });
+
   it('blocks confirmation instead of mutating state when a queued action has no explicit patch', async () => {
     const base = createDemoState();
     const app = await startTestServer({
@@ -256,6 +449,87 @@ describe('agent confirmation queue API', () => {
       '2026-05-05T20:30:00+08:00'
     );
   });
+
+  it('blocks file share confirmation when the queued action has no downloadable file binding', async () => {
+    const app = await startTestServer();
+    const queued = await createHighRiskShareAction(app.url);
+    const before = await requestJson(`${app.url}/api/state`);
+
+    const confirmed = await requestJson(`${app.url}/api/agent/actions/${queued.action.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Try to confirm without downloadable backing'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(confirmed.action).toMatchObject({
+      id: queued.action.id,
+      status: 'blocked',
+      requiresHuman: true
+    });
+    expect(after.messages).toHaveLength(before.messages.length);
+    expect(after.messages.some((message: { fileId?: string }) => message.fileId === 'file-slides-v3')).toBe(
+      before.messages.some((message: { fileId?: string }) => message.fileId === 'file-slides-v3')
+    );
+  });
+
+  it('blocks file share confirmation when the bound file version changed before review', async () => {
+    const base = createStateWithMatrixBackedSlides();
+    const app = await startTestServer({
+      ...base,
+      files: base.files.map((file) =>
+        file.id === 'file-slides-v3'
+          ? {
+              ...file,
+              version: 4
+            }
+          : file
+      ),
+      actionRequests: [
+        {
+          id: 'action-stale-file',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          kind: 'share_file',
+          status: 'needs_confirmation',
+          input: {
+            requesterId: 'user-chen',
+            requestText: 'send latest slides',
+            fileId: 'file-slides-v3',
+            fileVersion: 3
+          },
+          risk: {
+            level: 'medium',
+            score: 0.58,
+            reason: 'Confirm file handoff',
+            model: 'test'
+          },
+          createdAt: '2026-05-04T08:00:00.000Z',
+          updatedAt: '2026-05-04T08:00:00.000Z',
+          requiresHuman: true
+        }
+      ]
+    });
+    const before = await requestJson(`${app.url}/api/state`);
+
+    const confirmed = await requestJson(`${app.url}/api/agent/actions/action-stale-file/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: 'Confirm stale file'
+      })
+    });
+    const after = await requestJson(`${app.url}/api/state`);
+
+    expect(confirmed.action).toMatchObject({
+      status: 'blocked',
+      requiresHuman: true
+    });
+    expect(after.messages).toHaveLength(before.messages.length);
+    expect(after.messages.some((message: { id: string }) => message.id === 'msg-agent-share-file-slides-v3')).toBe(false);
+  });
 });
 
 async function startTestServer(initialState?: DemoState) {
@@ -291,6 +565,28 @@ function createStateWithMatrixBackedSlides(): DemoState {
   };
 }
 
+function createA2ASessionForAction(id: string, actionId: string): DemoState['a2aSessions'][number] {
+  return {
+    id,
+    roomId: 'room-team',
+    initiatorAgentId: 'agent-chen',
+    targetAgentIds: ['agent-lin'],
+    goal: `test session for ${actionId}`,
+    status: 'needs_confirmation',
+    turns: [],
+    proposedActionRequestIds: [actionId],
+    contextIds: [actionId],
+    risk: {
+      level: 'medium',
+      score: 0.5,
+      reason: 'A2A proposal requires human review',
+      model: 'test'
+    },
+    createdAt: '2026-05-04T08:00:00.000Z',
+    updatedAt: '2026-05-04T08:00:00.000Z'
+  };
+}
+
 async function createHighRiskShareAction(baseUrl: string) {
   await requestJson(`${baseUrl}/api/agent/share-file`, {
     method: 'POST',
@@ -317,4 +613,15 @@ async function requestJson(url: string, init?: RequestInit) {
   });
   expect(response.ok).toBe(true);
   return response.json();
+}
+
+async function requestJsonAllowError(url: string, init?: RequestInit) {
+  const response = await fetch(url, {
+    headers: { 'content-type': 'application/json' },
+    ...init
+  });
+  return {
+    status: response.status,
+    body: await response.json()
+  };
 }

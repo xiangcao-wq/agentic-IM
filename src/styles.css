@@ -1181,13 +1181,54 @@ button:disabled {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .agent-output-placeholder {
   min-height: 1px;
+}
+
+.agent-busy-panel {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(13, 115, 120, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #14383c;
+  background: rgba(230, 246, 241, 0.92);
+  box-shadow: 0 10px 24px rgba(13, 115, 120, 0.08);
+}
+
+.agent-busy-panel svg {
+  color: var(--teal);
+  animation: spin 900ms linear infinite;
+}
+
+.agent-busy-panel strong,
+.agent-busy-panel span {
+  display: block;
+}
+
+.agent-busy-panel strong {
+  font-size: 12px;
+}
+
+.agent-busy-panel span {
+  margin-top: 2px;
+  color: #4b6165;
+  font-size: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .agent-dock {

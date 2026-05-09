@@ -56,7 +56,7 @@ export function validateDemoStateShape(value: unknown): DemoState {
   if (candidate.a2aSessions === undefined) {
     candidate.a2aSessions = [];
   }
-  if (!Array.isArray(candidate.agentAutopilotPolicies) || candidate.agentAutopilotPolicies.length === 0) {
+  if (candidate.agentAutopilotPolicies === undefined) {
     candidate.agentAutopilotPolicies = createDefaultAgentAutopilotPolicies();
   }
   if (candidate.fileTextChunks === undefined) {
@@ -68,7 +68,7 @@ export function validateDemoStateShape(value: unknown): DemoState {
   if (candidate.matrixObserverCheckpoints === undefined) {
     candidate.matrixObserverCheckpoints = [];
   }
-  if (!Array.isArray(candidate.aiAutoreplyPolicies) || candidate.aiAutoreplyPolicies.length === 0) {
+  if (candidate.aiAutoreplyPolicies === undefined) {
     candidate.aiAutoreplyPolicies = createDefaultAiAutoreplyPolicies();
   }
   if (candidate.aiReplyJobs === undefined) {

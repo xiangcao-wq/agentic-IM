@@ -5,6 +5,7 @@ export type AgentActionKind =
   | 'deadline'
   | 'find_file'
   | 'share_file'
+  | 'send_message'
   | 'coordinate'
   | 'task_update'
   | 'calendar_update'
@@ -31,6 +32,7 @@ export type AgentRunIntent =
   | 'deadline'
   | 'find_file'
   | 'share_file'
+  | 'send_message'
   | 'coordinate'
   | 'task_update_suggest'
   | 'web_search'
@@ -41,9 +43,38 @@ export type AgentToolName =
   | 'deadline.answer'
   | 'file.search'
   | 'file.share'
+  | 'message.send'
   | 'web.search'
   | 'agent.coordinate'
   | 'task.suggest_update';
+
+export type AgentToolInvocationStatus =
+  | 'validation_failed'
+  | 'denied'
+  | 'awaiting_permission'
+  | 'completed'
+  | 'failed';
+
+export type AgentPermissionOutcome = 'allow' | 'deny' | 'ask';
+
+export interface AgentToolInvocationSnapshot {
+  id: string;
+  toolName: AgentToolName;
+  agentId: string;
+  roomId: string;
+  status: AgentToolInvocationStatus;
+  permissionOutcome?: AgentPermissionOutcome;
+  requiredPermissions: string[];
+  requiresHuman: boolean;
+  risk?: RiskAssessment;
+  reviewerIds: string[];
+  reasons: string[];
+  evidenceIds: string[];
+  inputSummary: Record<string, unknown>;
+  outputSummary: Record<string, unknown>;
+  error?: string;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
@@ -216,6 +247,7 @@ export interface AgentProgressEvent {
   label: string;
   detail?: string;
   toolCalls: string[];
+  toolInvocations?: AgentToolInvocationSnapshot[];
   riskLevel?: RiskLevel;
   createdAt: string;
 }
@@ -348,6 +380,17 @@ export interface FileShareAction {
   log: AgentActionLog;
 }
 
+export interface SendMessageAction {
+  status: 'executed' | 'needs_confirmation' | 'blocked';
+  requiresHuman: boolean;
+  risk: RiskAssessment;
+  targetRoomId: string;
+  targetUserId?: string;
+  messageBody: string;
+  message?: Message;
+  log: AgentActionLog;
+}
+
 export interface CoordinationResult {
   status: 'executed' | 'needs_confirmation' | 'blocked';
   requiresHuman: boolean;
@@ -362,6 +405,10 @@ export interface AgentRunRequest {
   intent?: AgentRunIntent;
   userText: string;
   targetUserId?: string;
+  targetRoomId?: string;
+  messageBody?: string;
+  fileId?: string;
+  fileVersion?: number;
 }
 
 export interface ChatResult {
@@ -387,7 +434,7 @@ export interface AgentRunResult {
   requiresHuman: boolean;
   plan?: string;
   reasoning?: string;
-  result?: RoomSummary | DeadlineAnswer | FileShareAction | CoordinationResult | ChatResult | WebSearchAnswer;
+  result?: RoomSummary | DeadlineAnswer | FileShareAction | SendMessageAction | CoordinationResult | ChatResult | WebSearchAnswer;
   files?: FileItem[];
   message?: Message;
   memory?: MemoryItem;
