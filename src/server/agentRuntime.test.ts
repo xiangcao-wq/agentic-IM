@@ -37,13 +37,13 @@ describe('agent runtime', () => {
       requiresHuman: false,
       logId: result.result.log.id
     });
-    expect(result.state.actionRequests[0]).toBe(result.actionRequest);
-    expect(result.state.actionLogs[0]).toBe(result.result.log);
+    const persistedRequest = result.state.actionRequests.find((request) => request.id === result.actionRequest.id);
+    expect(persistedRequest).toMatchObject({ status: 'executed', logId: result.result.log.id });
+    const persistedLog = result.state.actionLogs.find((log) => log.id === result.result.log.id);
     expect(result.result.risk.model).toBe('policy-engine-v1');
     expect(result.result.log.toolCalls).toContain('file.share');
-    expect(result.actionRequest.status).toBe('executed');
-    expect(result.state.actionLogs[0].toolCalls).toContain('tool_executor.file.share');
-    expect(result.state.actionLogs[0].toolCalls).toContain('file_library.lookup_latest');
+    expect(persistedLog?.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
+    expect(persistedLog?.toolCalls).toContain('file_library.lookup_latest');
   });
 
   it('shares an explicitly selected authorized file instead of guessing the newest match', async () => {
@@ -98,7 +98,8 @@ describe('agent runtime', () => {
     expect(result.actionRequest.requiresHuman).toBe(true);
     expect(result.actionRequest.risk?.level).toBe('high');
     expect(result.actionRequest.logId).toBeUndefined();
-    expect(result.state.actionLogs[0]).toBe(result.result.log);
-    expect(result.result.log.toolCalls).toContain('file.share');
+    const persistedLog = result.state.actionLogs.find((log) => log.id === result.result.log.id);
+    expect(persistedLog).toBeDefined();
+    expect(result.result.log.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
   });
 });
