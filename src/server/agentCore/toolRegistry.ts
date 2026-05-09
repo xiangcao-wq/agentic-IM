@@ -1,7 +1,20 @@
 import type { AgentToolName, FileItem } from '../../domain/types';
 
 export type AgentCoreToolName = Extract<AgentToolName, 'message.send' | 'file.share'>;
-export type ToolSideEffect = 'read' | 'write';
+export type ToolSideEffect = 'read' | 'write' | 'external' | 'destructive';
+export type ToolVisibility = 'model' | 'internal';
+export type ToolCategory = 'communication' | 'file';
+export type ToolAuditLevel = 'none' | 'summary' | 'full';
+
+export interface ToolAuditPolicy {
+  level: ToolAuditLevel;
+}
+
+export interface ToolPermissionPolicy {
+  mode: 'none' | 'policy';
+  requiredPermissions: string[];
+  requiresApprovalOn: Array<'ask'>;
+}
 
 export interface ToolRiskPolicy {
   requiresPolicy: boolean;
@@ -28,8 +41,14 @@ export interface FileShareInput {
 
 export interface AgentCoreToolDefinition<Input> {
   name: AgentCoreToolName;
+  version: number;
+  displayName: string;
   description: string;
+  category: ToolCategory;
   sideEffect: ToolSideEffect;
+  visibility: ToolVisibility;
+  audit: ToolAuditPolicy;
+  permission: ToolPermissionPolicy;
   requiredPermissions: string[];
   riskPolicy: ToolRiskPolicy;
   validateInput(input: unknown): ToolInputValidation<Input>;
@@ -41,16 +60,36 @@ const coreTools: {
 } = {
   'message.send': {
     name: 'message.send',
+    version: 1,
+    displayName: 'Send message',
     description: 'Send an Agent-authored delegated message to an authorized room or direct chat.',
+    category: 'communication',
     sideEffect: 'write',
+    visibility: 'model',
+    audit: { level: 'full' },
+    permission: {
+      mode: 'policy',
+      requiredPermissions: ['message:send'],
+      requiresApprovalOn: ['ask']
+    },
     requiredPermissions: ['message:send'],
     riskPolicy: { requiresPolicy: true },
     validateInput: validateMessageSendInput
   },
   'file.share': {
     name: 'file.share',
+    version: 1,
+    displayName: 'Share file',
     description: 'Share a real Matrix-backed authorized file or request confirmation.',
-    sideEffect: 'write',
+    category: 'file',
+    sideEffect: 'external',
+    visibility: 'model',
+    audit: { level: 'full' },
+    permission: {
+      mode: 'policy',
+      requiredPermissions: ['file:share'],
+      requiresApprovalOn: ['ask']
+    },
     requiredPermissions: ['file:share'],
     riskPolicy: { requiresPolicy: true },
     validateInput: validateFileShareInput
@@ -59,6 +98,14 @@ const coreTools: {
 
 export function getCoreTool<Name extends AgentCoreToolName>(name: Name): (typeof coreTools)[Name] {
   return coreTools[name];
+}
+
+export function listCoreTools(): AgentCoreToolDefinition<MessageSendInput | FileShareInput>[] {
+  return Object.values(coreTools);
+}
+
+export function isCoreToolName(value: unknown): value is AgentCoreToolName {
+  return typeof value === 'string' && value in coreTools;
 }
 
 function validateMessageSendInput(input: unknown): ToolInputValidation<MessageSendInput> {
