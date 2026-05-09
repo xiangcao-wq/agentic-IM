@@ -56,7 +56,24 @@ describe('agent core tool registry', () => {
     expect(isCoreToolName('message.send')).toBe(true);
     expect(isCoreToolName('file.share')).toBe(true);
     expect(isCoreToolName('web.search')).toBe(false);
+    expect(isCoreToolName('toString')).toBe(false);
     expect(isCoreToolName(undefined)).toBe(false);
+  });
+
+  it('does not persist mutations made through listed tool metadata', () => {
+    const tools = listCoreTools();
+
+    tools[0].permission.requiredPermissions.push('bad');
+
+    expect(listCoreTools()[0].permission.requiredPermissions).toEqual(['message:send']);
+  });
+
+  it('does not persist mutations made through direct tool metadata', () => {
+    const tool = getCoreTool('message.send');
+
+    tool.requiredPermissions.push('bad');
+
+    expect(getCoreTool('message.send').requiredPermissions).toEqual(['message:send']);
   });
 
   it('validates message.send input before execution', () => {

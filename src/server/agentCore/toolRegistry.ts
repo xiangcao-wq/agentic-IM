@@ -54,10 +54,15 @@ export interface AgentCoreToolDefinition<Input> {
   validateInput(input: unknown): ToolInputValidation<Input>;
 }
 
-const coreTools: {
+type CoreToolsRegistry = {
   'message.send': AgentCoreToolDefinition<MessageSendInput>;
   'file.share': AgentCoreToolDefinition<FileShareInput>;
-} = {
+};
+
+const MESSAGE_SEND_REQUIRED_PERMISSIONS = ['message:send'] as const;
+const FILE_SHARE_REQUIRED_PERMISSIONS = ['file:share'] as const;
+
+const coreTools: CoreToolsRegistry = {
   'message.send': {
     name: 'message.send',
     version: 1,
@@ -67,12 +72,8 @@ const coreTools: {
     sideEffect: 'write',
     visibility: 'model',
     audit: { level: 'full' },
-    permission: {
-      mode: 'policy',
-      requiredPermissions: ['message:send'],
-      requiresApprovalOn: ['ask']
-    },
-    requiredPermissions: ['message:send'],
+    permission: createPolicyPermission(MESSAGE_SEND_REQUIRED_PERMISSIONS),
+    requiredPermissions: createPermissions(MESSAGE_SEND_REQUIRED_PERMISSIONS),
     riskPolicy: { requiresPolicy: true },
     validateInput: validateMessageSendInput
   },
@@ -85,27 +86,51 @@ const coreTools: {
     sideEffect: 'external',
     visibility: 'model',
     audit: { level: 'full' },
-    permission: {
-      mode: 'policy',
-      requiredPermissions: ['file:share'],
-      requiresApprovalOn: ['ask']
-    },
-    requiredPermissions: ['file:share'],
+    permission: createPolicyPermission(FILE_SHARE_REQUIRED_PERMISSIONS),
+    requiredPermissions: createPermissions(FILE_SHARE_REQUIRED_PERMISSIONS),
     riskPolicy: { requiresPolicy: true },
     validateInput: validateFileShareInput
   }
 };
 
+export type AgentCoreTool = (typeof coreTools)[keyof typeof coreTools];
+
 export function getCoreTool<Name extends AgentCoreToolName>(name: Name): (typeof coreTools)[Name] {
-  return coreTools[name];
+  return cloneCoreTool(coreTools[name]);
 }
 
-export function listCoreTools(): AgentCoreToolDefinition<MessageSendInput | FileShareInput>[] {
-  return Object.values(coreTools);
+export function listCoreTools(): AgentCoreTool[] {
+  return Object.values(coreTools).map(cloneCoreTool);
 }
 
 export function isCoreToolName(value: unknown): value is AgentCoreToolName {
-  return typeof value === 'string' && value in coreTools;
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(coreTools, value);
+}
+
+function createPolicyPermission(requiredPermissions: readonly string[]): ToolPermissionPolicy {
+  return {
+    mode: 'policy',
+    requiredPermissions: createPermissions(requiredPermissions),
+    requiresApprovalOn: ['ask']
+  };
+}
+
+function createPermissions(requiredPermissions: readonly string[]): string[] {
+  return [...requiredPermissions];
+}
+
+function cloneCoreTool<T extends AgentCoreTool>(tool: T): T {
+  return {
+    ...tool,
+    audit: { ...tool.audit },
+    permission: {
+      ...tool.permission,
+      requiredPermissions: [...tool.permission.requiredPermissions],
+      requiresApprovalOn: [...tool.permission.requiresApprovalOn]
+    },
+    requiredPermissions: [...tool.requiredPermissions],
+    riskPolicy: { ...tool.riskPolicy }
+  };
 }
 
 function validateMessageSendInput(input: unknown): ToolInputValidation<MessageSendInput> {
