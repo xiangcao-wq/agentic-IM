@@ -57,3 +57,14 @@ Implemented the first Product Kernel slice:
 - `/api/readiness` includes Agent event log health.
 
 This is not the final Postgres event store. It establishes the interface and API contract that the Postgres adapter will implement in the next storage-focused slice.
+
+## 2026-05-09 Tool Platform v2 Slice
+
+Implemented the second Product Kernel slice:
+
+- Core tools now expose product-grade metadata for visibility, audit, permission, side effect, category, and version.
+- Permission Broker converts existing policy decisions into explicit allow / deny / ask decisions.
+- Tool Executor returns permission decisions and invocation audit payloads for `message.send` and `file.share`.
+- Runtime compatibility checks confirm existing delegated message and file share flows still behave as before.
+
+This slice does not persist `tool_invocations` or `permission_requests` to Postgres yet. It establishes the typed backend contract that the future Permission Center UI and database-backed audit ledger can consume.
