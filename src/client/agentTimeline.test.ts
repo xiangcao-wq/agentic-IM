@@ -103,6 +103,105 @@ describe('agent timeline view models', () => {
     expect(buildAgentTimelineItems(null)).toEqual([]);
     expect(buildPermissionCenterItems(undefined)).toEqual([]);
   });
+
+  it('uses permission event type over payload outcome', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.permission.denied',
+        payload: {
+          invocationId: 'invocation-denied',
+          toolName: 'file.share',
+          permissionOutcome: 'allow'
+        }
+      })
+    ]);
+
+    expect(buildPermissionCenterItems(trace)[0]).toMatchObject({
+      invocationId: 'invocation-denied',
+      outcome: 'deny',
+      label: 'Denied'
+    });
+  });
+
+  it('reads permission data from nested invocation payloads', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.permission.requested',
+        payload: {
+          invocation: {
+            id: 'nested-invocation',
+            toolName: 'file.share',
+            requiredPermissions: ['file:share'],
+            reviewerIds: ['user-lin'],
+            requiresHuman: true,
+            reasons: ['owner approval required']
+          }
+        }
+      })
+    ]);
+
+    expect(buildPermissionCenterItems(trace)[0]).toMatchObject({
+      invocationId: 'nested-invocation',
+      toolName: 'file.share',
+      outcome: 'ask',
+      label: 'Needs review',
+      requiredPermissions: ['file:share'],
+      requiresHuman: true,
+      reviewerIds: ['user-lin'],
+      reason: 'owner approval required'
+    });
+  });
+
+  it('uses safe defaults for malformed nested invocation payloads', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.permission.allowed',
+        payload: {
+          invocation: {
+            id: 'partial-invocation',
+            toolName: 'file.share',
+            requiredPermissions: 'file:share',
+            reviewerIds: [false],
+            requiresHuman: 'yes'
+          }
+        }
+      })
+    ]);
+
+    expect(buildPermissionCenterItems(trace)[0]).toMatchObject({
+      invocationId: 'partial-invocation',
+      toolName: 'file.share',
+      outcome: 'allow',
+      label: 'Allowed',
+      requiredPermissions: [],
+      requiresHuman: false,
+      reviewerIds: [],
+      reason: 'allow'
+    });
+  });
+
+  it('builds timeline tool name and detail from nested invocation payloads', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.tool.failed',
+        payload: {
+          invocation: {
+            toolName: 'web.search',
+            status: 'failed',
+            permissionOutcome: 'deny',
+            reasons: ['search provider unavailable']
+          }
+        }
+      })
+    ]);
+
+    expect(buildAgentTimelineItems(trace)[0]).toMatchObject({
+      title: 'Tool failed',
+      detail: 'search provider unavailable',
+      toolName: 'web.search',
+      tone: 'danger'
+    });
+  });
 });
 
 function permissionEvent(

@@ -2,7 +2,6 @@ import type {
   AgentEvent,
   AgentEventType,
   AgentPermissionOutcome,
-  AgentToolInvocationSnapshot,
   AgentToolName,
   AgentTrace,
   RiskLevel
@@ -68,14 +67,14 @@ export function buildPermissionCenterItems(trace?: AgentTrace | null): Permissio
   return trace.events
     .filter(isPermissionEvent)
     .map((event) => {
-      const invocation = readInvocation(event);
       const outcome = permissionOutcome(event);
-      const invocationId = readString(event.payload.invocationId) ?? invocation?.id ?? event.id;
-      const requiredPermissions = readStringArray(event.payload.requiredPermissions) ?? invocation?.requiredPermissions ?? [];
-      const reviewerIds = readStringArray(event.payload.reviewerIds) ?? invocation?.reviewerIds ?? [];
+      const invocationId = readString(event.payload.invocationId) ?? readInvocationString(event, 'id') ?? event.id;
+      const requiredPermissions =
+        readStringArray(event.payload.requiredPermissions) ?? readInvocationStringArray(event, 'requiredPermissions') ?? [];
+      const reviewerIds = readStringArray(event.payload.reviewerIds) ?? readInvocationStringArray(event, 'reviewerIds') ?? [];
       const reason =
         readStringArray(event.payload.reasons)?.[0] ??
-        invocation?.reasons[0] ??
+        readInvocationStringArray(event, 'reasons')?.[0] ??
         event.detail ??
         event.label ??
         outcome;
@@ -83,11 +82,11 @@ export function buildPermissionCenterItems(trace?: AgentTrace | null): Permissio
       return {
         id: event.id,
         invocationId,
-        toolName: readToolName(event) ?? invocation?.toolName ?? 'unknown.tool',
+        toolName: readToolName(event) ?? 'unknown.tool',
         outcome,
         label: permissionLabel(outcome),
         requiredPermissions,
-        requiresHuman: readBoolean(event.payload.requiresHuman) ?? invocation?.requiresHuman ?? outcome === 'ask',
+        requiresHuman: readBoolean(event.payload.requiresHuman) ?? readInvocationBoolean(event, 'requiresHuman') ?? outcome === 'ask',
         reviewerIds,
         reason,
         timestamp: event.createdAt,
@@ -161,24 +160,33 @@ function timelineTone(type: AgentEventType): AgentTimelineTone {
 
 function timelineDetail(event: AgentEvent): string {
   const status = readString(event.payload.status);
+  const invocationStatus = readInvocationString(event, 'status');
   const outcome = readString(event.payload.permissionOutcome);
+  const invocationOutcome = readInvocationString(event, 'permissionOutcome');
   const reason = readStringArray(event.payload.reasons)?.[0];
-  return event.detail ?? reason ?? status ?? outcome ?? event.label ?? event.type;
+  const invocationReason = readInvocationStringArray(event, 'reasons')?.[0];
+  return event.detail ?? reason ?? invocationReason ?? status ?? invocationStatus ?? outcome ?? invocationOutcome ?? event.label ?? event.type;
 }
 
 function readToolName(event: AgentEvent): AgentToolName | string | undefined {
-  return readString(event.payload.toolName) ?? event.toolCalls[0];
+  return readString(event.payload.toolName) ?? event.toolCalls[0] ?? readInvocationString(event, 'toolName');
 }
 
-function readInvocation(event: AgentEvent): AgentToolInvocationSnapshot | undefined {
+function readInvocationRecord(event: AgentEvent): Record<string, unknown> | undefined {
   const value = event.payload.invocation;
-  if (!isRecord(value)) {
-    return undefined;
-  }
-  if (typeof value.id !== 'string' || typeof value.toolName !== 'string') {
-    return undefined;
-  }
-  return value as unknown as AgentToolInvocationSnapshot;
+  return isRecord(value) ? value : undefined;
+}
+
+function readInvocationString(event: AgentEvent, key: string): string | undefined {
+  return readString(readInvocationRecord(event)?.[key]);
+}
+
+function readInvocationBoolean(event: AgentEvent, key: string): boolean | undefined {
+  return readBoolean(readInvocationRecord(event)?.[key]);
+}
+
+function readInvocationStringArray(event: AgentEvent, key: string): string[] | undefined {
+  return readStringArray(readInvocationRecord(event)?.[key]);
 }
 
 function readString(value: unknown): string | undefined {
