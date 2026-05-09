@@ -44,6 +44,13 @@ describe('agent runtime', () => {
     expect(result.result.log.toolCalls).toContain('file.share');
     expect(persistedLog?.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
     expect(persistedLog?.toolCalls).toContain('file_library.lookup_latest');
+    expect(result.toolInvocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['file:share'],
+      requiresHuman: false
+    });
   });
 
   it('shares an explicitly selected authorized file instead of guessing the newest match', async () => {
@@ -101,5 +108,11 @@ describe('agent runtime', () => {
     const persistedLog = result.state.actionLogs.find((log) => log.id === result.result.log.id);
     expect(persistedLog).toBeDefined();
     expect(result.result.log.toolCalls).toEqual(expect.arrayContaining(['tool_executor.file.share', 'file.share']));
+    expect(result.toolInvocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'awaiting_permission',
+      permissionOutcome: 'ask',
+      requiresHuman: true
+    });
   });
 });

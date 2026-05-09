@@ -5,9 +5,10 @@ import {
   requireActionConfirmation
 } from '../domain/actionQueue';
 import { createFileShareAction } from '../domain/agentEngine';
-import type { AgentActionRequest, DemoState, FileShareAction } from '../domain/types';
+import type { AgentActionRequest, AgentToolInvocationSnapshot, DemoState, FileShareAction } from '../domain/types';
 import type { AiProvider } from './aiProvider';
 import { executeCoreTool } from './agentCore/toolExecutor';
+import { toolInvocationRecordToSnapshot } from './agentCore/toolInvocationAudit';
 
 interface RuntimeFileShareInput {
   id?: string;
@@ -21,11 +22,21 @@ interface RuntimeFileShareInput {
   fileVersion?: number;
 }
 
+interface EnforcedFileSharePolicy {
+  result: FileShareAction;
+  toolInvocation?: AgentToolInvocationSnapshot;
+}
+
 export async function runFileShareAction(
   state: DemoState,
   input: RuntimeFileShareInput,
   aiProvider?: AiProvider
-): Promise<{ state: DemoState; result: FileShareAction; actionRequest: AgentActionRequest }> {
+): Promise<{
+  state: DemoState;
+  result: FileShareAction;
+  actionRequest: AgentActionRequest;
+  toolInvocation?: AgentToolInvocationSnapshot;
+}> {
   const queued = enqueueAgentAction(state, {
     id: input.id,
     agentId: input.agentId,
@@ -41,7 +52,8 @@ export async function runFileShareAction(
     createdAt: input.createdAt
   });
   const result = await createFileShareAction(queued.state, input, {}, aiProvider);
-  const enforcedResult = enforceFileSharePolicy(queued.state, input, result);
+  const enforced = enforceFileSharePolicy(queued.state, input, result);
+  const enforcedResult = enforced.result;
   const withLog = {
     ...queued.state,
     actionLogs: [enforcedResult.log, ...queued.state.actionLogs]
@@ -56,7 +68,8 @@ export async function runFileShareAction(
     return {
       state: completed.state,
       result: enforcedResult,
-      actionRequest: completed.request
+      actionRequest: completed.request,
+      ...(enforced.toolInvocation ? { toolInvocation: enforced.toolInvocation } : {})
     };
   }
 
@@ -69,7 +82,8 @@ export async function runFileShareAction(
     return {
       state: blocked.state,
       result: enforcedResult,
-      actionRequest: blocked.request
+      actionRequest: blocked.request,
+      ...(enforced.toolInvocation ? { toolInvocation: enforced.toolInvocation } : {})
     };
   }
 
@@ -97,7 +111,8 @@ export async function runFileShareAction(
   return {
     state: confirmation.state,
     result: enforcedResult,
-    actionRequest: confirmation.request
+    actionRequest: confirmation.request,
+    ...(enforced.toolInvocation ? { toolInvocation: enforced.toolInvocation } : {})
   };
 }
 
@@ -105,10 +120,10 @@ function enforceFileSharePolicy(
   state: DemoState,
   input: RuntimeFileShareInput,
   result: FileShareAction
-): FileShareAction {
+): EnforcedFileSharePolicy {
   const agent = state.agents.find((candidate) => candidate.id === input.agentId);
   if (!agent) {
-    return result;
+    return { result };
   }
 
   const toolResult = executeCoreTool(state, {
@@ -135,23 +150,26 @@ function enforceFileSharePolicy(
   ]);
 
   return {
-    ...result,
-    status,
-    requiresHuman: status === 'needs_confirmation',
-    risk: toolResult.risk ?? {
-      level: 'high',
-      score: 0.9,
-      reason: toolResult.error ?? 'File share tool execution failed.',
-      model: 'tool-executor-v1'
-    },
-    file: toolResult.data?.file ?? result.file,
-    message: status === 'executed' ? toolResult.data?.message : undefined,
-    log: {
-      ...result.log,
+    result: {
+      ...result,
       status,
-      risk: toolResult.risk ?? result.risk,
-      toolCalls
-    }
+      requiresHuman: status === 'needs_confirmation',
+      risk: toolResult.risk ?? {
+        level: 'high',
+        score: 0.9,
+        reason: toolResult.error ?? 'File share tool execution failed.',
+        model: 'tool-executor-v1'
+      },
+      file: toolResult.data?.file ?? result.file,
+      message: status === 'executed' ? toolResult.data?.message : undefined,
+      log: {
+        ...result.log,
+        status,
+        risk: toolResult.risk ?? result.risk,
+        toolCalls
+      }
+    },
+    ...(toolResult.invocation ? { toolInvocation: toolInvocationRecordToSnapshot(toolResult.invocation) } : {})
   };
 }
 

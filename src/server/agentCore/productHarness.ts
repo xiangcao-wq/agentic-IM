@@ -5,6 +5,7 @@ import type { WebSearchProvider } from '../webSearch';
 import type { AgentEvent, AgentEventDraft } from './agentEvents';
 import { agentProgressToEventDraft, createRunEventDraft } from './agentEvents';
 import type { AgentEventStore } from './eventLogStore';
+import { toolInvocationToEventDrafts } from './toolEventAdapter';
 
 type ProductHarnessProgressEvent = Omit<AgentProgressEvent, 'id' | 'createdAt' | 'sequence'>;
 
@@ -55,6 +56,7 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
     }
   });
   const progressDrafts: AgentEventDraft[] = [];
+  const seenToolInvocationIds = new Set<string>();
 
   try {
     const runtime = await runAgentIntent(
@@ -74,6 +76,22 @@ export async function runProductAgentSession(input: ProductHarnessInput): Promis
               event
             )
           );
+          for (const invocation of event.toolInvocations ?? []) {
+            if (seenToolInvocationIds.has(invocation.id)) {
+              continue;
+            }
+            seenToolInvocationIds.add(invocation.id);
+            progressDrafts.push(
+              ...toolInvocationToEventDrafts(
+                {
+                  tenantId,
+                  sessionId,
+                  runId
+                },
+                invocation
+              )
+            );
+          }
           try {
             input.onProgress?.(event);
           } catch {

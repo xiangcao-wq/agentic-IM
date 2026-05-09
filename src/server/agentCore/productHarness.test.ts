@@ -76,6 +76,131 @@ describe('runProductAgentSession', () => {
     expect(page.events.at(-1)).toMatchObject({ type: 'agent.run.completed' });
   });
 
+  it('records ordered tool and permission events from send_message progress snapshots', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+
+    const runtime = await runProductAgentSession({
+      state: createDemoState(),
+      input: {
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send Chen a review request.'
+      },
+      eventStore: store,
+      runId: 'agent-run-tool-events',
+      sessionId: 'agent-session-tool-events',
+      aiProvider: undefined,
+      tools: {}
+    });
+
+    expect(runtime.response.intent).toBe('send_message');
+
+    const page = await store.list({ runId: 'agent-run-tool-events' });
+    const auditEvents = page.events.filter(
+      (event) => event.type.startsWith('agent.tool.') || event.type.startsWith('agent.permission.')
+    );
+
+    expect(auditEvents.map((event) => event.type)).toEqual([
+      'agent.tool.requested',
+      'agent.permission.allowed',
+      'agent.tool.completed'
+    ]);
+    expect(page.events.map((event) => event.type)).toContain('agent.run.completed');
+    for (const event of auditEvents) {
+      expect(event.payload).toMatchObject({
+        toolName: 'message.send',
+        status: 'completed',
+        permissionOutcome: 'allow'
+      });
+    }
+  });
+
+  it('records requested permission events for send_message confirmations', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+
+    const runtime = await runProductAgentSession({
+      state: createDemoState(),
+      input: {
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'The private key rotation note contains a secret token.',
+        userText: 'Send Chen the credential update.'
+      },
+      eventStore: store,
+      runId: 'agent-run-tool-events-confirmation',
+      sessionId: 'agent-session-tool-events-confirmation',
+      aiProvider: undefined,
+      tools: {}
+    });
+
+    expect(runtime.response.requiresHuman).toBe(true);
+
+    const page = await store.list({ runId: 'agent-run-tool-events-confirmation' });
+    const auditEvents = page.events.filter(
+      (event) => event.type.startsWith('agent.tool.') || event.type.startsWith('agent.permission.')
+    );
+
+    expect(auditEvents.map((event) => event.type)).toEqual([
+      'agent.tool.requested',
+      'agent.permission.requested'
+    ]);
+    expect(auditEvents[1].payload).toMatchObject({
+      toolName: 'message.send',
+      status: 'awaiting_permission',
+      permissionOutcome: 'ask'
+    });
+  });
+
+  it('records denied and failed tool events for blocked send_message runs', async () => {
+    const store = new MemoryAgentEventStore();
+    await store.init();
+
+    const runtime = await runProductAgentSession({
+      state: createDemoState(),
+      input: {
+        agentId: 'agent-chen',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-class',
+        targetUserId: 'user-teacher',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send the teacher a review request.'
+      },
+      eventStore: store,
+      runId: 'agent-run-tool-events-blocked',
+      sessionId: 'agent-session-tool-events-blocked',
+      aiProvider: undefined,
+      tools: {}
+    });
+
+    expect(runtime.response.requiresHuman).toBe(false);
+
+    const page = await store.list({ runId: 'agent-run-tool-events-blocked' });
+    const auditEvents = page.events.filter(
+      (event) => event.type.startsWith('agent.tool.') || event.type.startsWith('agent.permission.')
+    );
+
+    expect(auditEvents.map((event) => event.type)).toEqual([
+      'agent.tool.requested',
+      'agent.permission.denied',
+      'agent.tool.failed'
+    ]);
+    expect(auditEvents[2].payload).toMatchObject({
+      toolName: 'message.send',
+      status: 'denied',
+      permissionOutcome: 'deny'
+    });
+  });
+
   it('records failed product events before rethrowing runtime errors', async () => {
     const store = new MemoryAgentEventStore();
     await store.init();

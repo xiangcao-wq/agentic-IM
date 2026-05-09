@@ -26,6 +26,7 @@ import type {
 import type { AiProvider, AiTextPrompt } from './aiProvider';
 import { defaultToolCallsForIntent, isAgentToolName, primaryToolNameForIntent } from './agentTools';
 import { executeCoreTool } from './agentCore/toolExecutor';
+import { toolInvocationRecordToSnapshot } from './agentCore/toolInvocationAudit';
 import { runFileShareAction } from './agentRuntime';
 import { searchFileTextChunks } from './fileTextIndex';
 import type { WebSearchProvider } from './webSearch';
@@ -335,6 +336,7 @@ async function executeAgentPlan(
       label: result.requiresHuman ? '写入确认队列' : '写入运行日志',
       detail: result.status,
       toolCalls: resultLog.toolCalls,
+      toolInvocations: runtime.toolInvocation ? [runtime.toolInvocation] : [],
       riskLevel: result.risk.level
     });
     return {
@@ -1469,6 +1471,18 @@ function handleAgentSendMessage(
     message,
     log
   };
+  const toolInvocation = toolResult.invocation
+    ? toolInvocationRecordToSnapshot(toolResult.invocation)
+    : undefined;
+
+  emitAgentRunProgress(progress, input, {
+    phase: 'executing',
+    label: 'Audit message.send',
+    detail: toolResult.status,
+    toolCalls: toolResult.toolCalls,
+    toolInvocations: toolInvocation ? [toolInvocation] : [],
+    riskLevel: risk.level
+  });
 
   if (status === 'needs_confirmation') {
     const queued = queueActionForConfirmation(state, {
