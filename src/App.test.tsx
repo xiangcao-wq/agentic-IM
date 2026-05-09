@@ -974,6 +974,8 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('Permission allowed');
     expect(host.textContent).toContain('message.send');
     expect(host.textContent).toContain('message:send');
+    expect(host.querySelector('.agent-timeline-list .trace-row')).toBeTruthy();
+    expect(host.querySelector('.permission-center-list .permission-row')).toBeTruthy();
   });
 
   it('keeps the Agent result visible when trace replay is unavailable', async () => {

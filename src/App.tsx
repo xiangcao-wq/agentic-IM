@@ -1306,7 +1306,7 @@ function AgentTracePanel(props: {
 }) {
   if (props.traceStatus === 'loading') {
     return (
-      <section className="data-section trace-section" data-testid="agent-trace-panel">
+      <section className="data-section agent-trace-section" data-testid="agent-trace-panel">
         <div className="section-title">
           <ClipboardList size={17} />
           <h3>Agent Timeline</h3>
@@ -1323,7 +1323,7 @@ function AgentTracePanel(props: {
 
   if (props.traceStatus === 'unavailable') {
     return (
-      <section className="data-section trace-section" data-testid="agent-trace-panel">
+      <section className="data-section agent-trace-section" data-testid="agent-trace-panel">
         <div className="section-title">
           <ClipboardList size={17} />
           <h3>Agent Timeline</h3>
@@ -1343,13 +1343,13 @@ function AgentTracePanel(props: {
   }
 
   return (
-    <section className="data-section trace-section" data-testid="agent-trace-panel">
+    <section className="data-section agent-trace-section" data-testid="agent-trace-panel">
       <div className="section-title">
         <ClipboardList size={17} />
         <h3>Agent Timeline</h3>
       </div>
-      <div className="compact-list">
-        <div className="compact-row trace-row tone-neutral">
+      <div className="compact-list agent-timeline-list">
+        <div className="trace-summary-row">
           <strong>{props.trace.status}</strong>
           <span>
             {props.trace.eventCount} events
@@ -1371,11 +1371,11 @@ function AgentTracePanel(props: {
         ))}
       </div>
 
-      <div className="section-title">
+      <div className="section-title permission-title">
         <ShieldCheck size={17} />
         <h3>Permission Center</h3>
       </div>
-      <div className="compact-list">
+      <div className="compact-list permission-center-list">
         {props.permissionItems.length > 0 ? (
           props.permissionItems.map((item) => (
             <div className={`compact-row permission-row outcome-${item.outcome}`} key={item.id}>
