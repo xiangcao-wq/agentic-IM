@@ -1647,6 +1647,15 @@ button:disabled {
   margin-top: 4px;
 }
 
+.agent-trace-section .trace-list-summary {
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #617276;
+  background: #f7fafb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .agent-trace-section .trace-row,
 .agent-trace-section .permission-row {
   border: 1px solid #d8e4e6;
