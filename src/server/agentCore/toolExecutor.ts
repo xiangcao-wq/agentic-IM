@@ -1,5 +1,11 @@
 import type { DemoState, FileItem, Message, RiskAssessment } from '../../domain/types';
 import { assessFileSharePolicy, assessMessageSendPolicy } from './policyEngine';
+import { createToolPermissionDecision, type ToolPermissionDecision } from './permissionBroker';
+import {
+  createToolInvocationRecord,
+  type ToolInvocationRecord,
+  type ToolInvocationStatus
+} from './toolInvocationAudit';
 import { getCoreTool, type AgentCoreToolName, type FileShareInput, type MessageSendInput } from './toolRegistry';
 
 export type CoreToolResultStatus = 'ok' | 'not_found' | 'denied' | 'needs_confirmation' | 'failed';
@@ -13,6 +19,8 @@ export interface CoreToolResult<T> {
   risk?: RiskAssessment;
   policyReasons?: string[];
   error?: string;
+  permissionDecision?: ToolPermissionDecision;
+  invocation?: ToolInvocationRecord;
 }
 
 export interface CoreToolExecutionRequest {
@@ -58,12 +66,20 @@ export function executeCoreTool(
     return executeFileShareTool(state, request);
   }
 
+  const error = `unsupported core tool: ${request.toolName}`;
   return {
     status: 'failed',
     observations: [`Unsupported core tool: ${request.toolName}`],
     evidenceIds: [],
     toolCalls: [`tool_executor.${request.toolName}`, `${request.toolName}.unsupported`],
-    error: `unsupported core tool: ${request.toolName}`
+    error,
+    invocation: createToolInvocationRecord({
+      toolName: request.toolName,
+      agentId: request.agent.id,
+      roomId: request.sourceRoomId,
+      status: 'failed',
+      error
+    })
   };
 }
 
@@ -80,7 +96,13 @@ function executeFileShareTool(
       observations: [validated.error],
       evidenceIds: [],
       toolCalls: [...toolCalls, 'file.share.validation_failed'],
-      error: validated.error
+      error: validated.error,
+      invocation: validationFailedInvocation({
+        toolName: 'file.share',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        error: validated.error
+      })
     };
   }
 
@@ -96,6 +118,12 @@ function executeFileShareTool(
     requestText,
     file: input.file
   });
+  const permissionDecision = createToolPermissionDecision({
+    tool,
+    policy,
+    agentId: request.agent.id,
+    roomId: request.sourceRoomId
+  });
   const evidenceIds = [targetRoomId, requesterId, input.file?.id].filter(Boolean) as string[];
   const output: FileShareToolOutput = {
     targetRoomId,
@@ -103,6 +131,12 @@ function executeFileShareTool(
     requestText,
     file: input.file
   };
+  const inputSummary = fileShareInputSummary({
+    targetRoomId,
+    requesterId,
+    fileId: input.fileId ?? input.file?.id,
+    fileVersion: input.fileVersion ?? input.file?.version
+  });
 
   if (policy.outcome === 'deny') {
     return {
@@ -112,7 +146,18 @@ function executeFileShareTool(
       evidenceIds,
       toolCalls: [...toolCalls, 'file.share'],
       risk: policy.risk,
-      policyReasons: policy.reasons
+      policyReasons: policy.reasons,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'file.share',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('denied'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: fileShareOutputSummary(output),
+        evidenceIds
+      })
     };
   }
 
@@ -124,40 +169,79 @@ function executeFileShareTool(
       evidenceIds,
       toolCalls: [...toolCalls, 'file.share'],
       risk: policy.risk,
-      policyReasons: policy.reasons
+      policyReasons: policy.reasons,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'file.share',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('needs_confirmation'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: fileShareOutputSummary(output),
+        evidenceIds
+      })
     };
   }
 
   const owner = state.users.find((user) => user.id === request.agent.ownerId);
+  const failureReason = !owner ? 'owner_not_found' : 'file_not_found';
+  const failureError = !owner ? 'Agent owner cannot be verified.' : 'File cannot be verified.';
   if (!owner || !input.file) {
     return {
       status: 'failed',
       data: output,
-      observations: [!owner ? 'owner_not_found' : 'file_not_found'],
+      observations: [failureReason],
       evidenceIds,
       toolCalls: [...toolCalls, !owner ? 'file.share.owner_missing' : 'file.share.file_missing'],
       risk: policy.risk,
-      policyReasons: [!owner ? 'owner_not_found' : 'file_not_found'],
-      error: !owner ? 'Agent owner cannot be verified.' : 'File cannot be verified.'
+      policyReasons: [failureReason],
+      error: failureError,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'file.share',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('failed'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: fileShareOutputSummary(output),
+        evidenceIds,
+        error: failureError
+      })
     };
   }
 
+  const message = createAgentFileMessage({
+    agent: request.agent,
+    ownerName: owner.name,
+    roomId: targetRoomId,
+    file: input.file
+  });
+  const data: FileShareToolOutput = {
+    ...output,
+    message
+  };
+
   return {
     status: 'ok',
-    data: {
-      ...output,
-      message: createAgentFileMessage({
-        agent: request.agent,
-        ownerName: owner.name,
-        roomId: targetRoomId,
-        file: input.file
-      })
-    },
+    data,
     observations: policy.reasons,
     evidenceIds,
     toolCalls: [...toolCalls, 'file.share', 'matrix.send_event'],
     risk: policy.risk,
-    policyReasons: policy.reasons
+    policyReasons: policy.reasons,
+    permissionDecision,
+    invocation: createToolInvocationRecord({
+      toolName: 'file.share',
+      agentId: request.agent.id,
+      roomId: request.sourceRoomId,
+      status: invocationStatusForResult('ok'),
+      permission: permissionDecision,
+      inputSummary,
+      outputSummary: fileShareOutputSummary(data),
+      evidenceIds
+    })
   };
 }
 
@@ -174,7 +258,13 @@ function executeMessageSendTool(
       observations: [validated.error],
       evidenceIds: [],
       toolCalls: [...toolCalls, 'message.send.validation_failed'],
-      error: validated.error
+      error: validated.error,
+      invocation: validationFailedInvocation({
+        toolName: 'message.send',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        error: validated.error
+      })
     };
   }
 
@@ -185,12 +275,19 @@ function executeMessageSendTool(
     targetUserId: input.targetUserId,
     messageBody: input.messageBody
   });
+  const permissionDecision = createToolPermissionDecision({
+    tool,
+    policy,
+    agentId: request.agent.id,
+    roomId: request.sourceRoomId
+  });
   const evidenceIds = [input.targetRoomId, input.targetUserId].filter(Boolean) as string[];
   const output: MessageSendToolOutput = {
     targetRoomId: input.targetRoomId,
     targetUserId: input.targetUserId,
     messageBody: input.messageBody
   };
+  const inputSummary = messageSendInputSummary(input);
 
   if (policy.outcome === 'deny') {
     return {
@@ -200,7 +297,18 @@ function executeMessageSendTool(
       evidenceIds,
       toolCalls: [...toolCalls, 'message.send'],
       risk: policy.risk,
-      policyReasons: policy.reasons
+      policyReasons: policy.reasons,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'message.send',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('denied'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: messageSendOutputSummary(output),
+        evidenceIds
+      })
     };
   }
 
@@ -212,11 +320,23 @@ function executeMessageSendTool(
       evidenceIds,
       toolCalls: [...toolCalls, 'message.send'],
       risk: policy.risk,
-      policyReasons: policy.reasons
+      policyReasons: policy.reasons,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'message.send',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('needs_confirmation'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: messageSendOutputSummary(output),
+        evidenceIds
+      })
     };
   }
 
   const owner = state.users.find((user) => user.id === request.agent.ownerId);
+  const failureError = 'Agent owner cannot be verified.';
   if (!owner) {
     return {
       status: 'failed',
@@ -226,27 +346,117 @@ function executeMessageSendTool(
       toolCalls: [...toolCalls, 'message.send.owner_missing'],
       risk: policy.risk,
       policyReasons: ['owner_not_found'],
-      error: 'Agent owner cannot be verified.'
+      error: failureError,
+      permissionDecision,
+      invocation: createToolInvocationRecord({
+        toolName: 'message.send',
+        agentId: request.agent.id,
+        roomId: request.sourceRoomId,
+        status: invocationStatusForResult('failed'),
+        permission: permissionDecision,
+        inputSummary,
+        outputSummary: messageSendOutputSummary(output),
+        evidenceIds,
+        error: failureError
+      })
     };
   }
 
+  const message = createAgentDelegatedMessage({
+    agent: request.agent,
+    ownerName: owner.name,
+    roomId: input.targetRoomId,
+    body: input.messageBody
+  });
+  const data: MessageSendToolOutput = {
+    ...output,
+    message
+  };
+
   return {
     status: 'ok',
-    data: {
-      ...output,
-      message: createAgentDelegatedMessage({
-        agent: request.agent,
-        ownerName: owner.name,
-        roomId: input.targetRoomId,
-        body: input.messageBody
-      })
-    },
+    data,
     observations: policy.reasons,
     evidenceIds,
     toolCalls: [...toolCalls, 'message.send', 'matrix.send_event'],
     risk: policy.risk,
-    policyReasons: policy.reasons
+    policyReasons: policy.reasons,
+    permissionDecision,
+    invocation: createToolInvocationRecord({
+      toolName: 'message.send',
+      agentId: request.agent.id,
+      roomId: request.sourceRoomId,
+      status: invocationStatusForResult('ok'),
+      permission: permissionDecision,
+      inputSummary,
+      outputSummary: messageSendOutputSummary(data),
+      evidenceIds
+    })
   };
+}
+
+function invocationStatusForResult(status: CoreToolResultStatus): ToolInvocationStatus {
+  if (status === 'denied') return 'denied';
+  if (status === 'needs_confirmation') return 'awaiting_permission';
+  if (status === 'ok') return 'completed';
+  if (status === 'failed' || status === 'not_found') return 'failed';
+  return 'failed';
+}
+
+function validationFailedInvocation(input: {
+  toolName: AgentCoreToolName;
+  agentId: string;
+  roomId: string;
+  error: string;
+}): ToolInvocationRecord {
+  return createToolInvocationRecord({
+    toolName: input.toolName,
+    agentId: input.agentId,
+    roomId: input.roomId,
+    status: 'validation_failed',
+    error: input.error
+  });
+}
+
+function messageSendInputSummary(input: MessageSendInput): Record<string, unknown> {
+  return compactSummary({
+    targetRoomId: input.targetRoomId,
+    targetUserId: input.targetUserId,
+    messageLength: input.messageBody.length
+  });
+}
+
+function messageSendOutputSummary(output: MessageSendToolOutput): Record<string, unknown> {
+  return compactSummary({
+    messageId: output.message?.id,
+    roomId: output.message?.roomId ?? output.targetRoomId
+  });
+}
+
+function fileShareInputSummary(input: {
+  targetRoomId: string;
+  requesterId: string;
+  fileId?: string;
+  fileVersion?: number;
+}): Record<string, unknown> {
+  return compactSummary({
+    targetRoomId: input.targetRoomId,
+    requesterId: input.requesterId,
+    fileId: input.fileId,
+    fileVersion: input.fileVersion
+  });
+}
+
+function fileShareOutputSummary(output: FileShareToolOutput): Record<string, unknown> {
+  return compactSummary({
+    fileId: output.file?.id,
+    messageId: output.message?.id,
+    roomId: output.message?.roomId ?? output.targetRoomId
+  });
+}
+
+function compactSummary(summary: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== undefined));
 }
 
 function createAgentDelegatedMessage(input: {

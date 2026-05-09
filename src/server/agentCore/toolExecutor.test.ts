@@ -28,6 +28,18 @@ describe('agent core tool executor', () => {
       type: 'agent',
       sourceAgentId: 'agent-lin'
     });
+    expect(result.permissionDecision).toMatchObject({
+      outcome: 'allow',
+      toolName: 'message.send',
+      requiredPermissions: ['message:send']
+    });
+    expect(result.invocation).toMatchObject({
+      toolName: 'message.send',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['message:send'],
+      requiresHuman: false
+    });
     expect(result.toolCalls).toContain('message.send');
     expect(result.toolCalls).toContain('matrix.send_event');
     expect(result.evidenceIds).toEqual(['room-team', 'user-chen']);
@@ -50,6 +62,12 @@ describe('agent core tool executor', () => {
     });
 
     expect(result.status).toBe('denied');
+    expect(result.permissionDecision?.outcome).toBe('deny');
+    expect(result.invocation).toMatchObject({
+      toolName: 'message.send',
+      status: 'denied',
+      permissionOutcome: 'deny'
+    });
     expect(result.risk?.level).toBe('high');
     expect(result.policyReasons).toContain('target_room_not_authorized');
     expect(result.data?.message).toBeUndefined();
@@ -73,6 +91,12 @@ describe('agent core tool executor', () => {
 
     expect(result.status).toBe('failed');
     expect(result.error).toBe('messageBody must be a non-empty string');
+    expect(result.permissionDecision).toBeUndefined();
+    expect(result.invocation).toMatchObject({
+      toolName: 'message.send',
+      status: 'validation_failed',
+      error: 'messageBody must be a non-empty string'
+    });
     expect(result.toolCalls).toEqual(['tool_executor.message.send', 'message.send.validation_failed']);
   });
 
@@ -101,6 +125,18 @@ describe('agent core tool executor', () => {
     const data = result.data as { file?: { id: string }; message?: { fileId?: string } } | undefined;
 
     expect(result.status).toBe('ok');
+    expect(result.permissionDecision).toMatchObject({
+      outcome: 'allow',
+      toolName: 'file.share',
+      requiredPermissions: ['file:share']
+    });
+    expect(result.invocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['file:share'],
+      requiresHuman: false
+    });
     expect(result.risk?.model).toBe('policy-engine-v1');
     expect(data?.file?.id).toBe('file-slides-v3');
     expect(data?.message?.fileId).toBe('file-slides-v3');
@@ -132,6 +168,13 @@ describe('agent core tool executor', () => {
     });
 
     expect(result.status).toBe('needs_confirmation');
+    expect(result.permissionDecision?.outcome).toBe('ask');
+    expect(result.invocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'awaiting_permission',
+      permissionOutcome: 'ask',
+      requiresHuman: true
+    });
     expect(result.policyReasons).toContain('missing_downloadable_file_backing');
     expect((result.data as { message?: unknown } | undefined)?.message).toBeUndefined();
     expect(result.toolCalls).toEqual(['tool_executor.file.share', 'file.share']);
@@ -163,6 +206,12 @@ describe('agent core tool executor', () => {
     });
 
     expect(result.status).toBe('denied');
+    expect(result.permissionDecision?.outcome).toBe('deny');
+    expect(result.invocation).toMatchObject({
+      toolName: 'file.share',
+      status: 'denied',
+      permissionOutcome: 'deny'
+    });
     expect(result.policyReasons).toContain('file_outside_agent_owner_boundary');
     expect((result.data as { message?: unknown } | undefined)?.message).toBeUndefined();
     expect(result.toolCalls).toEqual(['tool_executor.file.share', 'file.share']);
