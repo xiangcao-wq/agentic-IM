@@ -100,7 +100,8 @@ describe('product readiness runner', () => {
                 configured: false,
                 provider: 'fallback',
                 health: 'missing'
-              }
+              },
+              eventLog: { ok: true, status: 'ready' }
             }
           };
         }
@@ -130,8 +131,167 @@ describe('product readiness runner', () => {
       'fetch:http://127.0.0.1:8791/api/readiness'
     ]);
     expect(results).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'readiness endpoint', status: 'passed' })])
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'readiness auth boundary', status: 'skipped', reason: '--local-demo' }),
+        expect.objectContaining({ name: 'readiness endpoint', status: 'passed' })
+      ])
     );
+  });
+
+  it('passes the readiness auth boundary when no-token and query-token requests are rejected', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      expect(init.headers).toBeUndefined();
+      return {
+        ok: false,
+        status: url.includes('agent_im_token=') ? 403 : 401,
+        async text() {
+          return 'denied';
+        }
+      };
+    });
+
+    const results = await runReadinessChecks(
+      [{ name: 'readiness auth boundary', readinessAuthBoundary: true }],
+      {
+        fetchImpl,
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {
+          AGENT_IM_API_BASE: 'https://agentbridge.example.com/',
+          AGENT_IM_API_TOKEN: 'server-token'
+        }
+      }
+    );
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      'https://agentbridge.example.com/api/readiness',
+      expect.objectContaining({})
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      'https://agentbridge.example.com/api/readiness?agent_im_token=server-token',
+      expect.objectContaining({})
+    );
+    expect(results).toMatchObject([{ name: 'readiness auth boundary', status: 'passed' }]);
+  });
+
+  it('fails the readiness auth boundary when no-token access succeeds', async () => {
+    const results = await runReadinessChecks(
+      [{ name: 'readiness auth boundary', readinessAuthBoundary: true }],
+      {
+        fetchImpl: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          async text() {
+            return 'token server-token leaked in body';
+          }
+        })),
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {
+          AGENT_IM_API_BASE: 'https://agentbridge.example.com',
+          AGENT_IM_API_TOKEN: 'server-token'
+        }
+      }
+    );
+
+    expect(results).toMatchObject([
+      {
+        name: 'readiness auth boundary',
+        status: 'failed',
+        error: 'no-token readiness request expected 401 or 403, received 200; body: token [redacted] leaked in body'
+      }
+    ]);
+  });
+
+  it('fails the readiness auth boundary when query-token access succeeds', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        async text() {
+          return 'denied';
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        async text() {
+          return 'accepted x-agent-im-token: server-token';
+        }
+      });
+
+    const results = await runReadinessChecks(
+      [{ name: 'readiness auth boundary', readinessAuthBoundary: true }],
+      {
+        fetchImpl,
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {
+          AGENT_IM_API_BASE: 'https://agentbridge.example.com',
+          AGENT_IM_API_TOKEN: 'server-token'
+        }
+      }
+    );
+
+    expect(results[0].error).toContain('query-token readiness request expected 401 or 403, received 200');
+    expect(results[0].error).toContain('x-agent-im-token: [redacted]');
+    expect(results[0].error).not.toContain('server-token');
+  });
+
+  it('fails the readiness auth boundary when no product token is configured', async () => {
+    const results = await runReadinessChecks(
+      [{ name: 'readiness auth boundary', readinessAuthBoundary: true }],
+      {
+        fetchImpl: vi.fn(),
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {
+          AGENT_IM_API_BASE: 'https://agentbridge.example.com'
+        }
+      }
+    );
+
+    expect(results).toMatchObject([
+      {
+        name: 'readiness auth boundary',
+        status: 'failed',
+        error: 'AGENT_IM_API_TOKEN or VITE_AGENT_API_TOKEN is required for readiness auth boundary check'
+      }
+    ]);
+  });
+
+  it('sanitizes readiness auth boundary transport errors', async () => {
+    const results = await runReadinessChecks(
+      [{ name: 'readiness auth boundary', readinessAuthBoundary: true }],
+      {
+        fetchImpl: vi.fn(async (url) => {
+          throw new Error(`fetch failed for ${url} with bearer server-token`);
+        }),
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {
+          AGENT_IM_API_BASE: 'https://agentbridge.example.com',
+          AGENT_IM_API_TOKEN: 'server-token'
+        }
+      }
+    );
+
+    expect(results[0].error).toContain('fetch failed for https://agentbridge.example.com/api/readiness');
+    expect(results[0].error).toContain('bearer [redacted]');
+    expect(results[0].error).not.toContain('server-token');
   });
 
   it('fails product readiness when the endpoint reports unhealthy checks', async () => {
@@ -154,7 +314,8 @@ describe('product readiness runner', () => {
                 storage: { ok: true, status: 'ready' },
                 worker: { ok: true, status: 'ready' },
                 connector: { ok: true, status: 'ready' },
-                provider: { ok: true, status: 'ready' }
+                provider: { ok: true, status: 'ready' },
+                eventLog: { ok: true, status: 'ready' }
               }
             };
           }
@@ -192,7 +353,8 @@ describe('product readiness runner', () => {
                 storage: { ok: true, status: 'ready', message: 'Local JSON storage is writable.' },
                 worker: { ok: true, status: 'ready', message: 'Autopilot worker is available.' },
                 connector: { ok: true, status: 'ready', message: 'Matrix connector is enabled.' },
-                provider: { ok: true, status: 'ready', message: 'AI provider health is connected.' }
+                provider: { ok: true, status: 'ready', message: 'AI provider health is connected.' },
+                eventLog: { ok: true, status: 'ready', message: 'Agent event log is writable.' }
               }
             };
           }
@@ -223,7 +385,8 @@ describe('product readiness runner', () => {
                 storage: { ok: true, status: 'ready' },
                 worker: { ok: true, status: 'ready' },
                 connector: { ok: true, status: 'ready' },
-                provider: { ok: true, status: 'ready' }
+                provider: { ok: true, status: 'ready' },
+                eventLog: { ok: true, status: 'ready' }
               }
             };
           }
@@ -260,7 +423,8 @@ describe('product readiness runner', () => {
                 storage: { ok: true, status: 'ready' },
                 worker: { ok: true, status: 'ready' },
                 connector: { ok: true, status: 'ready' },
-                provider: { ok: true, status: 'ready' }
+                provider: { ok: true, status: 'ready' },
+                eventLog: { ok: true, status: 'ready' }
               }
             };
           }
@@ -305,6 +469,7 @@ describe('product readiness runner', () => {
                   provider: 'fallback',
                   health: 'missing'
                 },
+                eventLog: { ok: true, status: 'ready', message: 'Agent event log is writable.' },
                 downloads: {
                   ok: false,
                   status: 'blocked',
@@ -358,6 +523,42 @@ describe('product readiness runner', () => {
     expect(results[0].error).toContain('body: upstream failed for x-agent-im-token: [redacted]');
     expect(results[0].error).toContain('Authorization: Bearer [redacted]');
     expect(results[0].error).not.toContain('server-token');
+  });
+
+  it('fails the readiness endpoint check when event log readiness is missing', async () => {
+    const results = await runReadinessChecks(
+      [{ name: 'readiness endpoint', readinessEndpoint: true }],
+      {
+        fetchImpl: vi.fn(async () => ({
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              checks: {
+                auth: { ok: true, status: 'ready', mode: 'public' },
+                storage: { ok: true, status: 'ready' },
+                worker: { ok: true, status: 'ready' },
+                connector: { ok: true, status: 'ready' },
+                provider: { ok: true, status: 'ready' }
+              }
+            };
+          }
+        })),
+        stdout: { write: vi.fn() },
+        stderr: { write: vi.fn() },
+        log: vi.fn(),
+        error: vi.fn(),
+        env: {}
+      }
+    );
+
+    expect(results).toMatchObject([
+      {
+        name: 'readiness endpoint',
+        status: 'failed',
+        error: '/api/readiness response is missing required checks'
+      }
+    ]);
   });
 
   it('fails readiness endpoint checks that exceed the configured timeout', async () => {

@@ -56,6 +56,7 @@ Suggested directories:
 
 ```bash
 sudo mkdir -p /opt/agentbridge
+sudo mkdir -p /opt/agentbridge/releases
 sudo mkdir -p /var/lib/agentbridge/data
 sudo mkdir -p /var/lib/agentbridge/media
 sudo mkdir -p /etc/agentbridge
@@ -121,11 +122,16 @@ Token rotation requires:
 Run these as the `agentbridge` user unless a command uses `sudo`.
 
 ```bash
-cd /opt/agentbridge
-git clone https://github.com/xiangcao-wq/agentic-IM.git current
+cd /opt/agentbridge/releases
+git clone https://github.com/xiangcao-wq/agentic-IM.git initial
+cd /opt/agentbridge/releases/initial
+git switch main
+git pull --ff-only origin main
+RELEASE_SHA=$(git rev-parse HEAD)
+cd /opt/agentbridge/releases
+mv initial "$RELEASE_SHA"
+ln -sfnT "/opt/agentbridge/releases/$RELEASE_SHA" /opt/agentbridge/current
 cd /opt/agentbridge/current
-git switch ui-polish-agent-workbench
-git pull --ff-only origin ui-polish-agent-workbench
 npm ci
 ```
 
@@ -299,38 +305,64 @@ Do not use `--local-demo` for the final controlled server pilot signoff.
 
 ## Deployment Update Procedure
 
-Before updating:
+The current JSON state store means this pilot cannot safely run two write-capable API
+instances against the same state file for a true blue-green cutover. For existing users,
+use a controlled near-zero-downtime update: build and verify the new release in a separate
+directory while the old version stays online, then take one short API restart window to
+switch `current` and reload Nginx. True zero-downtime writes should wait for the
+Postgres-backed storage slice.
+
+Before updating, record the current production SHA:
 
 ```bash
 cd /opt/agentbridge/current
+PREVIOUS_SHA=$(git rev-parse HEAD)
+echo "$PREVIOUS_SHA" | tee /opt/agentbridge/previous-known-good-sha.txt
 git fetch origin
 git status --short --branch
 npm run test
-npm run build
-```
-
-Back up runtime state:
-
-```bash
-sudo systemctl stop agentbridge-api
-cp /var/lib/agentbridge/data/agent-im-db.json \
-  /var/lib/agentbridge/data/agent-im-db.$(date +%Y%m%d-%H%M%S).json
-sudo systemctl start agentbridge-api
-```
-
-Deploy:
-
-```bash
-cd /opt/agentbridge/current
-git pull --ff-only origin ui-polish-agent-workbench
-npm ci
 set -a
 . /etc/agentbridge/agentbridge.env
 set +a
 export VITE_AGENT_API_TOKEN="$AGENT_IM_API_TOKEN"
 npm run build
-sudo systemctl restart agentbridge-api
+```
+
+Prepare the new release without touching the live `current` symlink:
+
+```bash
+cd /opt/agentbridge/releases
+RELEASE_SHA=$(git ls-remote https://github.com/xiangcao-wq/agentic-IM.git refs/heads/main | awk '{print $1}')
+if [ ! -d "/opt/agentbridge/releases/$RELEASE_SHA" ]; then
+  git clone https://github.com/xiangcao-wq/agentic-IM.git "$RELEASE_SHA"
+fi
+cd "/opt/agentbridge/releases/$RELEASE_SHA"
+git switch main
+git reset --hard "$RELEASE_SHA"
+npm ci
+set -a
+. /etc/agentbridge/agentbridge.env
+set +a
+export VITE_AGENT_API_TOKEN="$AGENT_IM_API_TOKEN"
+npm run test
+npm run build
+```
+
+Cut over with a short API restart and a consistent stopped-state backup:
+
+```bash
+sudo systemctl stop agentbridge-api
+BACKUP_PATH="/var/lib/agentbridge/data/agent-im-db.$(date +%Y%m%d-%H%M%S).json"
+cp /var/lib/agentbridge/data/agent-im-db.json "$BACKUP_PATH"
+echo "$BACKUP_PATH" | tee /opt/agentbridge/latest-state-backup.txt
+ln -sfnT "/opt/agentbridge/releases/$RELEASE_SHA" /opt/agentbridge/current
+set -a
+. /etc/agentbridge/agentbridge.env
+set +a
+export VITE_AGENT_API_TOKEN="$AGENT_IM_API_TOKEN"
+cd /opt/agentbridge/current
 sudo nginx -t
+sudo systemctl start agentbridge-api
 sudo systemctl reload nginx
 ```
 
@@ -342,15 +374,25 @@ Rollback the app code:
 
 ```bash
 cd /opt/agentbridge/current
-git log --oneline -5
-git reset --hard <previous-known-good-sha>
+PREVIOUS_SHA=$(cat /opt/agentbridge/previous-known-good-sha.txt)
+if [ -z "$PREVIOUS_SHA" ]; then
+  echo "Missing previous known-good SHA" >&2
+  exit 1
+fi
+if [ ! -d "/opt/agentbridge/releases/$PREVIOUS_SHA" ]; then
+  git clone https://github.com/xiangcao-wq/agentic-IM.git "/opt/agentbridge/releases/$PREVIOUS_SHA"
+  git -C "/opt/agentbridge/releases/$PREVIOUS_SHA" reset --hard "$PREVIOUS_SHA"
+fi
+sudo systemctl stop agentbridge-api
+ln -sfnT "/opt/agentbridge/releases/$PREVIOUS_SHA" /opt/agentbridge/current
+cd /opt/agentbridge/current
 set -a
 . /etc/agentbridge/agentbridge.env
 set +a
 export VITE_AGENT_API_TOKEN="$AGENT_IM_API_TOKEN"
 npm ci
 npm run build
-sudo systemctl restart agentbridge-api
+sudo systemctl start agentbridge-api
 sudo systemctl reload nginx
 ```
 
@@ -378,12 +420,14 @@ Go only when all are true:
 - `npm run test` passes on the release commit.
 - `npm run build` passes with the production token exported as `VITE_AGENT_API_TOKEN`.
 - `npm run readiness:product` passes without `--local-demo`.
+- `npm run readiness:product` fails if no-token or query-token `/api/readiness` access is accepted.
 - `curl "$HOST/api/readiness"` returns `401`.
 - `curl "$HOST/api/readiness?agent_im_token=<token>"` returns `401`.
 - Authenticated `/api/readiness` returns `200` and no token value.
 - `checks.auth.mode` is `public` or `production`.
 - `checks.auth.allowQueryToken` is `false`.
 - `checks.storage.readable` and `checks.storage.writable` are both `true`.
+- `checks.eventLog.readable`, `checks.eventLog.writable`, and `checks.eventLog.valid` are all `true`.
 - HTTPS is enabled and HTTP redirects to HTTPS.
 - Runtime state has a backup.
 - Rollback commit SHA is recorded.
@@ -402,6 +446,7 @@ These are acceptable for a controlled pilot, but block public launch:
 - Browser token is visible to anyone who can load the app.
 - No per-user account model or role-based access control.
 - JSON file persistence is not a multi-user production database.
+- True zero-downtime write traffic requires database-backed storage; the controlled pilot uses a short API restart window.
 - No rate limiting on public endpoints.
 - No structured log redaction pipeline.
 - No CI/CD deployment automation yet.

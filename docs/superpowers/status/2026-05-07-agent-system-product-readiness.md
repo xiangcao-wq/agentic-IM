@@ -92,3 +92,16 @@ Implemented the fourth Product Kernel slice:
 - Raw SSE progress remains hidden from the compact Workbench; replayed EventLog data is the product-facing source.
 
 Remaining gap: this is a per-run Workbench surface. Cross-run trace search, policy editing, and Postgres-backed audit querying remain future product slices.
+
+## 2026-05-09 Deployment Readiness Gate Slice
+
+Implemented the first deployment-readiness hardening slice:
+
+- Product readiness now requires the Agent EventLog check to be present and healthy.
+- Product readiness now verifies the `/api/readiness` auth boundary before the authenticated readiness call.
+- No-token and query-string-token readiness access must return `401` or `403` in product mode.
+- `--local-demo` still skips product-only auth boundary checks while keeping browser smoke and authenticated readiness checks.
+- The controlled server pilot runbook now targets `main` and uses release directories plus a `current` symlink for safer upgrades.
+- The runbook explicitly documents that JSON-file storage supports a short controlled API restart window, not true zero-downtime write traffic.
+
+Remaining gap: a real public launch still needs Postgres-backed storage, real user auth, rate limiting, structured log redaction, and CI/CD deployment automation.

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-const requiredReadinessChecks = ['auth', 'storage', 'worker', 'connector', 'provider'];
+const requiredReadinessChecks = ['auth', 'storage', 'worker', 'connector', 'provider', 'eventLog'];
 const defaultReadinessTimeoutMs = 15_000;
 
 export const defaultChecks = [
@@ -9,6 +9,7 @@ export const defaultChecks = [
   { name: 'local agent eval', script: 'eval:agent' },
   { name: 'real provider agent eval', script: 'eval:agent:real', skipInLocalDemo: true },
   { name: 'browser smoke', script: 'smoke:browser' },
+  { name: 'readiness auth boundary', readinessAuthBoundary: true, skipInLocalDemo: true },
   { name: 'readiness endpoint', readinessEndpoint: true },
   { name: 'Matrix and API smoke', script: 'infra:smoke', skipInLocalDemo: true }
 ];
@@ -47,46 +48,10 @@ export async function runReadinessChecks(checks, options = {}) {
 
 export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch, options = {}) {
   const readinessUrl = `${baseUrl.replace(/\/+$/, '')}/api/readiness`;
-  const timeoutMs = options.readinessTimeoutMs ?? defaultReadinessTimeoutMs;
-  const abortController =
-    timeoutMs > 0 ? options.abortControllerFactory?.() ?? new AbortController() : undefined;
   const requestInit = {
     headers: token ? { 'x-agent-im-token': token } : {}
   };
-  if (abortController) {
-    requestInit.signal = abortController.signal;
-  }
-
-  let timedOut = false;
-  let timeoutId;
-  const setTimeoutImpl = options.setTimeoutImpl ?? setTimeout;
-  const clearTimeoutImpl = options.clearTimeoutImpl ?? clearTimeout;
-  const timeoutPromise =
-    timeoutMs > 0
-      ? new Promise((_, reject) => {
-          timeoutId = setTimeoutImpl(() => {
-            timedOut = true;
-            abortController?.abort();
-            reject(new Error(`/api/readiness timed out after ${timeoutMs}ms`));
-          }, timeoutMs);
-        })
-      : undefined;
-
-  let response;
-  try {
-    response = await (timeoutPromise
-      ? Promise.race([fetchImpl(readinessUrl, requestInit), timeoutPromise])
-      : fetchImpl(readinessUrl, requestInit));
-  } catch (error) {
-    if (timedOut) {
-      throw new Error(`/api/readiness timed out after ${timeoutMs}ms`);
-    }
-    throw error;
-  } finally {
-    if (timeoutId !== undefined) {
-      clearTimeoutImpl(timeoutId);
-    }
-  }
+  const response = await fetchWithTimeout(fetchImpl, readinessUrl, requestInit, options, '/api/readiness');
 
   if (!response.ok) {
     const bodyText = sanitizeForReadinessError(await readResponseText(response), token);
@@ -98,11 +63,52 @@ export async function checkReadinessEndpoint(baseUrl, token, fetchImpl = fetch, 
   return body;
 }
 
+export async function checkReadinessAuthBoundary(baseUrl, token, fetchImpl = fetch, options = {}) {
+  if (!token) {
+    throw new Error('AGENT_IM_API_TOKEN or VITE_AGENT_API_TOKEN is required for readiness auth boundary check');
+  }
+
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+  const probes = [
+    {
+      label: 'no-token readiness request',
+      url: `${normalizedBaseUrl}/api/readiness`
+    },
+    {
+      label: 'query-token readiness request',
+      url: `${normalizedBaseUrl}/api/readiness?agent_im_token=${encodeURIComponent(token)}`
+    }
+  ];
+
+  for (const probe of probes) {
+    let response;
+    try {
+      response = await fetchWithTimeout(fetchImpl, probe.url, {}, options, '/api/readiness auth boundary');
+    } catch (error) {
+      throw new Error(
+        sanitizeForReadinessError(error instanceof Error ? error.message : String(error), token)
+      );
+    }
+    const status = Number(response.status);
+    if (status === 401 || status === 403) {
+      continue;
+    }
+
+    const bodyText = sanitizeForReadinessError(await readResponseText(response), token);
+    const bodyDetail = bodyText ? `; body: ${bodyText}` : '';
+    throw new Error(`${probe.label} expected 401 or 403, received ${response.status ?? 'unknown'}${bodyDetail}`);
+  }
+}
+
 export function formatDuration(ms) {
   return `${Math.round(ms / 100) / 10}s`;
 }
 
 function runCheck(check, options) {
+  if (check.readinessAuthBoundary) {
+    return runReadinessAuthBoundaryCheck(check, options);
+  }
+
   if (check.readinessEndpoint) {
     return runReadinessEndpointCheck(check, options);
   }
@@ -124,6 +130,23 @@ function runReadinessEndpointCheck(check, options) {
   return runTimedCheck(check, () =>
     checkReadinessEndpoint(baseUrl, token, fetchImpl, {
       localDemo: options.localDemo,
+      readinessTimeoutMs: options.readinessTimeoutMs,
+      abortControllerFactory: options.abortControllerFactory,
+      setTimeoutImpl: options.setTimeoutImpl,
+      clearTimeoutImpl: options.clearTimeoutImpl
+    })
+  );
+}
+
+function runReadinessAuthBoundaryCheck(check, options) {
+  const env = options.env ?? process.env;
+  const baseUrl =
+    firstEnvValue(env, ['AGENT_IM_API_BASE', 'VITE_AGENT_API_BASE', 'AGENT_IM_API_URL']) ?? 'http://127.0.0.1:8791';
+  const token = firstEnvValue(env, ['AGENT_IM_API_TOKEN', 'VITE_AGENT_API_TOKEN']) ?? '';
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  return runTimedCheck(check, () =>
+    checkReadinessAuthBoundary(baseUrl, token, fetchImpl, {
       readinessTimeoutMs: options.readinessTimeoutMs,
       abortControllerFactory: options.abortControllerFactory,
       setTimeoutImpl: options.setTimeoutImpl,
@@ -216,6 +239,9 @@ function formatCheckTarget(check) {
   if (check.readinessEndpoint) {
     return ' (/api/readiness)';
   }
+  if (check.readinessAuthBoundary) {
+    return ' (/api/readiness auth boundary)';
+  }
   return '';
 }
 
@@ -285,6 +311,46 @@ async function readResponseText(response) {
     return await response.text();
   } catch {
     return '';
+  }
+}
+
+async function fetchWithTimeout(fetchImpl, url, requestInit, options, timeoutLabel) {
+  const timeoutMs = options.readinessTimeoutMs ?? defaultReadinessTimeoutMs;
+  const abortController =
+    timeoutMs > 0 ? options.abortControllerFactory?.() ?? new AbortController() : undefined;
+  const init = { ...requestInit };
+  if (abortController) {
+    init.signal = abortController.signal;
+  }
+
+  let timedOut = false;
+  let timeoutId;
+  const setTimeoutImpl = options.setTimeoutImpl ?? setTimeout;
+  const clearTimeoutImpl = options.clearTimeoutImpl ?? clearTimeout;
+  const timeoutPromise =
+    timeoutMs > 0
+      ? new Promise((_, reject) => {
+          timeoutId = setTimeoutImpl(() => {
+            timedOut = true;
+            abortController?.abort();
+            reject(new Error(`${timeoutLabel} timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+        })
+      : undefined;
+
+  try {
+    return await (timeoutPromise
+      ? Promise.race([fetchImpl(url, init), timeoutPromise])
+      : fetchImpl(url, init));
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`${timeoutLabel} timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeoutImpl(timeoutId);
+    }
   }
 }
 
