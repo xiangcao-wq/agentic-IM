@@ -189,6 +189,11 @@ describe('real local agent IM server', () => {
       type: 'agent',
       agentLabel: '林雯的 Agent 代发'
     });
+    expect(result.log.toolCalls).toContain('message.send');
+    expect(result.requiresHuman).toBe(false);
+    expect(result.actionRequest).toBeUndefined();
+    expect(result.runId).toMatch(/^agent-run-/);
+    expect(result.sessionId).toMatch(/^agent-session-/);
 
     const state = await requestJson(`${app.url}/api/state`);
     expect(state.messages.some((message: { id: string }) => message.id === result.message.id)).toBe(true);
