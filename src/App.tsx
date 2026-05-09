@@ -1311,7 +1311,7 @@ function AgentTracePanel(props: {
           <ClipboardList size={17} />
           <h3>Agent Timeline</h3>
         </div>
-        <div className="compact-list">
+        <div className="compact-list agent-timeline-list">
           <div className="compact-row trace-row tone-neutral">
             <strong>Loading trace</strong>
             <span>Waiting for replay data</span>
@@ -1328,7 +1328,7 @@ function AgentTracePanel(props: {
           <ClipboardList size={17} />
           <h3>Agent Timeline</h3>
         </div>
-        <div className="compact-list">
+        <div className="compact-list agent-timeline-list">
           <div className="compact-row trace-row tone-warning">
             <strong>Trace unavailable</strong>
             <span>Run result is available, but replay data could not be loaded.</span>

@@ -1619,7 +1619,7 @@ button:disabled {
   gap: 10px;
 }
 
-.trace-summary-row {
+.agent-trace-section .trace-summary-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1631,47 +1631,47 @@ button:disabled {
   background: #fbfdfd;
 }
 
-.trace-summary-row strong {
+.agent-trace-section .trace-summary-row strong {
   color: #213235;
   font-size: 12px;
   text-transform: uppercase;
 }
 
-.trace-summary-row span {
+.agent-trace-section .trace-summary-row span {
   color: #657477;
   font-size: 12px;
   font-weight: 700;
 }
 
-.permission-title {
+.agent-trace-section .permission-title {
   margin-top: 4px;
 }
 
-.trace-row,
-.permission-row {
+.agent-trace-section .trace-row,
+.agent-trace-section .permission-row {
   border: 1px solid #d8e4e6;
 }
 
-.trace-row.tone-success,
-.permission-row.outcome-allow {
+.agent-trace-section .trace-row.tone-success,
+.agent-trace-section .permission-row.outcome-allow {
   border-color: #bee1cd;
   background: #f0faf4;
 }
 
-.trace-row.tone-warning,
-.permission-row.outcome-ask {
+.agent-trace-section .trace-row.tone-warning,
+.agent-trace-section .permission-row.outcome-ask {
   border-color: #efd69c;
   background: #fff8e8;
 }
 
-.trace-row.tone-danger,
-.permission-row.outcome-deny {
+.agent-trace-section .trace-row.tone-danger,
+.agent-trace-section .permission-row.outcome-deny {
   border-color: #e8c6ce;
   background: #fff1f3;
 }
 
-.trace-row em,
-.permission-row em {
+.agent-trace-section .trace-row em,
+.agent-trace-section .permission-row em {
   margin-left: auto;
   border-radius: 999px;
   padding: 2px 7px;
@@ -1681,17 +1681,17 @@ button:disabled {
   font-size: 11px;
 }
 
-.permission-row.outcome-deny em {
+.agent-trace-section .permission-row.outcome-deny em {
   color: #a23a4f;
   background: #ffe8ed;
 }
 
-.permission-row.outcome-ask em {
+.agent-trace-section .permission-row.outcome-ask em {
   color: #986315;
   background: #fff3d7;
 }
 
-.permission-row small {
+.agent-trace-section .permission-row small {
   display: block;
   margin-top: 5px;
   color: #657477;
