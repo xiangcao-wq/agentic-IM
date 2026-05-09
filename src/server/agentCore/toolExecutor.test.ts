@@ -105,6 +105,8 @@ describe('agent core tool executor', () => {
     const agent = state.agents.find((candidate) => candidate.id === 'agent-lin');
     const file = state.files.find((candidate) => candidate.id === 'file-slides-v3');
     if (!agent || !file) throw new Error('missing test data');
+    const owner = state.users.find((candidate) => candidate.id === agent.ownerId);
+    if (!owner) throw new Error('missing test owner');
 
     const result = executeCoreTool(state, {
       toolName: 'file.share',
@@ -122,7 +124,8 @@ describe('agent core tool executor', () => {
         }
       }
     });
-    const data = result.data as { file?: { id: string }; message?: { fileId?: string } } | undefined;
+    const data =
+      result.data as { file?: { id: string }; message?: { body?: string; fileId?: string } } | undefined;
 
     expect(result.status).toBe('ok');
     expect(result.permissionDecision).toMatchObject({
@@ -140,6 +143,8 @@ describe('agent core tool executor', () => {
     expect(result.risk?.model).toBe('policy-engine-v1');
     expect(data?.file?.id).toBe('file-slides-v3');
     expect(data?.message?.fileId).toBe('file-slides-v3');
+    expect(data?.message?.body).toContain(owner.name);
+    expect(data?.message?.body).not.toContain('?{');
     expect(result.toolCalls).toContain('tool_executor.file.share');
     expect(result.toolCalls).toContain('matrix.send_event');
     expect(result.evidenceIds).toEqual(['room-team', 'user-chen', 'file-slides-v3']);
