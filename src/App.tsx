@@ -140,6 +140,25 @@ function App() {
     }
   }
 
+  function loadAgentTraceForRun(sequence: number, traceRunId: string) {
+    if (agentRunSequenceRef.current === sequence) {
+      setAgentTraceStatus('loading');
+    }
+    void getAgentTrace(apiBaseUrl, traceRunId)
+      .then((trace) => {
+        if (agentRunSequenceRef.current === sequence) {
+          setAgentTrace(trace);
+          setAgentTraceStatus('ready');
+        }
+      })
+      .catch(() => {
+        if (agentRunSequenceRef.current === sequence) {
+          setAgentTrace(null);
+          setAgentTraceStatus('unavailable');
+        }
+      });
+  }
+
   useEffect(() => {
     let disposed = false;
     refreshState()
@@ -295,14 +314,7 @@ function App() {
         setAgentResult({ kind: 'agent-run', value: response });
       }
       if (response.runId) {
-        if (agentRunSequenceRef.current === runId) {
-          setAgentTraceStatus('loading');
-        }
-        const trace = await getAgentTrace(apiBaseUrl, response.runId).catch(() => null);
-        if (agentRunSequenceRef.current === runId) {
-          setAgentTrace(trace);
-          setAgentTraceStatus(trace ? 'ready' : 'unavailable');
-        }
+        loadAgentTraceForRun(runId, response.runId);
       }
       await refreshState();
       return response;

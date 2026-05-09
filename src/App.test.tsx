@@ -1009,6 +1009,174 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('trace not found');
   });
 
+  it('does not keep the Agent action busy or block refresh while trace replay is loading', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-slow-trace',
+      result: {
+        reply: 'Primary answer rendered.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockReturnValue(new Promise(() => undefined));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Will trace block?');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.fetchState).toHaveBeenCalledTimes(2);
+    expect(sendButton!.disabled).toBe(false);
+    expect(host.querySelector('.agent-busy-panel')).toBeNull();
+    expect(host.textContent).toContain('Primary answer rendered.');
+    expect(host.textContent).toContain('Loading trace');
+  });
+
+  it('does not fetch trace replay when the Agent result has no run id', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.getAgentTrace.mockClear();
+
+    const summaryButton = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')].find((button) =>
+      button.textContent?.includes('总结群聊')
+    );
+    expect(summaryButton).toBeTruthy();
+    await act(async () => {
+      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
+  });
+
+  it('keeps stale trace replay responses from overwriting a newer Agent run', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    let resolveFirstTrace!: (trace: AgentTrace) => void;
+    let resolveSecondTrace!: (trace: AgentTrace) => void;
+    apiMocks.runAgent
+      .mockResolvedValueOnce(createAgentRunResult({
+        runId: 'first-run',
+        result: {
+          reply: 'First run answer.'
+        }
+      }))
+      .mockResolvedValueOnce(createAgentRunResult({
+        runId: 'second-run',
+        result: {
+          reply: 'Second run answer.'
+        }
+      }));
+    apiMocks.getAgentTrace
+      .mockReturnValueOnce(new Promise<AgentTrace>((resolve) => {
+        resolveFirstTrace = resolve;
+      }))
+      .mockReturnValueOnce(new Promise<AgentTrace>((resolve) => {
+        resolveSecondTrace = resolve;
+      }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+
+    await act(async () => {
+      setInputValue(prompt!, 'first run');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      setInputValue(prompt!, 'second run');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveSecondTrace(createAgentTrace({
+        runId: 'second-run',
+        toolName: 'second.tool',
+        permissionReason: 'Second trace reason'
+      }));
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('Second trace reason');
+    expect(host.textContent).toContain('second.tool');
+
+    await act(async () => {
+      resolveFirstTrace(createAgentTrace({
+        runId: 'first-run',
+        toolName: 'first.tool',
+        permissionReason: 'First stale trace reason'
+      }));
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Second trace reason');
+    expect(host.textContent).toContain('second.tool');
+    expect(host.textContent).not.toContain('First stale trace reason');
+    expect(host.textContent).not.toContain('first.tool');
+  });
+
+  it('refreshes state after trace replay rejection', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-rejected-trace',
+      result: {
+        reply: 'Refresh still happens.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockRejectedValueOnce(new Error('trace not found'));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Reject trace');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiMocks.fetchState).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toContain('Refresh still happens.');
+    expect(host.textContent).toContain('Trace unavailable');
+  });
+
   it('submits the Agent input as free chat and renders the chat reply', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
@@ -1150,12 +1318,19 @@ function createAgentRunResult(overrides: Partial<AgentRunResult> = {}): AgentRun
   };
 }
 
-function createAgentTrace(): AgentTrace {
+function createAgentTrace(overrides: {
+  runId?: string;
+  toolName?: string;
+  permissionReason?: string;
+} = {}): AgentTrace {
   const createdAt = '2026-05-04T08:03:00.000Z';
+  const runId = overrides.runId ?? 'agent-run-ui';
+  const toolName = overrides.toolName ?? 'message.send';
+  const permissionReason = overrides.permissionReason ?? 'Allowed by room policy';
   const baseEvent = {
     tenantId: 'tenant-ui',
     sessionId: 'agent-session-ui',
-    runId: 'agent-run-ui',
+    runId,
     agentId: 'agent-lin',
     roomId: 'room-team',
     visibility: 'audit' as const,
@@ -1164,7 +1339,7 @@ function createAgentTrace(): AgentTrace {
   };
 
   return {
-    runId: 'agent-run-ui',
+    runId,
     sessionId: 'agent-session-ui',
     tenantId: 'tenant-ui',
     agentId: 'agent-lin',
@@ -1173,7 +1348,7 @@ function createAgentTrace(): AgentTrace {
     startedAt: createdAt,
     finishedAt: '2026-05-04T08:03:05.000Z',
     phases: ['created', 'tool', 'permission', 'completed'],
-    toolCalls: ['message.send'],
+    toolCalls: [toolName],
     eventCount: 5,
     events: [
       {
@@ -1195,10 +1370,10 @@ function createAgentTrace(): AgentTrace {
         type: 'agent.tool.requested',
         label: 'Tool requested',
         detail: 'Preparing to send a message',
-        toolCalls: ['message.send'],
+        toolCalls: [toolName],
         payload: {
           invocationId: 'invoke-message-send',
-          toolName: 'message.send',
+          toolName,
           requiredPermissions: ['message:send']
         }
       },
@@ -1209,14 +1384,14 @@ function createAgentTrace(): AgentTrace {
         cursor: 'seq:3',
         type: 'agent.permission.allowed',
         label: 'Permission allowed',
-        detail: 'Policy allowed message send',
-        toolCalls: ['message.send'],
+        detail: permissionReason,
+        toolCalls: [toolName],
         payload: {
           invocationId: 'invoke-message-send',
-          toolName: 'message.send',
+          toolName,
           requiredPermissions: ['message:send'],
           requiresHuman: false,
-          reasons: ['Allowed by room policy']
+          reasons: [permissionReason]
         }
       },
       {
@@ -1226,11 +1401,11 @@ function createAgentTrace(): AgentTrace {
         cursor: 'seq:4',
         type: 'agent.tool.completed',
         label: 'Tool completed',
-        detail: 'message.send completed',
-        toolCalls: ['message.send'],
+        detail: `${toolName} completed`,
+        toolCalls: [toolName],
         payload: {
           invocationId: 'invoke-message-send',
-          toolName: 'message.send',
+          toolName,
           status: 'completed'
         }
       },
@@ -1242,7 +1417,7 @@ function createAgentTrace(): AgentTrace {
         type: 'agent.run.completed',
         label: 'Run completed',
         detail: 'Agent run completed',
-        toolCalls: ['message.send'],
+        toolCalls: [toolName],
         payload: {
           status: 'completed'
         }
