@@ -27,6 +27,7 @@ import {
   createStateEventSource,
   downloadFile,
   fetchState,
+  getAgentTrace,
   getAutopilotWorkerStatus,
   humanReply,
   runAgent,
@@ -42,6 +43,7 @@ import type {
   AgentActionLog,
   AgentActionRequest,
   AgentProgressEvent,
+  AgentTrace,
   AgentRunIntent,
   AgentRunRequest,
   AgentRunResult,
@@ -63,6 +65,12 @@ import type {
   WebSearchAnswer
 } from './domain/types';
 import { sortMessagesChronologically } from './domain/messages';
+import {
+  buildAgentTimelineItems,
+  buildPermissionCenterItems,
+  type AgentTimelineItem,
+  type PermissionCenterItem
+} from './client/agentTimeline';
 
 type AgentResult =
   | { kind: 'summary'; value: RoomSummary }
@@ -76,6 +84,7 @@ type AgentResult =
 type RoomFilter = 'all' | 'group' | 'direct';
 type EventStreamStatus = 'connecting' | 'connected' | 'disconnected';
 type RoomContentTab = 'chat' | 'tasks' | 'files' | 'calendar' | 'members';
+type AgentTraceLoadStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
 const apiBaseUrl = import.meta.env.VITE_AGENT_API_BASE ?? '';
 const currentUserId = 'user-lin';
@@ -100,6 +109,8 @@ function App() {
   const [roomSearch, setRoomSearch] = useState('');
   const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
+  const [agentTrace, setAgentTrace] = useState<AgentTrace | null>(null);
+  const [agentTraceStatus, setAgentTraceStatus] = useState<AgentTraceLoadStatus>('idle');
   const [agentProgressEvents, setAgentProgressEvents] = useState<AgentProgressEvent[]>([]);
   const [composer, setComposer] = useState('');
   const [agentPrompt, setAgentPrompt] = useState('这次作业什么时候截止？');
@@ -275,11 +286,23 @@ function App() {
     agentRunSequenceRef.current = runId;
     setBusyAction(label);
     setError(null);
+    setAgentTrace(null);
+    setAgentTraceStatus('idle');
     eventStreamErrorVisibleRef.current = false;
     try {
       const response = await runAgent(apiBaseUrl, request);
       if (agentRunSequenceRef.current === runId) {
         setAgentResult({ kind: 'agent-run', value: response });
+      }
+      if (response.runId) {
+        if (agentRunSequenceRef.current === runId) {
+          setAgentTraceStatus('loading');
+        }
+        const trace = await getAgentTrace(apiBaseUrl, response.runId).catch(() => null);
+        if (agentRunSequenceRef.current === runId) {
+          setAgentTrace(trace);
+          setAgentTraceStatus(trace ? 'ready' : 'unavailable');
+        }
       }
       await refreshState();
       return response;
@@ -516,6 +539,8 @@ function App() {
           error={error}
           busyAction={busyAction}
           result={agentResult}
+          trace={agentTrace}
+          traceStatus={agentTraceStatus}
           aiStatus={state.aiStatus}
           actions={state.actionRequests}
           a2aSessions={state.a2aSessions}
@@ -1046,6 +1071,8 @@ function AgentWorkbench(props: {
   error: string | null;
   busyAction: string | null;
   result: AgentResult | null;
+  trace: AgentTrace | null;
+  traceStatus: AgentTraceLoadStatus;
   aiStatus?: AiRuntimeStatus;
   actions: AgentActionRequest[];
   a2aSessions: DemoState['a2aSessions'];
@@ -1075,6 +1102,8 @@ function AgentWorkbench(props: {
   );
   const aiStatus = deriveAiStatus(props.result, props.aiStatus);
   const resultKey = props.result ? getAgentResultKey(props.result) : 'empty-agent-result';
+  const timelineItems = useMemo(() => buildAgentTimelineItems(props.trace), [props.trace]);
+  const permissionItems = useMemo(() => buildPermissionCenterItems(props.trace), [props.trace]);
   const roomA2ASessions = props.a2aSessions
     .filter(
       (session) =>
@@ -1119,6 +1148,15 @@ function AgentWorkbench(props: {
             <motion.div className="agent-output-placeholder" key="empty-agent-result" aria-hidden="true" />
           )}
         </AnimatePresence>
+
+        {props.result?.kind === 'agent-run' && (props.trace || props.traceStatus !== 'idle') ? (
+          <AgentTracePanel
+            trace={props.trace}
+            traceStatus={props.traceStatus}
+            timelineItems={timelineItems}
+            permissionItems={permissionItems}
+          />
+        ) : null}
 
         {pendingActions.length > 0 ? (
           <section className="data-section confirmation-section">
@@ -1245,6 +1283,112 @@ function AgentWorkbench(props: {
         </div>
       </div>
     </aside>
+  );
+}
+
+function AgentTracePanel(props: {
+  trace: AgentTrace | null;
+  traceStatus: AgentTraceLoadStatus;
+  timelineItems: AgentTimelineItem[];
+  permissionItems: PermissionCenterItem[];
+}) {
+  if (props.traceStatus === 'loading') {
+    return (
+      <section className="data-section trace-section" data-testid="agent-trace-panel">
+        <div className="section-title">
+          <ClipboardList size={17} />
+          <h3>Agent Timeline</h3>
+        </div>
+        <div className="compact-list">
+          <div className="compact-row trace-row tone-neutral">
+            <strong>Loading trace</strong>
+            <span>Waiting for replay data</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (props.traceStatus === 'unavailable') {
+    return (
+      <section className="data-section trace-section" data-testid="agent-trace-panel">
+        <div className="section-title">
+          <ClipboardList size={17} />
+          <h3>Agent Timeline</h3>
+        </div>
+        <div className="compact-list">
+          <div className="compact-row trace-row tone-warning">
+            <strong>Trace unavailable</strong>
+            <span>Run result is available, but replay data could not be loaded.</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!props.trace) {
+    return null;
+  }
+
+  return (
+    <section className="data-section trace-section" data-testid="agent-trace-panel">
+      <div className="section-title">
+        <ClipboardList size={17} />
+        <h3>Agent Timeline</h3>
+      </div>
+      <div className="compact-list">
+        <div className="compact-row trace-row tone-neutral">
+          <strong>{props.trace.status}</strong>
+          <span>
+            {props.trace.eventCount} events
+            {props.trace.toolCalls.length > 0 ? ` | ${props.trace.toolCalls.join(', ')}` : ''}
+          </span>
+        </div>
+        {props.timelineItems.slice(-8).map((item) => (
+          <div className={`compact-row trace-row tone-${item.tone}`} key={item.id}>
+            <strong>
+              <span>{item.title}</span>
+              {item.riskLevel ? <em>{item.riskLevel}</em> : null}
+            </strong>
+            <span>
+              {item.detail}
+              {item.toolName ? ` | ${item.toolName}` : ''}
+            </span>
+            <small>{formatTime(item.timestamp)}</small>
+          </div>
+        ))}
+      </div>
+
+      <div className="section-title">
+        <ShieldCheck size={17} />
+        <h3>Permission Center</h3>
+      </div>
+      <div className="compact-list">
+        {props.permissionItems.length > 0 ? (
+          props.permissionItems.map((item) => (
+            <div className={`compact-row permission-row outcome-${item.outcome}`} key={item.id}>
+              <strong>
+                <span>{item.label}</span>
+                {item.riskLevel ? <em>{item.riskLevel}</em> : null}
+              </strong>
+              <span>
+                {item.toolName}
+                {item.requiredPermissions.length > 0 ? ` | ${item.requiredPermissions.join(', ')}` : ''}
+                {item.requiresHuman ? ' | human review' : ' | policy auto'}
+              </span>
+              <small>
+                {formatTime(item.timestamp)}
+                {item.reason ? ` | ${item.reason}` : ''}
+              </small>
+            </div>
+          ))
+        ) : (
+          <div className="compact-row permission-row outcome-allow">
+            <strong>No permission decision</strong>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createDemoState } from './domain/demoState';
-import type { AgentRunResult } from './domain/types';
+import type { AgentRunResult, AgentTrace } from './domain/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   createStateEventSource: vi.fn(),
   downloadFile: vi.fn(),
   fetchState: vi.fn(),
+  getAgentTrace: vi.fn(),
   getAutopilotWorkerStatus: vi.fn(),
   generateDemoAssets: vi.fn(),
   humanReply: vi.fn(),
@@ -44,6 +45,7 @@ describe('App runtime upgrade controls', () => {
     eventListeners = {};
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.getAgentTrace.mockResolvedValue(createAgentTrace());
     apiMocks.getAutopilotWorkerStatus.mockResolvedValue({ worker: createAutopilotWorkerStatus() });
     apiMocks.runAutopilotWorkerOnce.mockResolvedValue({
       worker: createAutopilotWorkerStatus({ runCount: 1 }),
@@ -925,6 +927,88 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('msg-02');
   });
 
+  it('fetches trace replay after an Agent run and renders audit timeline data', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    const baseResult = createAgentRunResult();
+    apiMocks.runAgent.mockResolvedValue({
+      ...baseResult,
+      runId: 'agent-run-ui',
+      sessionId: 'agent-session-ui',
+      eventCursor: 'seq:5',
+      intent: 'send_message',
+      result: {
+        status: 'executed',
+        targetRoomId: 'room-team',
+        messageBody: 'Trace replay message',
+        risk: baseResult.log.risk
+      },
+      log: {
+        ...baseResult.log,
+        toolCalls: ['message.send']
+      }
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'send message Trace replay message');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).toHaveBeenCalledWith('', 'agent-run-ui');
+    expect(host.querySelector('[data-testid="agent-trace-panel"]')).toBeTruthy();
+    expect(host.textContent).toContain('Agent Timeline');
+    expect(host.textContent).toContain('Permission Center');
+    expect(host.textContent).toContain('Tool requested');
+    expect(host.textContent).toContain('Permission allowed');
+    expect(host.textContent).toContain('message.send');
+    expect(host.textContent).toContain('message:send');
+  });
+
+  it('keeps the Agent result visible when trace replay is unavailable', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-missing-trace',
+      result: {
+        reply: 'The answer still renders.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockRejectedValueOnce(new Error('trace not found'));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    expect(prompt).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'What still renders?');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('The answer still renders.');
+    expect(host.textContent).toContain('Trace unavailable');
+    expect(host.textContent).not.toContain('trace not found');
+  });
+
   it('submits the Agent input as free chat and renders the chat reply', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
@@ -1063,6 +1147,107 @@ function createAgentRunResult(overrides: Partial<AgentRunResult> = {}): AgentRun
       ...base.log,
       ...overrides.log
     }
+  };
+}
+
+function createAgentTrace(): AgentTrace {
+  const createdAt = '2026-05-04T08:03:00.000Z';
+  const baseEvent = {
+    tenantId: 'tenant-ui',
+    sessionId: 'agent-session-ui',
+    runId: 'agent-run-ui',
+    agentId: 'agent-lin',
+    roomId: 'room-team',
+    visibility: 'audit' as const,
+    riskLevel: 'low' as const,
+    createdAt
+  };
+
+  return {
+    runId: 'agent-run-ui',
+    sessionId: 'agent-session-ui',
+    tenantId: 'tenant-ui',
+    agentId: 'agent-lin',
+    roomId: 'room-team',
+    status: 'completed',
+    startedAt: createdAt,
+    finishedAt: '2026-05-04T08:03:05.000Z',
+    phases: ['created', 'tool', 'permission', 'completed'],
+    toolCalls: ['message.send'],
+    eventCount: 5,
+    events: [
+      {
+        ...baseEvent,
+        id: 'trace-event-1',
+        sequence: 1,
+        cursor: 'seq:1',
+        type: 'agent.run.created',
+        label: 'Run created',
+        detail: 'Agent run accepted',
+        toolCalls: [],
+        payload: {}
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-2',
+        sequence: 2,
+        cursor: 'seq:2',
+        type: 'agent.tool.requested',
+        label: 'Tool requested',
+        detail: 'Preparing to send a message',
+        toolCalls: ['message.send'],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName: 'message.send',
+          requiredPermissions: ['message:send']
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-3',
+        sequence: 3,
+        cursor: 'seq:3',
+        type: 'agent.permission.allowed',
+        label: 'Permission allowed',
+        detail: 'Policy allowed message send',
+        toolCalls: ['message.send'],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName: 'message.send',
+          requiredPermissions: ['message:send'],
+          requiresHuman: false,
+          reasons: ['Allowed by room policy']
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-4',
+        sequence: 4,
+        cursor: 'seq:4',
+        type: 'agent.tool.completed',
+        label: 'Tool completed',
+        detail: 'message.send completed',
+        toolCalls: ['message.send'],
+        payload: {
+          invocationId: 'invoke-message-send',
+          toolName: 'message.send',
+          status: 'completed'
+        }
+      },
+      {
+        ...baseEvent,
+        id: 'trace-event-5',
+        sequence: 5,
+        cursor: 'seq:5',
+        type: 'agent.run.completed',
+        label: 'Run completed',
+        detail: 'Agent run completed',
+        toolCalls: ['message.send'],
+        payload: {
+          status: 'completed'
+        }
+      }
+    ]
   };
 }
 
