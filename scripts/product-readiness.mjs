@@ -16,10 +16,11 @@ Default checks:
   npm run eval:agent
   npm run eval:agent:real
   npm run smoke:browser
+  GET /api/readiness auth boundary
   GET /api/readiness
   npm run infra:smoke
 
---local-demo skips eval:agent:real and infra:smoke, but still runs browser smoke and /api/readiness.
+--local-demo skips eval:agent:real, the auth boundary check, and infra:smoke, but still runs browser smoke and /api/readiness.
 `);
   process.exit(0);
 }
