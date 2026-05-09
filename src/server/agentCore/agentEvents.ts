@@ -2,19 +2,22 @@ import type { AgentToolInvocationSnapshot, RiskLevel } from '../../domain/types'
 
 export type AgentEventVisibility = 'user' | 'internal' | 'audit';
 
-export type AgentEventType =
-  | 'agent.run.created'
-  | 'agent.run.started'
-  | 'agent.progress'
-  | 'agent.tool.requested'
-  | 'agent.permission.allowed'
-  | 'agent.permission.denied'
-  | 'agent.permission.requested'
-  | 'agent.tool.completed'
-  | 'agent.tool.failed'
-  | 'agent.run.completed'
-  | 'agent.run.failed'
-  | 'agent.run.cancelled';
+export const AGENT_EVENT_TYPES = [
+  'agent.run.created',
+  'agent.run.started',
+  'agent.progress',
+  'agent.tool.requested',
+  'agent.permission.allowed',
+  'agent.permission.denied',
+  'agent.permission.requested',
+  'agent.tool.completed',
+  'agent.tool.failed',
+  'agent.run.completed',
+  'agent.run.failed',
+  'agent.run.cancelled'
+] as const;
+
+export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 
 export type AgentEventPayload = Record<string, unknown>;
 export type AgentRunEventType =

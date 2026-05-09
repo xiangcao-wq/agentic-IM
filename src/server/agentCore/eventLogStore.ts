@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { access, appendFile, mkdir, open, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { AgentEvent, AgentEventDraft } from './agentEvents';
-import { createAgentEventId, encodeEventCursor, parseEventCursor } from './agentEvents';
+import { AGENT_EVENT_TYPES, createAgentEventId, encodeEventCursor, parseEventCursor } from './agentEvents';
 
 export interface AgentEventPage {
   events: AgentEvent[];
@@ -33,15 +33,7 @@ export interface AgentEventStore {
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
-const AGENT_EVENT_TYPES = new Set([
-  'agent.run.created',
-  'agent.run.started',
-  'agent.progress',
-  'agent.run.completed',
-  'agent.run.failed',
-  'agent.run.cancelled'
-]);
-
+const AGENT_EVENT_TYPE_SET = new Set<string>(AGENT_EVENT_TYPES);
 const AGENT_EVENT_VISIBILITIES = new Set(['user', 'internal', 'audit']);
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 
@@ -289,7 +281,7 @@ function isAgentEvent(value: unknown): value is AgentEvent {
 }
 
 function isKnownEventType(value: unknown): boolean {
-  return isString(value) && AGENT_EVENT_TYPES.has(value);
+  return isString(value) && AGENT_EVENT_TYPE_SET.has(value);
 }
 
 function isKnownVisibility(value: unknown): boolean {

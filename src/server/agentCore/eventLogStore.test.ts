@@ -3,9 +3,11 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { AgentToolInvocationSnapshot } from '../../domain/types';
 import type { AgentEvent, AgentEventDraft } from './agentEvents';
 import { createAgentEventId, createRunEventDraft, encodeEventCursor } from './agentEvents';
 import { JsonlAgentEventStore, MemoryAgentEventStore } from './eventLogStore';
+import { toolInvocationToEventDrafts } from './toolEventAdapter';
 
 function draft(
   runId: string,
@@ -86,6 +88,62 @@ describe('MemoryAgentEventStore', () => {
 });
 
 describe('JsonlAgentEventStore', () => {
+  it('replays adapter-created tool and permission events from jsonl', async () => {
+    const path = await tempEventPath();
+    const store = new JsonlAgentEventStore(path);
+    await store.init();
+    const invocation: AgentToolInvocationSnapshot = {
+      id: 'tool-invocation-jsonl',
+      toolName: 'message.send',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['message:send'],
+      requiresHuman: false,
+      risk: {
+        level: 'low',
+        score: 0.1,
+        reason: 'allowed',
+        model: 'test-policy'
+      },
+      reviewerIds: [],
+      reasons: ['allowed'],
+      evidenceIds: ['room-team'],
+      inputSummary: { targetRoomId: 'room-team' },
+      outputSummary: { messageId: 'msg-1' },
+      createdAt: '2026-05-09T00:00:00.000Z'
+    };
+
+    await store.appendMany(
+      toolInvocationToEventDrafts(
+        {
+          tenantId: 'local',
+          sessionId: 'session-jsonl-tool-events',
+          runId: 'run-jsonl-tool-events'
+        },
+        invocation
+      )
+    );
+    const reloaded = new JsonlAgentEventStore(path);
+    await reloaded.init();
+
+    const page = await reloaded.list({ runId: 'run-jsonl-tool-events' });
+    const health = await reloaded.health();
+
+    expect(page.events.map((event) => event.type)).toEqual([
+      'agent.tool.requested',
+      'agent.permission.allowed',
+      'agent.tool.completed'
+    ]);
+    expect(page.events.map((event) => event.payload.eventKind)).toEqual([
+      'agent.tool.requested',
+      'agent.permission.allowed',
+      'agent.tool.completed'
+    ]);
+    expect(health.valid).toBe(true);
+  });
+
   it('persists events to jsonl and reloads them', async () => {
     const path = await tempEventPath();
     const store = new JsonlAgentEventStore(path);
