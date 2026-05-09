@@ -96,6 +96,54 @@ describe('agent event helpers', () => {
     expect(draft.payload.riskLevel).toBe('low');
   });
 
+  it('preserves tool invocation snapshots on progress event payloads', () => {
+    const invocation = {
+      id: 'tool-invocation-progress',
+      toolName: 'message.send' as const,
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed' as const,
+      permissionOutcome: 'allow' as const,
+      requiredPermissions: ['message:send'],
+      requiresHuman: false,
+      reviewerIds: [],
+      reasons: ['allowed'],
+      evidenceIds: ['room-team'],
+      inputSummary: { targetRoomId: 'room-team' },
+      outputSummary: { messageId: 'msg-1' },
+      createdAt: '2026-05-09T00:00:00.000Z'
+    };
+
+    const draft = agentProgressToEventDraft(
+      {
+        tenantId: 'local',
+        sessionId: 'session-1',
+        runId: 'run-1'
+      },
+      {
+        runId: 'run-1',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        phase: 'executing',
+        label: 'Audit tool',
+        toolCalls: ['message.send'],
+        toolInvocations: [invocation]
+      }
+    );
+
+    invocation.requiredPermissions.push('mutated:permission');
+    invocation.inputSummary.targetRoomId = 'mutated-room';
+
+    expect(draft.payload.toolInvocations).toEqual([
+      expect.objectContaining({
+        id: 'tool-invocation-progress',
+        toolName: 'message.send',
+        requiredPermissions: ['message:send'],
+        inputSummary: { targetRoomId: 'room-team' }
+      })
+    ]);
+  });
+
   it('rejects legacy progress events for a different run', () => {
     expect(() =>
       agentProgressToEventDraft(

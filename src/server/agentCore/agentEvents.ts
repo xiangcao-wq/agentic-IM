@@ -1,4 +1,4 @@
-import type { RiskLevel } from '../../domain/types';
+import type { AgentToolInvocationSnapshot, RiskLevel } from '../../domain/types';
 
 export type AgentEventVisibility = 'user' | 'internal' | 'audit';
 
@@ -6,12 +6,23 @@ export type AgentEventType =
   | 'agent.run.created'
   | 'agent.run.started'
   | 'agent.progress'
+  | 'agent.tool.requested'
+  | 'agent.permission.allowed'
+  | 'agent.permission.denied'
+  | 'agent.permission.requested'
+  | 'agent.tool.completed'
+  | 'agent.tool.failed'
   | 'agent.run.completed'
   | 'agent.run.failed'
   | 'agent.run.cancelled';
 
 export type AgentEventPayload = Record<string, unknown>;
-export type AgentRunEventType = Exclude<AgentEventType, 'agent.progress'>;
+export type AgentRunEventType =
+  | 'agent.run.created'
+  | 'agent.run.started'
+  | 'agent.run.completed'
+  | 'agent.run.failed'
+  | 'agent.run.cancelled';
 
 export interface AgentEventDraft {
   type: AgentEventType;
@@ -63,6 +74,7 @@ export interface LegacyAgentProgressEvent {
   label: string;
   detail?: string;
   toolCalls?: string[];
+  toolInvocations?: AgentToolInvocationSnapshot[];
   riskLevel?: RiskLevel;
 }
 
@@ -118,6 +130,7 @@ export function agentProgressToEventDraft(
   }
 
   const toolCalls = progress.toolCalls ? [...progress.toolCalls] : [];
+  const toolInvocations = (progress.toolInvocations ?? []).map(cloneToolInvocationSnapshot);
 
   return {
     type: 'agent.progress',
@@ -137,9 +150,88 @@ export function agentProgressToEventDraft(
       label: progress.label,
       detail: progress.detail,
       toolCalls,
+      ...(progress.toolInvocations !== undefined ? { toolInvocations } : {}),
       riskLevel: progress.riskLevel
     }
   };
+}
+
+function cloneToolInvocationSnapshot(snapshot: AgentToolInvocationSnapshot): AgentToolInvocationSnapshot {
+  return {
+    ...snapshot,
+    requiredPermissions: [...snapshot.requiredPermissions],
+    ...(snapshot.risk ? { risk: { ...snapshot.risk } } : {}),
+    reviewerIds: [...snapshot.reviewerIds],
+    reasons: [...snapshot.reasons],
+    evidenceIds: [...snapshot.evidenceIds],
+    inputSummary: cloneJsonRecord(snapshot.inputSummary),
+    outputSummary: cloneJsonRecord(snapshot.outputSummary)
+  };
+}
+
+function cloneJsonRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const value = sanitizeJsonValue(record, new WeakSet());
+  return isPlainRecord(value) ? value : {};
+}
+
+function sanitizeJsonValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+
+  if (seen.has(value)) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    seen.add(value);
+    const sanitized = value.map((item) => {
+      const sanitizedItem = sanitizeJsonValue(item, seen);
+      return sanitizedItem === undefined ? null : sanitizedItem;
+    });
+    seen.delete(value);
+    return sanitized;
+  }
+
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  seen.add(value);
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const sanitizedItem = sanitizeJsonValue(item, seen);
+    if (sanitizedItem !== undefined) {
+      sanitized[key] = sanitizedItem;
+    }
+  }
+  seen.delete(value);
+  return sanitized;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function normalizeSequence(sequence: number): number {
