@@ -236,6 +236,44 @@ describe('real local agent IM server', () => {
     expect(firstPage.events[0].sequence).toBeLessThan(secondPage.events[0].sequence);
   });
 
+  it('replays tool and permission audit events for agent runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send Chen a review request.'
+      })
+    });
+
+    const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
+    const types = replay.events.map((event: { type: string }) => event.type);
+
+    expect(types).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
+    expect(replay.events.find((event: { type: string }) => event.type === 'agent.tool.completed')).toMatchObject({
+      visibility: 'audit',
+      toolCalls: ['message.send'],
+      payload: {
+        toolName: 'message.send',
+        status: 'completed',
+        permissionOutcome: 'allow'
+      }
+    });
+  });
+
   it('returns a trace replay payload for an agent run', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
@@ -259,6 +297,36 @@ describe('real local agent IM server', () => {
     expect(trace.status).toBe('completed');
     expect(trace.events.length).toBeGreaterThanOrEqual(2);
     expect(trace.truncated).toBeUndefined();
+  });
+
+  it('includes tool audit events in trace replay payloads', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        messageBody: 'Please review the latest notes.',
+        userText: 'Send Chen a review request.'
+      })
+    });
+
+    const trace = await requestJson(`${app.url}/api/traces/${result.runId}`);
+
+    expect(trace.status).toBe('completed');
+    expect(trace.toolCalls).toContain('message.send');
+    expect(trace.events.map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
   });
 
   it('returns trace not found for a missing agent run trace', async () => {
