@@ -1,4 +1,4 @@
-import type { RiskAssessment } from '../../domain/types';
+import type { AgentToolInvocationSnapshot, RiskAssessment } from '../../domain/types';
 import type { AgentCoreToolName } from './toolRegistry';
 import type { ToolPermissionDecision } from './permissionBroker';
 
@@ -60,6 +60,27 @@ export function createToolInvocationRecord(input: CreateToolInvocationRecordInpu
     outputSummary: cloneSummary(input.outputSummary),
     error: input.error,
     createdAt: input.createdAt ?? new Date().toISOString()
+  };
+}
+
+export function toolInvocationRecordToSnapshot(record: ToolInvocationRecord): AgentToolInvocationSnapshot {
+  return {
+    id: record.id,
+    toolName: record.toolName,
+    agentId: record.agentId,
+    roomId: record.roomId,
+    status: record.status,
+    permissionOutcome: record.permissionOutcome,
+    requiredPermissions: [...record.requiredPermissions],
+    requiresHuman: record.requiresHuman,
+    risk: record.risk ? { ...record.risk } : undefined,
+    reviewerIds: [...record.reviewerIds],
+    reasons: [...record.reasons],
+    evidenceIds: [...record.evidenceIds],
+    inputSummary: cloneSummary(record.inputSummary),
+    outputSummary: cloneSummary(record.outputSummary),
+    error: record.error,
+    createdAt: record.createdAt
   };
 }
 

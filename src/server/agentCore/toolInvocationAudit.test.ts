@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RiskAssessment } from '../../domain/types';
 import type { ToolPermissionDecision } from './permissionBroker';
-import { createToolInvocationRecord } from './toolInvocationAudit';
+import { createToolInvocationRecord, toolInvocationRecordToSnapshot } from './toolInvocationAudit';
 
 const risk: RiskAssessment = {
   level: 'low',
@@ -49,6 +49,50 @@ describe('tool invocation audit', () => {
       risk,
       evidenceIds: ['room-team', 'msg-1'],
       inputSummary: { targetRoomId: 'room-team' },
+      outputSummary: { messageId: 'msg-1' },
+      createdAt: '2026-05-09T00:00:00.000Z'
+    });
+  });
+
+  it('converts invocation records into transport-safe snapshots', () => {
+    const record = createToolInvocationRecord({
+      id: 'tool-invocation-snapshot',
+      toolName: 'message.send',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed',
+      permission,
+      inputSummary: {
+        targetRoomId: 'room-team',
+        nested: { values: ['initial'] }
+      },
+      outputSummary: { messageId: 'msg-1' },
+      evidenceIds: ['room-team'],
+      createdAt: '2026-05-09T00:00:00.000Z'
+    });
+
+    const snapshot = toolInvocationRecordToSnapshot(record);
+
+    record.requiredPermissions.push('mutated:permission');
+    record.reasons.push('mutated reason');
+    (record.inputSummary.nested as { values: string[] }).values.push('mutated');
+
+    expect(snapshot).toMatchObject({
+      id: 'tool-invocation-snapshot',
+      toolName: 'message.send',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed',
+      permissionOutcome: 'allow',
+      requiredPermissions: ['message:send'],
+      requiresHuman: false,
+      reviewerIds: [],
+      reasons: ['allowed'],
+      evidenceIds: ['room-team'],
+      inputSummary: {
+        targetRoomId: 'room-team',
+        nested: { values: ['initial'] }
+      },
       outputSummary: { messageId: 'msg-1' },
       createdAt: '2026-05-09T00:00:00.000Z'
     });

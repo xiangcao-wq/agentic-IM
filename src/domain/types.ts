@@ -48,6 +48,34 @@ export type AgentToolName =
   | 'agent.coordinate'
   | 'task.suggest_update';
 
+export type AgentToolInvocationStatus =
+  | 'validation_failed'
+  | 'denied'
+  | 'awaiting_permission'
+  | 'completed'
+  | 'failed';
+
+export type AgentPermissionOutcome = 'allow' | 'deny' | 'ask';
+
+export interface AgentToolInvocationSnapshot {
+  id: string;
+  toolName: AgentToolName;
+  agentId: string;
+  roomId: string;
+  status: AgentToolInvocationStatus;
+  permissionOutcome?: AgentPermissionOutcome;
+  requiredPermissions: string[];
+  requiresHuman: boolean;
+  risk?: RiskAssessment;
+  reviewerIds: string[];
+  reasons: string[];
+  evidenceIds: string[];
+  inputSummary: Record<string, unknown>;
+  outputSummary: Record<string, unknown>;
+  error?: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -219,6 +247,7 @@ export interface AgentProgressEvent {
   label: string;
   detail?: string;
   toolCalls: string[];
+  toolInvocations?: AgentToolInvocationSnapshot[];
   riskLevel?: RiskLevel;
   createdAt: string;
 }
