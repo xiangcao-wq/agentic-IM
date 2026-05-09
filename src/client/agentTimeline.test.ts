@@ -202,6 +202,46 @@ describe('agent timeline view models', () => {
       tone: 'danger'
     });
   });
+
+  it('builds timeline detail from nested invocation status', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.tool.failed',
+        payload: {
+          invocation: {
+            toolName: 'web.search',
+            status: 'failed'
+          }
+        }
+      })
+    ]);
+
+    expect(buildAgentTimelineItems(trace)[0]).toMatchObject({
+      title: 'Tool failed',
+      detail: 'failed',
+      toolName: 'web.search'
+    });
+  });
+
+  it('builds timeline detail from nested invocation permission outcome', () => {
+    const trace = traceWith([
+      event(1, {
+        type: 'agent.permission.requested',
+        payload: {
+          invocation: {
+            toolName: 'file.share',
+            permissionOutcome: 'ask'
+          }
+        }
+      })
+    ]);
+
+    expect(buildAgentTimelineItems(trace)[0]).toMatchObject({
+      title: 'Permission needs review',
+      detail: 'ask',
+      toolName: 'file.share'
+    });
+  });
 });
 
 function permissionEvent(
