@@ -35,16 +35,27 @@ export interface PermissionCenterItem {
 }
 
 const SKIPPED_TIMELINE_EVENT_TYPES = new Set<AgentEventType>(['agent.progress']);
+const AGENT_EVENT_TYPES = new Set<AgentEventType>([
+  'agent.run.created',
+  'agent.run.started',
+  'agent.progress',
+  'agent.tool.requested',
+  'agent.permission.allowed',
+  'agent.permission.denied',
+  'agent.permission.requested',
+  'agent.tool.completed',
+  'agent.tool.failed',
+  'agent.run.completed',
+  'agent.run.failed',
+  'agent.run.cancelled'
+]);
 
 export function buildAgentTimelineItems(trace?: AgentTrace | null): AgentTimelineItem[] {
-  if (!trace) {
-    return [];
-  }
-
-  return trace.events
+  return readTraceEvents(trace)
     .filter((event) => !SKIPPED_TIMELINE_EVENT_TYPES.has(event.type))
     .map((event) => {
       const toolName = readToolName(event);
+      const riskLevel = readRiskLevel(event.riskLevel);
 
       return {
         id: event.id,
@@ -54,20 +65,17 @@ export function buildAgentTimelineItems(trace?: AgentTrace | null): AgentTimelin
         timestamp: event.createdAt,
         tone: timelineTone(event.type),
         ...(toolName ? { toolName } : {}),
-        ...(event.riskLevel ? { riskLevel: event.riskLevel } : {})
+        ...(riskLevel ? { riskLevel } : {})
       };
     });
 }
 
 export function buildPermissionCenterItems(trace?: AgentTrace | null): PermissionCenterItem[] {
-  if (!trace) {
-    return [];
-  }
-
-  return trace.events
+  return readTraceEvents(trace)
     .filter(isPermissionEvent)
     .map((event) => {
       const outcome = permissionOutcome(event);
+      const riskLevel = readRiskLevel(event.riskLevel);
       const invocationId = readString(event.payload.invocationId) ?? readInvocationString(event, 'id') ?? event.id;
       const requiredPermissions =
         readStringArray(event.payload.requiredPermissions) ?? readInvocationStringArray(event, 'requiredPermissions') ?? [];
@@ -75,8 +83,8 @@ export function buildPermissionCenterItems(trace?: AgentTrace | null): Permissio
       const reason =
         readStringArray(event.payload.reasons)?.[0] ??
         readInvocationStringArray(event, 'reasons')?.[0] ??
-        event.detail ??
-        event.label ??
+        readString(event.detail) ??
+        readString(event.label) ??
         outcome;
 
       return {
@@ -90,9 +98,40 @@ export function buildPermissionCenterItems(trace?: AgentTrace | null): Permissio
         reviewerIds,
         reason,
         timestamp: event.createdAt,
-        ...(event.riskLevel ? { riskLevel: event.riskLevel } : {})
+        ...(riskLevel ? { riskLevel } : {})
       };
     });
+}
+
+function readTraceEvents(trace?: AgentTrace | null): AgentEvent[] {
+  if (!isRecord(trace) || !Array.isArray(trace.events)) {
+    return [];
+  }
+  return trace.events
+    .map((event) => normalizeAgentEvent(event))
+    .filter((event): event is AgentEvent => Boolean(event));
+}
+
+function normalizeAgentEvent(event: unknown): AgentEvent | undefined {
+  if (!isRecord(event)) {
+    return undefined;
+  }
+
+  const id = readString(event.id);
+  const type = readAgentEventType(event.type);
+  const createdAt = readString(event.createdAt);
+  if (!id || !type || !createdAt) {
+    return undefined;
+  }
+
+  return {
+    ...event,
+    id,
+    type,
+    createdAt,
+    payload: isRecord(event.payload) ? event.payload : {},
+    toolCalls: readStringArray(event.toolCalls) ?? []
+  } as AgentEvent;
 }
 
 function isPermissionEvent(event: AgentEvent): boolean {
@@ -165,11 +204,21 @@ function timelineDetail(event: AgentEvent): string {
   const invocationOutcome = readInvocationString(event, 'permissionOutcome');
   const reason = readStringArray(event.payload.reasons)?.[0];
   const invocationReason = readInvocationStringArray(event, 'reasons')?.[0];
-  return event.detail ?? reason ?? invocationReason ?? status ?? invocationStatus ?? outcome ?? invocationOutcome ?? event.label ?? event.type;
+  return (
+    readString(event.detail) ??
+    reason ??
+    invocationReason ??
+    status ??
+    invocationStatus ??
+    outcome ??
+    invocationOutcome ??
+    readString(event.label) ??
+    event.type
+  );
 }
 
 function readToolName(event: AgentEvent): AgentToolName | string | undefined {
-  return readString(event.payload.toolName) ?? event.toolCalls[0] ?? readInvocationString(event, 'toolName');
+  return readString(event.payload.toolName) ?? readString(event.toolCalls[0]) ?? readInvocationString(event, 'toolName');
 }
 
 function readInvocationRecord(event: AgentEvent): Record<string, unknown> | undefined {
@@ -202,6 +251,14 @@ function readStringArray(value: unknown): string[] | undefined {
     return undefined;
   }
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+function readAgentEventType(value: unknown): AgentEventType | undefined {
+  return typeof value === 'string' && AGENT_EVENT_TYPES.has(value as AgentEventType) ? (value as AgentEventType) : undefined;
+}
+
+function readRiskLevel(value: unknown): RiskLevel | undefined {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

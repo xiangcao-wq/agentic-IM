@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createDemoState } from './domain/demoState';
-import type { AgentRunResult, AgentTrace } from './domain/types';
+import type { AgentEvent, AgentRunResult, AgentTrace } from './domain/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -978,11 +978,116 @@ describe('App runtime upgrade controls', () => {
     expect(host.querySelector('.permission-center-list .permission-row')).toBeTruthy();
   });
 
+  it('marks trace replay as partial when the server truncated it', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-truncated',
+      eventCursor: 'seq:5',
+      result: {
+        reply: 'Trace may be partial.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTrace({
+      runId: 'agent-run-truncated',
+      truncated: true
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Show a truncated trace');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('partial trace');
+  });
+
+  it('shows only the latest eight permission decisions with a compact summary', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-many-permissions',
+      eventCursor: 'seq:12',
+      result: {
+        reply: 'Many permission decisions.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTraceWithPermissionEvents(10));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Show many permissions');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const permissionRows = [...host.querySelectorAll('.permission-center-list .permission-row')];
+    expect(permissionRows).toHaveLength(8);
+    expect(host.textContent).toContain('Showing latest 8 of 10');
+    expect(permissionRows[0]?.textContent).toContain('permission reason 3');
+    expect(permissionRows.some((row) => row.textContent?.includes('permission reason 2'))).toBe(false);
+    expect(host.textContent).toContain('permission reason 10');
+  });
+
+  it('uses a neutral fallback when a trace has no permission decisions', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-no-permissions',
+      eventCursor: 'seq:2',
+      result: {
+        reply: 'No permissions needed.'
+      }
+    }));
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTraceWithoutPermissionEvents());
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'No permission path');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const fallback = host.querySelector('.permission-center-list .permission-row');
+    expect(fallback?.textContent).toContain('No permission decision');
+    expect(fallback?.classList.contains('outcome-neutral')).toBe(true);
+    expect(fallback?.classList.contains('outcome-allow')).toBe(false);
+  });
+
   it('keeps the Agent result visible when trace replay is unavailable', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
     apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
       runId: 'agent-run-missing-trace',
+      eventCursor: 'seq:5',
       result: {
         reply: 'The answer still renders.'
       }
@@ -1016,6 +1121,7 @@ describe('App runtime upgrade controls', () => {
     apiMocks.fetchState.mockResolvedValue(state);
     apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
       runId: 'agent-run-slow-trace',
+      eventCursor: 'seq:5',
       result: {
         reply: 'Primary answer rendered.'
       }
@@ -1068,6 +1174,38 @@ describe('App runtime upgrade controls', () => {
     expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
   });
 
+  it('does not fetch trace replay when the Agent result has a run id but no event cursor', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      runId: 'agent-run-without-cursor',
+      result: {
+        reply: 'Result without persisted events.'
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    apiMocks.getAgentTrace.mockClear();
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Run without event cursor');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Result without persisted events.');
+    expect(host.textContent).not.toContain('Trace unavailable');
+  });
+
   it('keeps stale trace replay responses from overwriting a newer Agent run', async () => {
     const state = createDemoState();
     apiMocks.fetchState.mockResolvedValue(state);
@@ -1076,12 +1214,14 @@ describe('App runtime upgrade controls', () => {
     apiMocks.runAgent
       .mockResolvedValueOnce(createAgentRunResult({
         runId: 'first-run',
+        eventCursor: 'seq:5',
         result: {
           reply: 'First run answer.'
         }
       }))
       .mockResolvedValueOnce(createAgentRunResult({
         runId: 'second-run',
+        eventCursor: 'seq:5',
         result: {
           reply: 'Second run answer.'
         }
@@ -1151,6 +1291,7 @@ describe('App runtime upgrade controls', () => {
     apiMocks.fetchState.mockResolvedValue(state);
     apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
       runId: 'agent-run-rejected-trace',
+      eventCursor: 'seq:5',
       result: {
         reply: 'Refresh still happens.'
       }
@@ -1324,6 +1465,9 @@ function createAgentTrace(overrides: {
   runId?: string;
   toolName?: string;
   permissionReason?: string;
+  truncated?: boolean;
+  events?: AgentEvent[];
+  eventCount?: number;
 } = {}): AgentTrace {
   const createdAt = '2026-05-04T08:03:00.000Z';
   const runId = overrides.runId ?? 'agent-run-ui';
@@ -1351,8 +1495,9 @@ function createAgentTrace(overrides: {
     finishedAt: '2026-05-04T08:03:05.000Z',
     phases: ['created', 'tool', 'permission', 'completed'],
     toolCalls: [toolName],
-    eventCount: 5,
-    events: [
+    eventCount: overrides.eventCount ?? overrides.events?.length ?? 5,
+    ...(overrides.truncated === undefined ? {} : { truncated: overrides.truncated }),
+    events: overrides.events ?? [
       {
         ...baseEvent,
         id: 'trace-event-1',
@@ -1425,6 +1570,58 @@ function createAgentTrace(overrides: {
         }
       }
     ]
+  };
+}
+
+function createAgentTraceWithPermissionEvents(permissionCount: number): AgentTrace {
+  const baseTrace = createAgentTrace();
+  const createdAt = '2026-05-04T08:03:00.000Z';
+  const permissionEvents: AgentEvent[] = Array.from({ length: permissionCount }, (_, index) => {
+    const sequence = index + 1;
+    return {
+      tenantId: 'tenant-ui',
+      sessionId: 'agent-session-ui',
+      runId: 'agent-run-many-permissions',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      visibility: 'audit',
+      riskLevel: sequence % 2 === 0 ? 'medium' : 'low',
+      createdAt: `2026-05-04T08:03:${String(sequence).padStart(2, '0')}.000Z`,
+      id: `permission-event-${sequence}`,
+      sequence,
+      cursor: `seq:${sequence}`,
+      type: sequence % 3 === 0 ? 'agent.permission.requested' : 'agent.permission.allowed',
+      label: `Permission ${sequence}`,
+      detail: `permission reason ${sequence}`,
+      toolCalls: [`tool.${sequence}`],
+      payload: {
+        invocationId: `invoke-${sequence}`,
+        toolName: `tool.${sequence}`,
+        requiredPermissions: [`permission:${sequence}`],
+        requiresHuman: sequence % 3 === 0,
+        reasons: [`permission reason ${sequence}`]
+      }
+    };
+  });
+
+  return {
+    ...baseTrace,
+    runId: 'agent-run-many-permissions',
+    eventCount: permissionEvents.length,
+    startedAt: createdAt,
+    finishedAt: permissionEvents.at(-1)?.createdAt,
+    toolCalls: permissionEvents.flatMap((event) => event.toolCalls),
+    events: permissionEvents
+  };
+}
+
+function createAgentTraceWithoutPermissionEvents(): AgentTrace {
+  const baseTrace = createAgentTrace();
+  const events = baseTrace.events.filter((event) => !event.type.startsWith('agent.permission.'));
+  return {
+    ...baseTrace,
+    eventCount: events.length,
+    events
   };
 }
 

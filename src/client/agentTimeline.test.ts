@@ -104,6 +104,61 @@ describe('agent timeline view models', () => {
     expect(buildPermissionCenterItems(undefined)).toEqual([]);
   });
 
+  it('returns empty arrays when trace events are not an array', () => {
+    const malformedTrace = { ...traceWith([]), events: null } as unknown as AgentTrace;
+
+    expect(buildAgentTimelineItems(malformedTrace)).toEqual([]);
+    expect(buildPermissionCenterItems(malformedTrace)).toEqual([]);
+  });
+
+  it('uses safe defaults when event payload and tool calls are missing', () => {
+    const trace = traceWith([
+      {
+        ...event(1, {
+          type: 'agent.permission.allowed',
+          detail: 'policy allow'
+        }),
+        payload: undefined,
+        toolCalls: undefined
+      } as unknown as AgentEvent
+    ]);
+
+    expect(() => buildAgentTimelineItems(trace)).not.toThrow();
+    expect(() => buildPermissionCenterItems(trace)).not.toThrow();
+    expect(buildAgentTimelineItems(trace)[0]).toMatchObject({
+      title: 'Permission allowed',
+      detail: 'policy allow'
+    });
+    expect(buildPermissionCenterItems(trace)[0]).toMatchObject({
+      invocationId: 'agent-run-ui-event-00000001',
+      toolName: 'unknown.tool',
+      requiredPermissions: [],
+      reviewerIds: []
+    });
+  });
+
+  it('skips malformed events without crashing', () => {
+    const trace = {
+      ...traceWith([]),
+      events: [
+        null,
+        'bad-event',
+        { id: '', type: 'agent.run.created', createdAt: '2026-05-09T00:00:00.000Z' },
+        { id: 'unknown-event', type: 'agent.unknown', createdAt: '2026-05-09T00:00:00.000Z' },
+        event(1, { type: 'agent.run.completed', detail: 'done' })
+      ]
+    } as unknown as AgentTrace;
+
+    expect(() => buildAgentTimelineItems(trace)).not.toThrow();
+    expect(() => buildPermissionCenterItems(trace)).not.toThrow();
+    expect(buildAgentTimelineItems(trace)).toHaveLength(1);
+    expect(buildAgentTimelineItems(trace)[0]).toMatchObject({
+      id: 'agent-run-ui-event-00000001',
+      title: 'Run completed'
+    });
+    expect(buildPermissionCenterItems(trace)).toEqual([]);
+  });
+
   it('uses permission event type over payload outcome', () => {
     const trace = traceWith([
       event(1, {

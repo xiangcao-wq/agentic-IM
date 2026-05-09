@@ -313,7 +313,7 @@ function App() {
       if (agentRunSequenceRef.current === runId) {
         setAgentResult({ kind: 'agent-run', value: response });
       }
-      if (response.runId) {
+      if (response.runId && response.eventCursor) {
         loadAgentTraceForRun(runId, response.runId);
       }
       await refreshState();
@@ -1342,6 +1342,12 @@ function AgentTracePanel(props: {
     return null;
   }
 
+  const traceToolCalls = Array.isArray(props.trace.toolCalls)
+    ? props.trace.toolCalls.filter((toolCall): toolCall is string => typeof toolCall === 'string' && toolCall.length > 0)
+    : [];
+  const eventCount = typeof props.trace.eventCount === 'number' ? props.trace.eventCount : props.timelineItems.length;
+  const visiblePermissionItems = props.permissionItems.slice(-8);
+
   return (
     <section className="data-section agent-trace-section" data-testid="agent-trace-panel">
       <div className="section-title">
@@ -1352,8 +1358,9 @@ function AgentTracePanel(props: {
         <div className="trace-summary-row">
           <strong>{props.trace.status}</strong>
           <span>
-            {props.trace.eventCount} events
-            {props.trace.toolCalls.length > 0 ? ` | ${props.trace.toolCalls.join(', ')}` : ''}
+            {eventCount} events
+            {traceToolCalls.length > 0 ? ` | ${traceToolCalls.join(', ')}` : ''}
+            {props.trace.truncated ? ' | partial trace' : ''}
           </span>
         </div>
         {props.timelineItems.slice(-8).map((item) => (
@@ -1376,8 +1383,11 @@ function AgentTracePanel(props: {
         <h3>Permission Center</h3>
       </div>
       <div className="compact-list permission-center-list">
+        {props.permissionItems.length > visiblePermissionItems.length ? (
+          <div className="trace-list-summary">Showing latest 8 of {props.permissionItems.length}</div>
+        ) : null}
         {props.permissionItems.length > 0 ? (
-          props.permissionItems.map((item) => (
+          visiblePermissionItems.map((item) => (
             <div className={`compact-row permission-row outcome-${item.outcome}`} key={item.id}>
               <strong>
                 <span>{item.label}</span>
@@ -1395,7 +1405,7 @@ function AgentTracePanel(props: {
             </div>
           ))
         ) : (
-          <div className="compact-row permission-row outcome-allow">
+          <div className="compact-row permission-row outcome-neutral">
             <strong>No permission decision</strong>
           </div>
         )}

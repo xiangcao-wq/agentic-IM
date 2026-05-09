@@ -1652,6 +1652,11 @@ button:disabled {
   border: 1px solid #d8e4e6;
 }
 
+.agent-trace-section .permission-row.outcome-neutral {
+  border-color: #d8e4e6;
+  background: #f7fafb;
+}
+
 .agent-trace-section .trace-row.tone-success,
 .agent-trace-section .permission-row.outcome-allow {
   border-color: #bee1cd;
