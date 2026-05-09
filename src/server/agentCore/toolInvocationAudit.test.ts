@@ -98,6 +98,98 @@ describe('tool invocation audit', () => {
     });
   });
 
+  it('sanitizes snapshot summaries into JSON-safe payloads', () => {
+    const circular: Record<string, unknown> = { label: 'cycle' };
+    circular.self = circular;
+
+    const record = createToolInvocationRecord({
+      id: 'tool-invocation-json-safe',
+      toolName: 'message.send',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed',
+      permission,
+      inputSummary: { targetRoomId: 'room-team' },
+      outputSummary: { messageId: 'msg-1' },
+      createdAt: '2026-05-09T00:00:00.000Z'
+    });
+
+    Object.assign(record.inputSummary, {
+      keep: 'value',
+      finiteNumber: 12,
+      nonFiniteNumber: Number.POSITIVE_INFINITY,
+      removeUndefined: undefined,
+      removeFunction: () => 'unsupported',
+      removeSymbol: Symbol('unsupported'),
+      removeBigInt: BigInt(5),
+      removeMap: new Map([['room', 'team']]),
+      removeSet: new Set(['room-team']),
+      nested: {
+        keep: true,
+        removeUndefined: undefined,
+        removeBigInt: BigInt(6),
+        removeMap: new Map([['nested', 'value']]),
+        circular
+      },
+      list: [
+        'ok',
+        undefined,
+        () => 'unsupported',
+        Symbol('unsupported'),
+        BigInt(7),
+        new Map([['array', 'value']]),
+        new Set(['array']),
+        circular,
+        Number.NaN,
+        Number.NEGATIVE_INFINITY
+      ]
+    });
+    record.outputSummary = {
+      result: 'ok',
+      removeBigInt: BigInt(8),
+      removeMap: new Map([['output', 'value']])
+    };
+
+    const snapshot = toolInvocationRecordToSnapshot(record);
+
+    expect(() => JSON.stringify(snapshot)).not.toThrow();
+    expect(snapshot.inputSummary).toEqual({
+      targetRoomId: 'room-team',
+      keep: 'value',
+      finiteNumber: 12,
+      nonFiniteNumber: null,
+      nested: {
+        keep: true,
+        circular: { label: 'cycle' }
+      },
+      list: ['ok', null, null, null, null, null, null, { label: 'cycle' }, null, null]
+    });
+    expect(snapshot.outputSummary).toEqual({ result: 'ok' });
+    expect(Object.prototype.hasOwnProperty.call(snapshot.inputSummary, 'removeUndefined')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(snapshot.inputSummary, 'removeBigInt')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(snapshot.inputSummary, 'removeMap')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(snapshot.inputSummary, 'removeSet')).toBe(false);
+  });
+
+  it('omits absent optional fields from snapshots', () => {
+    const record = createToolInvocationRecord({
+      id: 'tool-invocation-validation-snapshot',
+      toolName: 'message.send',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'validation_failed',
+      inputSummary: { targetRoomId: '' },
+      createdAt: '2026-05-09T00:00:00.000Z'
+    });
+
+    const snapshot = toolInvocationRecordToSnapshot(record);
+
+    expect(snapshot.status).toBe('validation_failed');
+    expect(Object.prototype.hasOwnProperty.call(snapshot, 'permissionOutcome')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(snapshot, 'risk')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(snapshot, 'error')).toBe(false);
+  });
+
   it('creates an awaiting permission record for ask decisions', () => {
     const record = createToolInvocationRecord({
       toolName: 'file.share',

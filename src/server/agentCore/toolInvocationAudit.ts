@@ -70,16 +70,16 @@ export function toolInvocationRecordToSnapshot(record: ToolInvocationRecord): Ag
     agentId: record.agentId,
     roomId: record.roomId,
     status: record.status,
-    permissionOutcome: record.permissionOutcome,
+    ...(record.permissionOutcome !== undefined ? { permissionOutcome: record.permissionOutcome } : {}),
     requiredPermissions: [...record.requiredPermissions],
     requiresHuman: record.requiresHuman,
-    risk: record.risk ? { ...record.risk } : undefined,
+    ...(record.risk ? { risk: { ...record.risk } } : {}),
     reviewerIds: [...record.reviewerIds],
     reasons: [...record.reasons],
     evidenceIds: [...record.evidenceIds],
-    inputSummary: cloneSummary(record.inputSummary),
-    outputSummary: cloneSummary(record.outputSummary),
-    error: record.error,
+    inputSummary: cloneSnapshotSummary(record.inputSummary),
+    outputSummary: cloneSnapshotSummary(record.outputSummary),
+    ...(record.error !== undefined ? { error: record.error } : {}),
     createdAt: record.createdAt
   };
 }
@@ -100,4 +100,65 @@ function cloneSummary(summary?: Record<string, unknown>): Record<string, unknown
 
 function cloneSummaryWithJson(summary: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(summary)) as Record<string, unknown>;
+}
+
+function cloneSnapshotSummary(summary?: Record<string, unknown>): Record<string, unknown> {
+  const value = sanitizeJsonValue(summary ?? {}, new WeakSet());
+  return isPlainRecord(value) ? value : {};
+}
+
+function sanitizeJsonValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+
+  if (seen.has(value)) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    seen.add(value);
+    const sanitized = value.map((item) => {
+      const sanitizedItem = sanitizeJsonValue(item, seen);
+      return sanitizedItem === undefined ? null : sanitizedItem;
+    });
+    seen.delete(value);
+    return sanitized;
+  }
+
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  seen.add(value);
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const sanitizedItem = sanitizeJsonValue(item, seen);
+    if (sanitizedItem !== undefined) {
+      sanitized[key] = sanitizedItem;
+    }
+  }
+  seen.delete(value);
+  return sanitized;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
