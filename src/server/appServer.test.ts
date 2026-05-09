@@ -329,6 +329,62 @@ describe('real local agent IM server', () => {
     );
   });
 
+  it('replays file share tool audit events through run events and traces', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createStateWithMatrixBackedSlides(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const result = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'share_file',
+        targetRoomId: 'room-team',
+        targetUserId: 'user-chen',
+        fileId: 'file-slides-v3',
+        fileVersion: 3,
+        userText: 'Please send Chen the latest slides.'
+      })
+    });
+
+    expect(result.intent).toBe('share_file');
+    expect(result.requiresHuman).toBe(false);
+
+    const replay = await requestJson(`${app.url}/api/agent-runs/${result.runId}/events`);
+    const completed = replay.events.find(
+      (event: { type: string; payload?: { toolName?: string } }) =>
+        event.type === 'agent.tool.completed' && event.payload?.toolName === 'file.share'
+    );
+
+    expect(replay.events.map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
+    expect(completed).toMatchObject({
+      visibility: 'audit',
+      toolCalls: ['file.share'],
+      payload: {
+        toolName: 'file.share',
+        status: 'completed',
+        permissionOutcome: 'allow',
+        outputSummary: {
+          fileId: 'file-slides-v3',
+          roomId: 'room-team'
+        }
+      }
+    });
+
+    const trace = await requestJson(`${app.url}/api/traces/${result.runId}`);
+    expect(trace.status).toBe('completed');
+    expect(trace.toolCalls).toContain('file.share');
+    expect(trace.events.map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining(['agent.tool.requested', 'agent.permission.allowed', 'agent.tool.completed'])
+    );
+  });
+
   it('returns trace not found for a missing agent run trace', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
     tempDirs.push(dir);
