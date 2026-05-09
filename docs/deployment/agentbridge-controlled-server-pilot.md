@@ -303,6 +303,32 @@ npm run readiness:product
 
 Do not use `--local-demo` for the final controlled server pilot signoff.
 
+## Server Inventory Before Upgrade
+
+Before upgrading an existing server, collect a read-only inventory from the current
+release directory. This does not mutate runtime state and redacts token-like values from
+the report.
+
+```bash
+cd /opt/agentbridge/current
+HOST=https://agentbridge.example.com
+npm run inventory:server -- --host "$HOST" --env-file /etc/agentbridge/agentbridge.env --json \
+  > /tmp/agentbridge-server-inventory.json
+```
+
+Review `/tmp/agentbridge-server-inventory.json` before sharing it. The report should
+confirm:
+
+- `git.commit` is the version currently running.
+- `service.activeState` is `active`.
+- `paths.current.realPath` points at the expected release directory.
+- `paths.stateFile` and `paths.eventLog` exist.
+- `env.AGENT_IM_API_TOKEN` and `env.DEEPSEEK_API_KEY` show `redacted: true` and do not reveal values.
+- `readiness.noToken.status` is `401` or `403`.
+- `readiness.queryToken.status` is `401` or `403`.
+- `readiness.authenticated.status` is `200`.
+- `findings` is empty or contains only items you have explicitly accepted for the pilot.
+
 ## Deployment Update Procedure
 
 The current JSON state store means this pilot cannot safely run two write-capable API

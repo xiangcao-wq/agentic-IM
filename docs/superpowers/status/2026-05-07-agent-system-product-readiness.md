@@ -105,3 +105,14 @@ Implemented the first deployment-readiness hardening slice:
 - The runbook explicitly documents that JSON-file storage supports a short controlled API restart window, not true zero-downtime write traffic.
 
 Remaining gap: a real public launch still needs Postgres-backed storage, real user auth, rate limiting, structured log redaction, and CI/CD deployment automation.
+
+## 2026-05-09 Server Inventory Preflight Slice
+
+Implemented the first server-upgrade preflight slice:
+
+- Added `npm run inventory:server` for read-only deployment inventory collection.
+- The inventory script redacts token/key/secret/password/credential values while preserving useful non-secret deployment settings.
+- The report captures git SHA, runtime versions, systemd service state, deployment symlink paths, JSON state file, EventLog file, media directory, and optional readiness HTTP boundary probes.
+- The controlled server pilot runbook now requires collecting and reviewing `/tmp/agentbridge-server-inventory.json` before upgrading an existing server.
+
+Remaining gap: this is still a manual operator preflight. CI/CD automation and centralized monitoring remain future release-engineering slices.
