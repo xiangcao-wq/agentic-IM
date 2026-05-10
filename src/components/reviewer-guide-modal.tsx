@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bot, CheckCircle2, Clock3, FileText, MessageSquare, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Bot, CheckCircle2, Clock3, MessageSquare, Search, ShieldCheck, Users, X } from 'lucide-react';
 
 const guideAppear = {
   initial: { opacity: 0, y: 10 },
@@ -49,9 +49,9 @@ export function ReviewerGuideModal({
           >
             <header className="review-guide-header">
               <div>
-                <span className="review-guide-kicker">团队协作空间</span>
-                <h2 id="review-guide-title">协作空间指南</h2>
-                <p>{`当前网站无需登录。你正在以${currentUserName}视角查看「${roomName}」。成员不在线时，个人助手会在授权范围内处理文件、日程和任务。`}</p>
+                <span className="review-guide-kicker">AgentBridge / A2A 原生聊天</span>
+                <h2 id="review-guide-title">从消息流到 Agent 协作网络</h2>
+                <p>{`AgentBridge 的核心判断是：未来聊天环境里，Agent 数量会多于人类用户。你正在以${currentUserName}视角查看「${roomName}」，每个成员都有自己的聊天分身，在授权范围内连接上下文、工具和决策边界。`}</p>
               </div>
               <button className="review-guide-close" type="button" onClick={onClose} aria-label="关闭协作指南">
                 <X size={18} />
@@ -61,18 +61,18 @@ export function ReviewerGuideModal({
             <div className="review-guide-grid">
               <div className="review-guide-card">
                 <Users size={18} />
-                <strong>成员状态</strong>
-                <span>在线、忙碌、离线和托管状态会显示在会话列表、聊天顶部和成员面板里。</span>
+                <strong>聊天仍是入口</strong>
+                <span>用户继续在群聊里提出真实请求，不需要迁移到复杂项目管理系统。</span>
               </div>
               <div className="review-guide-card">
                 <Bot size={18} />
-                <strong>个人助手</strong>
-                <span>{assistantDisplayName}会在授权边界内帮助处理查询、文件、日程和协商。</span>
+                <strong>A2A 是协作层</strong>
+                <span>{assistantDisplayName}代表 owner 交换约束、证据和提案，不是挂在旁边的问答机器人。</span>
               </div>
               <div className="review-guide-card">
                 <ShieldCheck size={18} />
-                <strong>风险门控</strong>
-                <span>低风险只读动作可以直接执行；文件代发、日程协调等动作会进入人工确认。</span>
+                <strong>风险门控是边界</strong>
+                <span>低风险授权动作可自动执行；日程、任务和私有文件必须确认或阻断。</span>
               </div>
             </div>
 
@@ -80,30 +80,30 @@ export function ReviewerGuideModal({
               <h3>建议体验路径</h3>
               <ol>
                 <li>
+                  <Users size={16} />
+                  <span>先看成员状态：谁在线、谁离线托管，理解这是人类和 Agent 共存的聊天网络。</span>
+                </li>
+                <li>
                   <Clock3 size={16} />
-                  <span>点击输入框左侧「+」，选择「问截止」。</span>
+                  <span>点击输入框左侧「+」，选择「问截止」，体验 Agent 从消息、任务和文件中读上下文。</span>
                 </li>
                 <li>
                   <Search size={16} />
-                  <span>继续选择「Agent 找文件」，用模糊线索匹配授权文件。</span>
-                </li>
-                <li>
-                  <FileText size={16} />
-                  <span>进入「Agent 操作台」，从「+」菜单选择「请求代发」。</span>
+                  <span>直接问：谁负责访谈材料？我今天先做什么？体验聊天分身综合任务和文件。</span>
                 </li>
                 <li>
                   <MessageSquare size={16} />
-                  <span>试着发送：帮我和陈晨商量一下，把合稿检查改到周三 23:00，触发个人助手协商。</span>
+                  <span>试着发送：帮我和陈晨商量一下，把合稿检查改到周三 23:00，触发 A2A 交换约束和提案。</span>
                 </li>
                 <li>
                   <CheckCircle2 size={16} />
-                  <span>在右侧查看 Timeline / Permission / Files，并确认或拒绝高风险动作。</span>
+                  <span>进入 Agent 操作台，查看 Timeline / Permission / Files，并确认或拒绝高风险动作。</span>
                 </li>
               </ol>
             </div>
 
             <footer className="review-guide-footer">
-              <p>核心看点：成员不在线时，个人助手可以推进协作，但文件、日程和任务变更仍然可追踪、可接管。</p>
+              <p>核心看点：这不是内置了 Agent 的 IM，而是面向 A2A 的聊天新范式。人类负责目标和确认，Agent 分身负责查找、对齐、分发、阻断和协商。</p>
               <button className="review-guide-primary" type="button" onClick={onClose}>
                 开始体验
               </button>

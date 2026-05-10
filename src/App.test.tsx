@@ -123,13 +123,18 @@ describe('App runtime upgrade controls', () => {
     });
 
     expect(host.querySelector('[role="dialog"]')).toBeTruthy();
-    expect(host.textContent).toContain('协作空间指南');
-    expect(host.textContent).toContain('成员不在线时，个人助手会在授权范围内处理文件、日程和任务。');
+    expect(host.textContent).toContain('AgentBridge / A2A 原生聊天');
+    expect(host.textContent).toContain('从消息流到 Agent 协作网络');
+    expect(host.textContent).toContain('Agent 数量会多于人类用户');
+    expect(host.textContent).toContain('聊天仍是入口');
+    expect(host.textContent).toContain('A2A 是协作层');
+    expect(host.textContent).toContain('风险门控是边界');
     expect(host.textContent).not.toContain('AI 用户');
     expect(host.textContent).not.toContain('演示角色');
     expect(host.textContent).not.toContain('评委');
     expect(host.textContent).toContain('Agent 操作台');
-    expect(host.textContent).toContain('个人助手协商');
+    expect(host.textContent).toContain('触发 A2A 交换约束和提案');
+    expect(host.textContent).toContain('这不是内置了 Agent 的 IM');
 
     const startButton = host.querySelector<HTMLButtonElement>('.review-guide-primary');
     expect(startButton).toBeTruthy();
