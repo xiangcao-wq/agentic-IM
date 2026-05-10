@@ -8,7 +8,8 @@ import {
   summarizeRoom
 } from '../domain/agentEngine';
 import { createDemoState } from '../domain/demoState';
-import { buildShortTermContext, listAgentMemories } from '../domain/memory';
+import { buildAgentContextBundle, buildShortTermContext, listAgentMemories } from '../domain/memory';
+import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type {
   AgentActionLog,
   AgentActionRequest,
@@ -227,6 +228,38 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
     const next = await updater(current);
     await db.write(next);
     return next;
+  }
+
+  async function sendMatrixMessageBestEffort(
+    state: DemoState,
+    message: Message | undefined,
+    options: {
+      agentLabel?: string;
+      sourceAgentId?: string;
+      fileId?: string;
+      fileName?: string;
+      mxcUri?: string;
+      mimeType?: string;
+      size?: number;
+    } = {}
+  ): Promise<Message | undefined> {
+    if (!matrixStore || !message) {
+      return message;
+    }
+
+    try {
+      return await matrixStore.sendMessage(
+        state,
+        {
+          roomId: message.roomId,
+          senderId: message.senderId,
+          body: message.body
+        },
+        options
+      );
+    } catch {
+      return message;
+    }
   }
 
   async function sendAutopilotMessage(sendState: DemoState, outbound: Message): Promise<Message> {
@@ -751,11 +784,18 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const body = await readJson<{ roomId: string; userId: string; prompt?: string }>(request);
         const state = await readRuntimeState();
         const profile = getAiActorProfile(state, body.userId, body.roomId);
+        const instructions = buildHumanReplyInstructions(state, profile);
+        const context = buildHumanReplyContext(state, body.userId, body.roomId, body.prompt);
+        const requestTail = [
+          '## Human Reply Request',
+          body.prompt ?? '请自然回复当前聊天。'
+        ].join('\n');
         const text = await aiProvider.generateText({
           actorRole: 'human_user',
           actorId: body.userId,
-          instructions: buildHumanReplyInstructions(state, profile),
-          input: [body.prompt ?? '请自然回复当前聊天。', buildShortTermContext(state, body.roomId)].join('\n\n'),
+          instructions,
+          input: [context, '', requestTail].join('\n\n'),
+          messages: buildCacheFriendlyMessages(instructions, context, requestTail),
           maxOutputTokens: 120
         });
         const message = matrixStore
@@ -935,13 +975,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         const result = runtime.result;
         let message = result.message;
         if (matrixStore && result.message) {
-          message = await matrixStore.sendMessage(
+          message = await sendMatrixMessageBestEffort(
             state,
-            {
-              roomId: result.message.roomId,
-              senderId: result.message.senderId,
-              body: result.message.body
-            },
+            result.message,
             {
               agentLabel: result.message.agentLabel,
               sourceAgentId: result.message.sourceAgentId,
@@ -1005,13 +1041,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
         }
         let message = runtime.response.message;
         if (matrixStore && message) {
-          message = await matrixStore.sendMessage(
+          message = await sendMatrixMessageBestEffort(
             runtimeState,
-            {
-              roomId: message.roomId,
-              senderId: message.senderId,
-              body: message.body
-            },
+            message,
             {
               agentLabel: message.agentLabel,
               sourceAgentId: message.sourceAgentId,
@@ -1047,13 +1079,9 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           ? undefined
           : createAgentCoordinationMessage(state, body.toAgentId, result.proposedPlan);
         if (matrixStore && message) {
-          message = await matrixStore.sendMessage(
+          message = await sendMatrixMessageBestEffort(
             state,
-            {
-              roomId: message.roomId,
-              senderId: message.senderId,
-              body: message.body
-            },
+            message,
             {
               agentLabel: message.agentLabel,
               sourceAgentId: message.sourceAgentId
@@ -1340,6 +1368,7 @@ function mergePersistedRuntimeState(baseState: DemoState, runtimeState: DemoStat
     actionLogs: mergeByKey(runtimeState.actionLogs, baseState.actionLogs, (log) => log.id),
     actionRequests: mergeActionRequests(runtimeState.actionRequests, baseState.actionRequests),
     a2aSessions: mergeUpdatedItems(runtimeState.a2aSessions, baseState.a2aSessions),
+    agentGoalPlans: mergeUpdatedItems(runtimeState.agentGoalPlans, baseState.agentGoalPlans),
     memories: mergeByKey(runtimeState.memories, baseState.memories, (memory) => memory.id),
     matrixObserverCheckpoints: mergeByKey(
       runtimeState.matrixObserverCheckpoints,
@@ -1481,6 +1510,24 @@ function createAiRuntimeCacheStatus(aiProvider: AiProvider | undefined): AiRunti
       lastUpdatedAt: route.lastUpdatedAt
     }))
   };
+}
+
+function buildHumanReplyContext(state: DemoState, userId: string, roomId: string, userText?: string): string {
+  const user = state.users.find((candidate) => candidate.id === userId);
+  if (user?.agentId) {
+    try {
+      return buildAgentContextBundle(state, {
+        roomId,
+        agentId: user.agentId,
+        userText: userText ?? '请自然回复当前聊天。',
+        focus: 'chat',
+        includeDiagnostics: false
+      }).text;
+    } catch {
+      // Fall through to short-term context if permissions and actor profiles diverge.
+    }
+  }
+  return buildShortTermContext(state, roomId);
 }
 
 async function checkAiRuntimeHealth(aiProvider: AiProvider | undefined): Promise<Partial<AiRuntimeStatus>> {

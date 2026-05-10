@@ -1,5 +1,6 @@
 import { buildAgentContextBundle, buildShortTermContext } from '../domain/memory';
 import { sortMessagesChronologically } from '../domain/messages';
+import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type { AgentActionLog, AiAutoreplyPolicy, AiReplyJob, DemoState, Message } from '../domain/types';
 import { buildHumanReplyInstructions, getAiActorProfile } from './aiActors';
 import type { AiProvider } from './aiProvider';
@@ -36,18 +37,20 @@ export async function runAiAutoreplies(input: RunAiAutorepliesInput): Promise<{
 
     try {
       const profile = getAiActorProfile(nextState, policy.userId, input.triggerMessage.roomId);
+      const instructions = buildHumanReplyInstructions(nextState, profile);
+      const context = buildAiHumanReplyContext(nextState, profile.userId, input.triggerMessage);
+      const requestTail = [
+        '## Trigger message',
+        `${input.triggerMessage.senderName}: ${input.triggerMessage.body}`,
+        '',
+        'Reply as this real user in the current chat. Continue the task handoff directly and do not explain that you are AI.'
+      ].join('\n\n');
       const text = await input.aiProvider.generateText({
         actorRole: 'human_user',
         actorId: policy.userId,
-        instructions: buildHumanReplyInstructions(nextState, profile),
-        input: [
-          buildAiHumanReplyContext(nextState, profile.userId, input.triggerMessage),
-          '',
-          '## Trigger message',
-          `${input.triggerMessage.senderName}: ${input.triggerMessage.body}`,
-          '',
-          'Reply as this real user in the current chat. Continue the task handoff directly and do not explain that you are AI.'
-        ].join('\n\n'),
+        instructions,
+        input: [context, '', requestTail].join('\n\n'),
+        messages: buildCacheFriendlyMessages(instructions, context, requestTail),
         maxOutputTokens: 120
       });
       const reply = await input.sendMessage(nextState, {
@@ -133,7 +136,8 @@ function buildAiHumanReplyContext(state: DemoState, userId: string, triggerMessa
         roomId: triggerMessage.roomId,
         agentId: user.agentId,
         userText: triggerMessage.body,
-        focus: 'chat'
+        focus: 'chat',
+        includeDiagnostics: false
       }).text;
     } catch {
       // Fallback keeps the reply available if an actor profile and agent permissions diverge.

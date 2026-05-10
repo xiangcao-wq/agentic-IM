@@ -4,16 +4,20 @@ import {
   summarizeRoom
 } from '../domain/agentEngine';
 import { enqueueAgentAction, requireActionConfirmation } from '../domain/actionQueue';
+import { normalizeAgentRiskReason, normalizeAgentUserText } from '../domain/agentText';
 import { buildAgentSystemPrompt, buildStructuredContext, listAgentMemories, writeMemory } from '../domain/memory';
+import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type {
   AgentActionKind,
   AgentActionLog,
+  AgentGoalPlan,
   AgentPlan,
   AgentProgressEvent,
   AgentRunIntent,
   AgentRunRequest,
   AgentRunResult,
   AgentToolCall,
+  AgentToolName,
   ChatResult,
   DemoState,
   FileItem,
@@ -23,7 +27,7 @@ import type {
   WebSearchAnswer,
   WebSearchResultItem
 } from '../domain/types';
-import type { AiProvider, AiTextPrompt } from './aiProvider';
+import type { AiProvider } from './aiProvider';
 import { defaultToolCallsForIntent, isAgentToolName, primaryToolNameForIntent } from './agentTools';
 import { executeCoreTool } from './agentCore/toolExecutor';
 import { toolInvocationRecordToSnapshot } from './agentCore/toolInvocationAudit';
@@ -47,6 +51,12 @@ interface AgentRunProgressOptions {
 
 interface AgentRuntimeToolOptions {
   webSearchProvider?: WebSearchProvider;
+}
+
+interface AgentChatGoalWorkspace {
+  text: string;
+  contextIds: string[];
+  toolCalls: string[];
 }
 
 const agentRunIntents = new Set<AgentRunIntent>([
@@ -74,6 +84,97 @@ function emitAgentRunProgress(
   });
 }
 
+function continueAgentGoalPlanIfRequested(
+  state: DemoState,
+  input: AgentRunRequest,
+  agent: DemoState['agents'][number],
+  progress?: AgentRunProgressOptions
+): { state: DemoState; response: AgentRunResult } | undefined {
+  if (!isGoalPlanContinuationRequest(input)) {
+    return undefined;
+  }
+  const goalPlan = findContinuableGoalPlan(state, input, agent);
+  if (!goalPlan) {
+    return undefined;
+  }
+
+  emitAgentRunProgress(progress, input, {
+    phase: 'executing',
+    label: '继续上一轮计划',
+    detail: goalPlan.summary,
+    toolCalls: ['goal_plan.resume']
+  });
+  const pendingActions = goalPlan.actionRequestIds
+    .map((id) => state.actionRequests.find((request) => request.id === id))
+    .filter((request): request is NonNullable<typeof request> => Boolean(request))
+    .filter((request) => request.status === 'needs_confirmation' || request.status === 'pending');
+  const completedSteps = goalPlan.steps.filter((step) => step.status === 'completed').map((step) => step.title);
+  const reply = pendingActions.length > 0
+    ? `我会接着上次计划推进。当前有 ${pendingActions.length} 个待确认动作，确认后我再继续执行。`
+    : `我会接着上次计划推进。已完成：${completedSteps.join('、') || goalPlan.summary}。当前没有待确认动作，下一步可以按这个结论继续细化或让我准备需要确认的动作。`;
+  const memoryWrite = writeMemory(state, {
+    agentId: input.agentId,
+    scopeRoomIds: [input.roomId],
+    kind: 'note',
+    content: `继续计划：${goalPlan.summary}`,
+    sourceIds: [goalPlan.id, ...goalPlan.contextIds]
+  });
+  const log = createLog({
+    agentId: input.agentId,
+    roomId: input.roomId,
+    action: `agent_run:goal_plan_resume:${goalPlan.id}`,
+    risk: lowRisk('继续查看已保存的 Agent 计划；未执行新的写操作。'),
+    contextIds: [goalPlan.id, ...goalPlan.contextIds, memoryWrite.memory.id],
+    toolCalls: ['goal_plan.resume', 'memory.write']
+  });
+
+  return {
+    state: {
+      ...memoryWrite.state,
+      actionLogs: [log, ...memoryWrite.state.actionLogs]
+    },
+    response: {
+      intent: 'chat',
+      requiresHuman: pendingActions.length > 0,
+      plan: goalPlan.summary,
+      reasoning: goalPlan.summary,
+      result: { reply } as ChatResult,
+      memory: memoryWrite.memory,
+      log,
+      actionRequest: pendingActions[0],
+      goalPlan
+    }
+  };
+}
+
+function isGoalPlanContinuationRequest(input: AgentRunRequest): boolean {
+  if (input.goalPlanId) {
+    return true;
+  }
+  const text = input.userText.trim().toLowerCase();
+  return includesAny(input.userText, ['继续', '按你的建议', '接着做', '下一步']) ||
+    text === 'continue' ||
+    text.includes('continue') ||
+    text.includes('proceed');
+}
+
+function findContinuableGoalPlan(
+  state: DemoState,
+  input: AgentRunRequest,
+  agent: DemoState['agents'][number]
+): AgentGoalPlan | undefined {
+  if (input.goalPlanId) {
+    return state.agentGoalPlans.find((plan) =>
+      plan.id === input.goalPlanId &&
+      plan.agentId === agent.id &&
+      plan.roomId === input.roomId
+    );
+  }
+  return [...state.agentGoalPlans]
+    .filter((plan) => plan.agentId === agent.id && plan.roomId === input.roomId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+}
+
 export async function runAgentIntent(
   state: DemoState,
   input: AgentRunRequest,
@@ -93,6 +194,11 @@ export async function runAgentIntent(
   }
   if (!agent.allowedRoomIds.includes(input.roomId)) {
     throw new Error(`${agent.displayName} cannot read ${input.roomId}`);
+  }
+
+  const continuation = continueAgentGoalPlanIfRequested(state, input, agent, progress);
+  if (continuation) {
+    return continuation;
   }
 
   emitAgentRunProgress(progress, input, {
@@ -439,7 +545,7 @@ async function executeAgentPlan(
   }
 
   if (intent === 'chat') {
-    return handleAgentChat(state, input, aiProvider, decision, progress);
+    return handleAgentChat(state, input, aiProvider, decision, progress, plan, agent);
   }
 
   if (intent === 'web_search') {
@@ -535,6 +641,8 @@ async function planAgentRun(
       'When the user explicitly asks for online, web, latest, news, DeepSeek search, or public external information, choose web_search and call web.search.',
       'If authorized current/global context cannot answer and the user asks for external public facts or DeepSeek/web search, use web_search instead of inventing an internal answer.',
       'Do not invent internal project details that are not explicit in the authorized context. If an internal claim is only inferred, say it is an inference.',
+      'For broad goal-analysis chat, you may include multiple read-only toolCalls before chat.answer: room.summarize, deadline.answer, file.search.',
+      'Never include write tools under chat. Use share_file, send_message, coordinate, or task_update_suggest when the user asks for side effects.',
       '你先判断用户真实意图，再输出一个可执行计划。此步骤只做规划，不发送消息、不改文件、不改日程。',
       '可选 intent：summary、deadline、find_file、share_file、send_message、coordinate、task_update_suggest、web_search、chat。',
       'userVisiblePlan 是展示给用户看的简短执行计划或判断依据，不要输出隐藏推理过程。',
@@ -651,7 +759,9 @@ function parseAgentPlan(raw: string, fallback: AgentPlan, input: AgentRunRequest
           ? parsed.plan
           : fallback.userVisiblePlan
     ),
-    answer: typeof parsed.answer === 'string' ? parsed.answer.trim() : undefined,
+    answer: typeof parsed.answer === 'string'
+      ? normalizeAgentUserText(parsed.answer, { maxChars: 280, maxSentences: 3 })
+      : undefined,
     toolCalls,
     risk,
     citations: Array.isArray(parsed.citations)
@@ -663,7 +773,11 @@ function parseAgentPlan(raw: string, fallback: AgentPlan, input: AgentRunRequest
 }
 
 function compactUserVisiblePlan(value: string): string {
-  const cleaned = value
+  const cleaned = normalizeAgentUserText(value, {
+    maxChars: 220,
+    maxSentences: 2,
+    fallback: fallbackPlanForIntent('chat')
+  })
     .replace(/\s+/g, ' ')
     .replace(/^(思考过程|思路|reasoning|plan)\s*[:：-]\s*/i, '')
     .trim();
@@ -692,7 +806,7 @@ function parsePlanRisk(value: unknown): RiskAssessment {
   return {
     level: risk.level,
     score: risk.score,
-    reason: risk.reason,
+    reason: normalizeAgentRiskReason(risk.reason),
     model: typeof risk.model === 'string' && risk.model.trim() ? risk.model : 'llm-planner'
   };
 }
@@ -747,9 +861,41 @@ function normalizeAgentPlan(plan: AgentPlan, input: AgentRunRequest): AgentPlan 
 }
 
 function normalizeToolCallsForIntent(intent: AgentRunIntent, toolCalls: AgentToolCall[]): AgentToolCall[] {
+  if (intent === 'chat') {
+    const safeToolCalls = toolCalls.filter((toolCall) =>
+      toolCall.tool === 'chat.answer' || isChatReadOnlyWorkspaceTool(toolCall.tool)
+    );
+    if (safeToolCalls.length === 0) {
+      return defaultToolCallsForIntent(intent, toolCalls[0]?.args ?? {});
+    }
+    return ensureChatAnswerTool(uniqueToolCalls(safeToolCalls));
+  }
   const primary = primaryToolNameForIntent(intent);
   const matching = toolCalls.filter((toolCall) => toolCall.tool === primary);
   return matching.length > 0 ? matching : defaultToolCallsForIntent(intent, toolCalls[0]?.args ?? {});
+}
+
+function isChatReadOnlyWorkspaceTool(tool: AgentToolName): boolean {
+  return tool === 'room.summarize' || tool === 'deadline.answer' || tool === 'file.search';
+}
+
+function ensureChatAnswerTool(toolCalls: AgentToolCall[]): AgentToolCall[] {
+  if (toolCalls.some((toolCall) => toolCall.tool === 'chat.answer')) {
+    return toolCalls;
+  }
+  return [...toolCalls, { tool: 'chat.answer', args: {} }];
+}
+
+function uniqueToolCalls(toolCalls: AgentToolCall[]): AgentToolCall[] {
+  const seen = new Set<string>();
+  return toolCalls.filter((toolCall) => {
+    const key = `${toolCall.tool}:${JSON.stringify(toolCall.args ?? {})}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 function agentPlanToDecision(state: DemoState, plan: AgentPlan, input: AgentRunRequest): AgentRunDecision {
@@ -810,6 +956,9 @@ function inferIntentFromText(text: string): AgentRunIntent {
   if (asksCapability) {
     return 'chat';
   }
+  if (looksLikeDirectAnswerRequest(text)) {
+    return 'chat';
+  }
   if (looksLikeTaskUpdateRequest(text)) {
     return 'task_update_suggest';
   }
@@ -836,6 +985,9 @@ function inferIntentFromText(text: string): AgentRunIntent {
 function normalizeDecisionIntent(intent: AgentRunIntent, text: string): AgentRunIntent {
   if (looksLikeWebSearchRequest(text)) {
     return 'web_search';
+  }
+  if (intent === 'send_message' && looksLikeDirectAnswerRequest(text)) {
+    return 'chat';
   }
   if (intent === 'coordinate' && !looksLikeCoordinationRequest(text)) {
     return 'chat';
@@ -935,9 +1087,98 @@ function looksLikeTaskUpdateRequest(text: string): boolean {
 }
 
 function looksLikeDelegatedMessageRequest(text: string): boolean {
+  if (looksLikeDirectAnswerRequest(text)) {
+    return false;
+  }
   const lowered = text.toLowerCase();
+  if (
+    includesAny(text, [
+      '发消息',
+      '发送消息',
+      '帮我发',
+      '代我发',
+      '发给',
+      '转告',
+      '通知陈晨',
+      '通知赵一鸣',
+      '通知王老师',
+      '告诉陈晨',
+      '告诉赵一鸣',
+      '告诉王老师',
+      '告诉大家'
+    ])
+  ) {
+    return true;
+  }
   return includesAny(text, ['发消息', '发送消息', '帮我发', '代我发', '告诉', '通知', '转告']) ||
     includesAny(lowered, ['send a message', 'send message', 'tell ', 'notify ', 'message ']);
+}
+
+function looksLikeDirectAnswerRequest(text: string): boolean {
+  const lowered = text.toLowerCase();
+  const asksMe =
+    includesAny(text, [
+      '告诉我',
+      '请告诉我',
+      '跟我说',
+      '给我说',
+      '和我说',
+      '对我说',
+      '告诉一下我',
+      '提醒我'
+    ]) ||
+    includesAny(lowered, ['tell me', 'let me know', 'show me', 'explain to me']);
+  if (!asksMe) {
+    return false;
+  }
+
+  return !(
+    /(?:告诉|通知)(?:陈晨|赵一鸣|王老师|大家|同学|组员|他们|她们|他|她)/.test(text) ||
+    includesAny(text, ['转告', '发给']) ||
+    /\b(?:tell|notify|message)\s+(?:chen|zhao|lin|teacher|wang|them|him|her|everyone)\b/i.test(text)
+  );
+}
+
+function looksLikeNextStepQuestion(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return (
+    includesAny(text, [
+      '下一步',
+      '接下来',
+      '先做什么',
+      '今天先做什么',
+      '需要做什么',
+      '优先做什么',
+      '先处理什么'
+    ]) ||
+    includesAny(lowered, [
+      'next step',
+      'what should i do',
+      'what to do next',
+      'do first',
+      'handle first'
+    ])
+  );
+}
+
+function looksLikeResponsibilityQuestion(text: string): boolean {
+  const lowered = text.toLowerCase();
+  const asksOwner =
+    /(?:\u8c01|\u54ea)[^，。？！?]{0,16}\u8d1f\u8d23/.test(text) ||
+    /\u8d1f\u8d23(?:\u4eba|\u65b9|\u8005)?/.test(text);
+  const materialScope =
+    /(?:\u8bbf\u8c08|\u7eaa\u8981|\u6750\u6599|\u5f15\u7528)/.test(text) ||
+    includesAny(lowered, ['interview', 'notes', 'material', 'quote', 'responsible', 'owner']);
+  return (
+    (asksOwner && materialScope) ||
+    includesAny(lowered, [
+      'who is responsible',
+      'who owns',
+      'who should handle',
+      'responsible for interview',
+      'owner of interview'
+    ])
+  );
 }
 
 function fallbackPlanForIntent(intent: AgentRunIntent): string {
@@ -1018,8 +1259,15 @@ function buildFileQueryTerms(query: string): string[] {
   if (includesAny(query, ['演示稿', '幻灯', '课件']) || includesAny(lowered, ['slides', 'slide', 'ppt', 'deck'])) {
     terms.push('演示稿', 'slides', 'ppt', 'pptx', 'presentation');
   }
-  if (includesAny(query, ['访谈', '纪要']) || lowered.includes('interview')) {
+  if (
+    includesAny(query, ['访谈', '纪要']) ||
+    lowered.includes('interview') ||
+    includesApproximateTerm(terms, ['interview', 'interviews'])
+  ) {
     terms.push('访谈', '纪要', 'interview');
+  }
+  if (includesAny(query, ['材料', '素材']) || includesApproximateTerm(terms, ['material', 'materials'])) {
+    terms.push('材料', '素材', 'material', 'materials');
   }
   if (includesAny(query, ['行动计划']) || includesAny(lowered, ['action plan', 'plan'])) {
     terms.push('行动计划', 'action', 'plan');
@@ -1053,14 +1301,62 @@ function normalizeFileText(file: FileItem): string {
 
 function scoreAuthorizedFile(state: DemoState, file: FileItem, terms: string[]): number {
   const haystack = normalizeFileText(file);
+  const titleHaystack = `${file.name} ${file.tags.join(' ')}`.toLowerCase();
+  const titleScore = terms.reduce((score, term) => score + (titleHaystack.includes(term) ? 3 : 0), 0);
   const metadataScore = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
   const chunkScore = (state.fileTextChunks ?? [])
     .filter((chunk) => chunk.fileId === file.id)
     .reduce((score, chunk) => {
       const chunkText = chunk.text.toLowerCase();
-      return score + terms.reduce((innerScore, term) => innerScore + (chunkText.includes(term) ? 2 : 0), 0);
+      const exactScore = terms.reduce((innerScore, term) => innerScore + (chunkText.includes(term) ? 2 : 0), 0);
+      return score + exactScore + scoreFuzzyTermMatches(chunkText, terms);
     }, 0);
-  return metadataScore + chunkScore;
+  return titleScore + metadataScore + scoreFuzzyTermMatches(haystack, terms) + chunkScore;
+}
+
+function includesApproximateTerm(terms: string[], candidates: string[]): boolean {
+  return terms.some((term) =>
+    candidates.some((candidate) => term === candidate || isNearToken(term, candidate))
+  );
+}
+
+function scoreFuzzyTermMatches(text: string, terms: string[]): number {
+  const tokens = text.match(/[a-z0-9]+/gi) ?? [];
+  return terms.reduce((score, term) => {
+    if (term.length < 5 || text.includes(term)) {
+      return score;
+    }
+    return tokens.some((token) => isNearToken(term, token.toLowerCase())) ? score + 1 : score;
+  }, 0);
+}
+
+function isNearToken(left: string, right: string): boolean {
+  if (left.length < 5 || right.length < 5 || Math.abs(left.length - right.length) > 1) {
+    return false;
+  }
+  let mismatches = 0;
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    mismatches += 1;
+    if (mismatches > 1) {
+      return false;
+    }
+    if (left.length > right.length) {
+      i += 1;
+    } else if (right.length > left.length) {
+      j += 1;
+    } else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return mismatches + (left.length - i) + (right.length - j) <= 1;
 }
 
 const fileQueryStopWords = new Set([
@@ -1721,7 +2017,7 @@ async function handleAgentWebSearch(
   }
 
   const result: WebSearchAnswer = {
-    answer,
+    answer: normalizeAgentUserText(answer, { maxChars: 900, maxSentences: 8, fallback: answer }),
     results,
     citations: results.map((item) => item.url),
     unavailableReason
@@ -1855,14 +2151,180 @@ function scoreWebSearchResult(result: WebSearchResultItem): number {
   return 0;
 }
 
+async function buildAgentChatGoalWorkspace(
+  state: DemoState,
+  input: AgentRunRequest,
+  agent: DemoState['agents'][number],
+  plan?: AgentPlan,
+  aiProvider?: AiProvider,
+  progress?: AgentRunProgressOptions
+): Promise<AgentChatGoalWorkspace> {
+  const workspaceTools = plan?.toolCalls.filter((toolCall) => isChatReadOnlyWorkspaceTool(toolCall.tool)) ?? [];
+  if (workspaceTools.length === 0) {
+    return emptyAgentChatGoalWorkspace();
+  }
+
+  const sections: string[] = ['## Agent Workspace', 'Read-only observations collected before answering.'];
+  const contextIds: string[] = [];
+  const toolCalls: string[] = [];
+
+  for (const toolCall of uniqueToolCalls(workspaceTools)) {
+    if (toolCall.tool === 'room.summarize') {
+      emitAgentRunProgress(progress, input, {
+        phase: 'executing',
+        label: '总结当前聊天室',
+        detail: input.roomId,
+        toolCalls: ['room.summarize']
+      });
+      const summary = await summarizeRoom(state, input.roomId, input.agentId, aiProvider);
+      sections.push(
+        '',
+        '### Room summary',
+        `Headline: ${summary.headline}`,
+        `Deadlines: ${summary.deadlines.join('; ') || 'none'}`,
+        `Todos: ${summary.todos.join('; ') || 'none'}`
+      );
+      contextIds.push(...summary.sources);
+      toolCalls.push('room.summarize');
+      continue;
+    }
+
+    if (toolCall.tool === 'deadline.answer') {
+      const question = getToolStringArg(toolCall, 'question') ?? input.userText;
+      emitAgentRunProgress(progress, input, {
+        phase: 'executing',
+        label: '检查截止时间',
+        detail: question,
+        toolCalls: ['deadline.answer']
+      });
+      const deadline = await answerDeadlineQuestion(
+        state,
+        {
+          agentId: input.agentId,
+          roomId: input.roomId,
+          question
+        },
+        aiProvider
+      );
+      sections.push('', '### Deadline check', deadline.answer);
+      contextIds.push(...deadline.citations);
+      toolCalls.push('deadline.answer');
+      continue;
+    }
+
+    const query = getToolStringArg(toolCall, 'query') ?? input.userText;
+    emitAgentRunProgress(progress, input, {
+      phase: 'executing',
+      label: '检索授权文件',
+      detail: query,
+      toolCalls: ['file.search']
+    });
+    const files = findAuthorizedFiles(state, agent.id, input.roomId, query).slice(0, 5);
+    sections.push(
+      '',
+      '### File search',
+      ...(files.length > 0
+        ? files.map((file) => `- ${file.name}; id=${file.id}; summary=${file.summary}`)
+        : ['- no matching authorized files'])
+    );
+    contextIds.push(...files.map((file) => file.id));
+    toolCalls.push('file.search', 'file_library.search');
+  }
+
+  return {
+    text: sections.join('\n'),
+    contextIds: uniqueStrings(contextIds),
+    toolCalls: uniqueStrings(toolCalls)
+  };
+}
+
+function emptyAgentChatGoalWorkspace(): AgentChatGoalWorkspace {
+  return {
+    text: '',
+    contextIds: [],
+    toolCalls: []
+  };
+}
+
+function getToolStringArg(toolCall: AgentToolCall, key: string): string | undefined {
+  const value = toolCall.args[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function createAgentGoalPlanForChat(input: {
+  input: AgentRunRequest;
+  plan?: AgentPlan;
+  runId?: string;
+  contextIds: string[];
+  actionRequestIds: string[];
+  completedAt: string;
+}): AgentGoalPlan | undefined {
+  const planToolCalls = input.plan?.toolCalls ?? [];
+  if (!planToolCalls.some((toolCall) => isChatReadOnlyWorkspaceTool(toolCall.tool))) {
+    return undefined;
+  }
+  const toolCalls = ensureChatAnswerTool(uniqueToolCalls(
+    planToolCalls.filter((toolCall) => toolCall.tool === 'chat.answer' || isChatReadOnlyWorkspaceTool(toolCall.tool))
+  ));
+  const contextIds = uniqueStrings(input.contextIds);
+  const createdAt = input.completedAt;
+  return {
+    id: `goal-plan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    agentId: input.input.agentId,
+    roomId: input.input.roomId,
+    originRunId: input.runId,
+    userText: input.input.userText,
+    summary: input.plan?.userVisiblePlan ?? fallbackPlanForIntent('chat'),
+    status: input.actionRequestIds.length > 0 ? 'needs_confirmation' : 'completed',
+    steps: toolCalls.map((toolCall, index) => ({
+      id: `goal-step-${Date.now()}-${index}-${toolCall.tool.replace(/[^a-z0-9]+/gi, '-')}`,
+      title: titleForGoalTool(toolCall.tool),
+      tool: toolCall.tool,
+      sideEffect: sideEffectForGoalTool(toolCall.tool),
+      status: input.actionRequestIds.length > 0 && sideEffectForGoalTool(toolCall.tool) === 'write'
+        ? 'needs_confirmation'
+        : 'completed',
+      requiresHuman: sideEffectForGoalTool(toolCall.tool) === 'write',
+      evidenceIds: contextIds,
+      createdAt,
+      updatedAt: input.completedAt
+    })),
+    contextIds,
+    actionRequestIds: [...input.actionRequestIds],
+    createdAt,
+    updatedAt: input.completedAt
+  };
+}
+
+function sideEffectForGoalTool(tool: AgentToolName): 'read' | 'write' {
+  return isChatReadOnlyWorkspaceTool(tool) || tool === 'chat.answer' || tool === 'web.search' ? 'read' : 'write';
+}
+
+function titleForGoalTool(tool: AgentToolName): string {
+  const titles: Record<AgentToolName, string> = {
+    'chat.answer': 'Answer the user',
+    'room.summarize': 'Summarize the room',
+    'deadline.answer': 'Check deadline and timing',
+    'file.search': 'Search authorized files',
+    'file.share': 'Prepare file handoff',
+    'message.send': 'Prepare delegated message',
+    'web.search': 'Search public web information',
+    'agent.coordinate': 'Coordinate with another agent',
+    'task.suggest_update': 'Prepare task update'
+  };
+  return titles[tool];
+}
+
 async function handleAgentChat(
   state: DemoState,
   input: AgentRunRequest,
   aiProvider?: AiProvider,
   decision?: AgentRunDecision,
-  progress?: AgentRunProgressOptions
+  progress?: AgentRunProgressOptions,
+  agentPlan?: AgentPlan,
+  agentInput?: DemoState['agents'][number]
 ): Promise<{ state: DemoState; response: AgentRunResult }> {
-  const agent = state.agents.find((a) => a.id === input.agentId);
+  const agent = agentInput ?? state.agents.find((a) => a.id === input.agentId);
   if (!agent) {
     throw new Error(`unknown agent: ${input.agentId}`);
   }
@@ -1912,25 +2374,32 @@ async function handleAgentChat(
     };
   }
 
+  const goalWorkspace = await buildAgentChatGoalWorkspace(state, input, agent, agentPlan, aiProvider, progress);
   const requiresEvidence = requiresInternalEvidenceForChat(input.userText);
   const decisionCitations = decision?.citations ?? [];
+  const availableContextIds = uniqueStrings([...decisionCitations, ...goalWorkspace.contextIds]);
   const shouldRejectDecisionAnswer =
     Boolean(decision?.answer) &&
     requiresEvidence &&
-    decisionCitations.length === 0;
-  let replyText = shouldRejectDecisionAnswer ? undefined : decision?.answer;
+    availableContextIds.length === 0;
   let usedFallbackReply = false;
-  let fallbackContextIds: string[] = decision?.answer && !shouldRejectDecisionAnswer ? decisionCitations : [];
-  if (!replyText) {
-    if (requiresEvidence) {
-      const fallback = createFallbackChatReply(state, input);
-      replyText = fallback.reply;
-      fallbackContextIds = fallback.contextIds;
-      usedFallbackReply = true;
-    } else {
-      try {
-      replyText = await generateChatReply(state, input, aiProvider);
-      } catch {
+  let fallbackContextIds: string[] = [];
+  let replyText: string | undefined;
+
+  if (shouldRejectDecisionAnswer || (requiresEvidence && availableContextIds.length === 0)) {
+    const fallback = createFallbackChatReply(state, input);
+    replyText = fallback.reply;
+    fallbackContextIds = fallback.contextIds;
+    usedFallbackReply = true;
+  } else {
+    fallbackContextIds = availableContextIds;
+    try {
+      replyText = await generateChatReply(state, input, aiProvider, goalWorkspace);
+    } catch {
+      if (decision?.answer) {
+        replyText = decision.answer;
+        fallbackContextIds = availableContextIds;
+      } else {
         const fallback = createFallbackChatReply(state, input);
         replyText = fallback.reply;
         fallbackContextIds = fallback.contextIds;
@@ -1938,6 +2407,11 @@ async function handleAgentChat(
       }
     }
   }
+  replyText = normalizeAgentUserText(replyText, {
+    maxChars: 360,
+    maxSentences: 4,
+    fallback: '我没有拿到可以直接展示的结论，请换一种问法或补充上下文。'
+  });
   const plan = decision?.plan ?? fallbackPlanForIntent('chat');
 
   emitAgentRunProgress(progress, input, {
@@ -1962,9 +2436,18 @@ async function handleAgentChat(
     contextIds: [...fallbackContextIds, memoryWrite.memory.id],
     toolCalls: [
       'deepseek.pro.chat.completions',
+      ...goalWorkspace.toolCalls,
       ...(usedFallbackReply ? ['fallback.local_context'] : []),
       'memory.write'
     ]
+  });
+  const goalPlan = createAgentGoalPlanForChat({
+    input,
+    plan: agentPlan,
+    runId: progress?.runId,
+    contextIds: fallbackContextIds,
+    actionRequestIds: [],
+    completedAt: log.createdAt
   });
   emitAgentRunProgress(progress, input, {
     phase: 'executing',
@@ -1973,9 +2456,14 @@ async function handleAgentChat(
     toolCalls: log.toolCalls,
     riskLevel: log.risk.level
   });
+  const nextState = {
+    ...memoryWrite.state,
+    actionLogs: [log, ...memoryWrite.state.actionLogs],
+    agentGoalPlans: goalPlan ? [goalPlan, ...memoryWrite.state.agentGoalPlans] : memoryWrite.state.agentGoalPlans
+  };
 
   return {
-    state: { ...memoryWrite.state, actionLogs: [log, ...memoryWrite.state.actionLogs] },
+    state: nextState,
     response: {
       intent: 'chat',
       requiresHuman: false,
@@ -1983,7 +2471,8 @@ async function handleAgentChat(
       reasoning: plan,
       result: { reply: replyText } as ChatResult,
       memory: memoryWrite.memory,
-      log
+      log,
+      goalPlan
     }
   };
 }
@@ -1998,12 +2487,28 @@ function createFallbackChatReply(
   const roomMessages = state.messages.filter((message) => message.roomId === input.roomId);
   const text = input.userText;
   const lowered = text.toLowerCase();
-  const chunkMatches = searchFileTextChunks(state, {
-    agentId: input.agentId,
-    roomId: input.roomId,
-    query: input.userText,
-    limit: 3
-  }).filter((match) => match.score >= 4);
+  if (looksLikeNextStepQuestion(text) && !looksLikeResponsibilityQuestion(text)) {
+    const roomMessageIds = new Set(roomMessages.map((message) => message.id));
+    const activeTasks = [...state.tasks]
+      .filter((task) => task.status !== 'done' && roomMessageIds.has(task.sourceMessageId))
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      .slice(0, 2);
+    if (activeTasks.length > 0) {
+      const [first, second] = activeTasks;
+      return {
+        reply: `下一步先处理「${first.title}」，截止时间是 ${first.deadline}。${second ? `之后跟进「${second.title}」。` : '如果要继续，我可以帮你整理需要确认的人和文件。'}`,
+        contextIds: activeTasks.map((task) => task.sourceMessageId)
+      };
+    }
+  }
+  const chunkMatches = looksLikeResponsibilityQuestion(text)
+    ? []
+    : searchFileTextChunks(state, {
+        agentId: input.agentId,
+        roomId: input.roomId,
+        query: input.userText,
+        limit: 3
+      }).filter((match) => match.score >= 4);
   if (chunkMatches.length > 0) {
     const top = chunkMatches[0];
     const otherFiles = uniqueStrings(chunkMatches.slice(1).map((match) => match.file.name)).filter(
@@ -2032,8 +2537,11 @@ function createFallbackChatReply(
   }
 
   if (
-    includesAny(text, ['你是谁', '能代谁', '代表谁', '代谁发']) ||
-    (lowered.includes('who') && (lowered.includes('act') || lowered.includes('agent')))
+    !looksLikeResponsibilityQuestion(text) &&
+    (
+      includesAny(text, ['你是谁', '能代谁', '代表谁', '代谁发']) ||
+      (lowered.includes('who') && (lowered.includes('act') || lowered.includes('agent')))
+    )
   ) {
     return {
       reply: `我是 ${owner.name} 的个人 Agent，只能在 ${owner.name} 授权的房间内读取上下文，并在授权边界内代 ${owner.name} 查找或发送文件。涉及他人身份、私聊、日程变更或高风险操作时，我会要求人工确认。`,
@@ -2057,7 +2565,7 @@ function createFallbackChatReply(
     }
     if (mentionsChen) {
       return {
-        reply: `从当前房间上下文看，访谈材料主要由陈晨补充和核对；${owner.name} 这边可见的访谈相关文件我可以先帮你查找，但代发前需要确认目标文件和授权。`,
+        reply: `从当前房间上下文看，访谈纪要和引用来源主要由陈晨补充和核对；${owner.name} 这边可见的访谈相关文件我可以先帮你查找，但代发前需要确认目标文件和授权。`,
         contextIds: [...contextIds, ...files.map((file) => file.id)]
       };
     }
@@ -2095,27 +2603,39 @@ function createFallbackChatReply(
   };
 }
 
-async function generateChatReply(state: DemoState, input: AgentRunRequest, aiProvider: AiProvider): Promise<string> {
+async function generateChatReply(
+  state: DemoState,
+  input: AgentRunRequest,
+  aiProvider: AiProvider,
+  goalWorkspace: AgentChatGoalWorkspace = emptyAgentChatGoalWorkspace()
+): Promise<string> {
   const systemPrompt = [
     buildAgentSystemPrompt(state, input.agentId),
     '',
-    '## 自由对话指引',
-    '你可以回答用户的任何问题，基于当前对话上下文和可用信息。',
-    '优先依据消息、任务、文件元数据和文件片段；Agent memory 只是较低可信的历史笔记，不能单独作为事实依据。',
-    '不要编造未明确出现的细节，例如编号差异、对方私聊内容、文件正文。若只是推断，必须明确说“我只能推断”。',
-    '如果用户的请求涉及到文件分享、日程协调等操作，请说明你的分析和建议。',
-    '如果你不确定答案，诚实说明并建议用户如何获取准确信息。',
-    '请用自然的中文回答。'
+    '## 用户回复指引',
+    '你负责生成最终展示给用户的一段自然回复，而不是解释内部运行过程。',
+    '优先依据当前授权上下文里的消息、任务、文件元数据、文件片段和日程；Agent memory 只能作为低置信参考，不能单独作为事实依据。',
+    '不要编造没有出现在授权上下文里的项目事实、私聊内容或文件正文。若只是推断，请明确说“我只能推断”。',
+    '不要提及工具名、执行链路、fallback、运行日志或内部风险模型。',
+    '不要输出 JSON、Markdown 表格、调试标签、引用 ID 列表或隐藏推理过程。',
+    '如果涉及文件发送、日程调整、任务状态变更等动作，只说明对用户有意义的结论和下一步确认点。',
+    '如果提供了 Agent Workspace，请把它视为刚完成的只读工作结果，并综合成清晰建议。',
+    '请用自然中文回答，最多 3 句话。'
   ].join('\n');
 
   const context = buildStructuredContext(state, input.roomId, input.agentId, {
     focus: 'chat',
-    userText: input.userText
+    userText: input.userText,
+    includeDiagnostics: false
   });
-  const requestTail = ['## Current User Request', `User input: ${input.userText}`].join('\n');
+  const requestTail = [
+    goalWorkspace.text,
+    '## Current User Request',
+    `User input: ${input.userText}`
+  ].filter(Boolean).join('\n\n');
   const userPrompt = [context, '', requestTail].join('\n');
 
-  return aiProvider.generateText({
+  const raw = await aiProvider.generateText({
     actorRole: 'personal_agent',
     actorId: input.agentId,
     instructions: systemPrompt,
@@ -2123,42 +2643,30 @@ async function generateChatReply(state: DemoState, input: AgentRunRequest, aiPro
     messages: buildCacheFriendlyMessages(systemPrompt, context, requestTail),
     maxOutputTokens: 500
   });
+  return extractUserReplyText(raw);
 }
 
-export function buildCacheFriendlyMessages(
-  systemPrompt: string,
-  context: string,
-  requestTail: string
-): AiTextPrompt['messages'] {
-  const { stable, volatile } = splitContextForPrefixCache(context);
-  return [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: stable },
-    { role: 'user', content: [volatile, requestTail].filter(Boolean).join('\n\n') }
-  ];
-}
-
-function splitContextForPrefixCache(context: string): { stable: string; volatile: string } {
-  const blocks = context.split(/\n(?=## )/);
-  if (blocks.length <= 1) {
-    return { stable: context, volatile: '' };
+function extractUserReplyText(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('{')) {
+    return raw;
   }
-
-  const stableSections = [blocks[0]];
-  const volatileSections: string[] = [];
-  const stableTitles = new Set(['Tasks', 'Files', 'Members']);
-
-  for (const block of blocks.slice(1)) {
-    const title = block.match(/^## ([^\n]+)/)?.[1]?.trim();
-    if (title && stableTitles.has(title)) {
-      stableSections.push(block);
-    } else {
-      volatileSections.push(block);
+  try {
+    const parsed = parseJson<{
+      answer?: unknown;
+      reply?: unknown;
+      message?: unknown;
+      suggestion?: unknown;
+    }>(trimmed);
+    for (const key of ['answer', 'reply', 'message', 'suggestion'] as const) {
+      if (typeof parsed[key] === 'string' && parsed[key].trim()) {
+        return parsed[key];
+      }
     }
+  } catch {
+    return raw;
   }
-
-  return {
-    stable: stableSections.filter(Boolean).join('\n\n'),
-    volatile: volatileSections.filter(Boolean).join('\n\n')
-  };
+  return raw;
 }
+
+export { buildCacheFriendlyMessages } from '../domain/promptCache';

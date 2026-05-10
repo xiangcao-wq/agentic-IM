@@ -11,6 +11,8 @@ import type {
   RoomSummary
 } from './types';
 import { buildStructuredContext, buildAgentSystemPrompt } from './memory';
+import { normalizeAgentRiskReason, normalizeAgentUserText } from './agentText';
+import { buildCacheFriendlyMessages } from './promptCache';
 import type { AiProvider } from '../server/aiProvider';
 
 interface DeadlineQuestionInput {
@@ -69,12 +71,17 @@ export async function summarizeRoom(
       '## Current Request',
       'Summarize this room from the authorized context above.'
     ].join('\n');
+    const requestTail = [
+      '## Current Request',
+      'Summarize this room from the authorized context above.'
+    ].join('\n');
 
     const raw = await aiProvider.generateText({
       actorRole: 'personal_agent',
       actorId: agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      messages: buildCacheFriendlyMessages(systemPrompt, context, requestTail),
       responseFormat: 'json_object',
       maxOutputTokens: 400
     });
@@ -175,12 +182,14 @@ export async function answerDeadlineQuestion(
       '## Current User Question',
       input.question
     ].join('\n');
+    const requestTail = ['## Current User Question', input.question].join('\n');
 
     const raw = await aiProvider.generateText({
       actorRole: 'personal_agent',
       actorId: input.agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      messages: buildCacheFriendlyMessages(systemPrompt, context, requestTail),
       responseFormat: 'json_object',
       maxOutputTokens: 300
     });
@@ -196,7 +205,7 @@ export async function answerDeadlineQuestion(
     }
 
     return {
-      answer: parsed.answer,
+      answer: normalizeAgentUserText(parsed.answer, { maxChars: 220, maxSentences: 2 }),
       citations
     };
   } catch {
@@ -285,12 +294,18 @@ export async function createFileShareAction(
       `Requester: ${input.requesterId}`,
       `Request text: ${input.requestText}`
     ].join('\n');
+    const requestTail = [
+      '## Current File Request',
+      `Requester: ${input.requesterId}`,
+      `Request text: ${input.requestText}`
+    ].join('\n');
 
     const raw = await aiProvider.generateText({
       actorRole: 'personal_agent',
       actorId: input.agentId,
       instructions: systemPrompt,
       input: userPrompt,
+      messages: buildCacheFriendlyMessages(systemPrompt, context, requestTail),
       responseFormat: 'json_object',
       maxOutputTokens: 300
     });
@@ -322,7 +337,7 @@ export async function createFileShareAction(
       : {
       level: parsed.risk.level,
       score: parsed.risk.score,
-      reason: parsed.risk.reason,
+      reason: normalizeAgentRiskReason(parsed.risk.reason),
       model: 'llm-driven'
     };
 
@@ -467,12 +482,18 @@ export async function coordinateAgents(
       `From agent: ${input.fromAgentId}`,
       `Proposal: ${input.proposal}`
     ].join('\n');
+    const requestTail = [
+      '## Current Coordination Proposal',
+      `From agent: ${input.fromAgentId}`,
+      `Proposal: ${input.proposal}`
+    ].join('\n');
 
     const raw = await aiProvider.generateText({
       actorRole: 'personal_agent',
       actorId: input.toAgentId,
       instructions: systemPrompt,
       input: userPrompt,
+      messages: buildCacheFriendlyMessages(systemPrompt, context, requestTail),
       responseFormat: 'json_object',
       maxOutputTokens: 300
     });
@@ -492,12 +513,12 @@ export async function coordinateAgents(
     const risk: RiskAssessment = {
       level: parsed.risk.level,
       score: parsed.risk.score,
-      reason: parsed.risk.reason,
+      reason: normalizeAgentRiskReason(parsed.risk.reason),
       model: 'llm-driven'
     };
 
     const status = risk.level === 'low' ? 'executed' : 'needs_confirmation';
-    const proposedPlan = parsed.suggestion;
+    const proposedPlan = normalizeAgentUserText(parsed.suggestion, { maxChars: 220, maxSentences: 2 });
     const log = createActionLog({
       agentId: toAgent.id,
       roomId: input.roomId,

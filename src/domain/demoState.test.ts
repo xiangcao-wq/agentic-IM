@@ -33,6 +33,19 @@ describe('demo scenario seed', () => {
       sourceMessageId: 'msg-11'
     });
 
+    expect(state.users.find((user) => user.id === 'user-lin')?.collaborationProfile).toMatchObject({
+      responsibility: '演示稿结构、课堂展示和最终视觉表达',
+      currentFocus: '等陈晨补齐访谈截图后更新演示稿第 5 页和结论页',
+      availability: '今天 18:30 后离线，19:30-21:30 是演示稿专注时间',
+      assistantScope: ['查找授权文件', '代发演示稿', '发起日程协商']
+    });
+    expect(state.users.find((user) => user.id === 'user-chen')?.collaborationProfile).toMatchObject({
+      responsibility: '访谈材料、引用来源和流程截图',
+      currentFocus: '补齐访谈纪要、截图和引用一致性',
+      availability: '当前在线，但 21:00 前需要集中补材料'
+    });
+    expect(state.users.every((user) => user.collaborationProfile?.assistantScope.length)).toBe(true);
+
     expect(state.files.find((file) => file.id === 'file-interview-notes-txt')).toMatchObject({
       name: '第4组-访谈纪要-v1.txt',
       contentType: 'text/plain; charset=utf-8',

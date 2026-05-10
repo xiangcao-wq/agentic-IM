@@ -12,6 +12,7 @@ export const STATE_COLLECTION_KEYS = [
   'actionLogs',
   'actionRequests',
   'a2aSessions',
+  'agentGoalPlans',
   'agentAutopilotPolicies',
   'memories',
   'matrixObserverCheckpoints',
@@ -36,6 +37,7 @@ export function getStateCollections(state: DemoState): StateCollections {
     actionLogs: normalized.actionLogs,
     actionRequests: normalized.actionRequests,
     a2aSessions: normalized.a2aSessions,
+    agentGoalPlans: normalized.agentGoalPlans,
     agentAutopilotPolicies: normalized.agentAutopilotPolicies,
     memories: normalized.memories,
     matrixObserverCheckpoints: normalized.matrixObserverCheckpoints,
@@ -55,6 +57,9 @@ export function validateDemoStateShape(value: unknown): DemoState {
   }
   if (candidate.a2aSessions === undefined) {
     candidate.a2aSessions = [];
+  }
+  if (candidate.agentGoalPlans === undefined) {
+    candidate.agentGoalPlans = [];
   }
   if (candidate.agentAutopilotPolicies === undefined) {
     candidate.agentAutopilotPolicies = createDefaultAgentAutopilotPolicies();
@@ -81,8 +86,54 @@ export function validateDemoStateShape(value: unknown): DemoState {
     }
   }
 
+  candidate.users = upgradeUserCollaborationProfiles(candidate.users as unknown[]);
+
   return value as DemoState;
 }
+
+function upgradeUserCollaborationProfiles(users: unknown[]): DemoState['users'] {
+  return users.map((user) => {
+    if (!user || typeof user !== 'object') {
+      return user;
+    }
+    const candidate = user as DemoState['users'][number];
+    const profile = defaultCollaborationProfiles[candidate.id];
+    if (!profile || candidate.collaborationProfile) {
+      return candidate;
+    }
+    return {
+      ...candidate,
+      collaborationProfile: profile
+    };
+  }) as DemoState['users'];
+}
+
+const defaultCollaborationProfiles: Record<string, NonNullable<DemoState['users'][number]['collaborationProfile']>> = {
+  'user-lin': {
+    responsibility: '演示稿结构、课堂展示和最终视觉表达',
+    currentFocus: '等陈晨补齐访谈截图后更新演示稿第 5 页和结论页',
+    availability: '今天 18:30 后离线，19:30-21:30 是演示稿专注时间',
+    assistantScope: ['查找授权文件', '代发演示稿', '发起日程协商']
+  },
+  'user-chen': {
+    responsibility: '访谈材料、引用来源和流程截图',
+    currentFocus: '补齐访谈纪要、截图和引用一致性',
+    availability: '当前在线，但 21:00 前需要集中补材料',
+    assistantScope: ['回答材料进度', '查找访谈文件', '参与日程协商']
+  },
+  'user-zhao': {
+    responsibility: '任务拆分、最终提交和报告结构收口',
+    currentFocus: '核对行动计划与报告结构，准备最终 PDF',
+    availability: '当前忙碌，16:00 后集中复核报告结构',
+    assistantScope: ['检查任务状态', '提醒截止时间', '发起合稿协调']
+  },
+  'user-teacher': {
+    responsibility: '课程要求、评分边界和答疑安排',
+    currentFocus: '等待各组按要求提交调研报告和 8 分钟演示稿',
+    availability: '课程答疑时间为 5月8日 10:00',
+    assistantScope: ['检索课程要求', '回答截止时间', '提醒评分边界']
+  }
+};
 
 function createDefaultAgentAutopilotPolicies(): DemoState['agentAutopilotPolicies'] {
   return [

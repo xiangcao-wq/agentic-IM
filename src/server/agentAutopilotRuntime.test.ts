@@ -183,6 +183,48 @@ describe('agent autopilot runtime', () => {
     expect(result.state.actionRequests.filter((request) => request.kind === 'coordinate')).toHaveLength(1);
   });
 
+  it('lets the current user ask their own assistant to negotiate in Chinese without saying Agent', async () => {
+    const state = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
+    const originalReviewTime = state.calendar.find((item) => item.id === 'cal-review')?.startsAt;
+    const trigger: Message = {
+      id: 'msg-natural-own-agent-cn',
+      roomId: 'room-team',
+      senderId: 'user-lin',
+      senderName: '林雯',
+      body: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。',
+      sentAt: '2026-05-04T20:41:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toMatchObject({
+      initiatorAgentId: 'agent-lin',
+      targetAgentIds: ['agent-lin', 'agent-chen'],
+      status: 'needs_confirmation'
+    });
+    expect(result.sessions[0].turns.map((turn) => turn.agentId)).toContain('agent-chen');
+    expect(result.state.actionRequests).toHaveLength(1);
+    expect(result.state.actionRequests[0]).toMatchObject({
+      agentId: 'agent-lin',
+      kind: 'coordinate',
+      status: 'needs_confirmation',
+      input: {
+        toAgentId: 'agent-chen',
+        calendarPatch: {
+          itemId: 'cal-review',
+          oldStartsAt: '2026-05-05T20:30:00+08:00',
+          newStartsAt: '2026-05-06T23:00:00+08:00'
+        }
+      }
+    });
+    expect(result.state.calendar.find((item) => item.id === 'cal-review')?.startsAt).toBe(originalReviewTime);
+  });
+
   it('counter-proposes a later time when a target Agent owner has a calendar conflict', async () => {
     const baseState = enableAutopilot(createDemoState(), ['agent-lin', 'agent-chen']);
     const state: DemoState = {

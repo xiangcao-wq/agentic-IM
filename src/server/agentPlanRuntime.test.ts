@@ -354,6 +354,162 @@ describe('agent plan runtime', () => {
     expect(String(aiProvider.calls[0].input)).toContain('sodium-router migration owner is Lin');
   });
 
+  it('uses a log-free user-facing prompt for final chat replies after planning', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const state = createDemoState();
+    state.actionLogs.unshift({
+      id: 'log-secret-diagnostic-marker',
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      action: 'agent_run:deadline:secret-diagnostic-marker',
+      status: 'executed',
+      risk: {
+        level: 'low',
+        score: 0.1,
+        reason: 'debug-only',
+        model: 'risk-mini-v1'
+      },
+      contextIds: [],
+      toolCalls: ['fallback.local_context', 'memory.write'],
+      createdAt: '2026-05-04T16:00:00+08:00'
+    });
+    await writeFile(dbPath, JSON.stringify(state, null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'answer',
+        intent: 'chat',
+        userVisiblePlan: 'Answer naturally.',
+        answer: 'Tool trace: deepseek.pro.chat.completions -> fallback.local_context\n我会先解释内部执行链。',
+        toolCalls: [{ tool: 'chat.answer', args: {} }],
+        risk: { level: 'low', score: 0.1, reason: 'Read-only answer.', model: 'planner-test' },
+        citations: []
+      }),
+      '我可以帮你梳理当前聊天、查找授权文件、确认截止时间，也可以在需要时帮你发起协商。'
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '你能帮我做什么？'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toBe('我可以帮你梳理当前聊天、查找授权文件、确认截止时间，也可以在需要时帮你发起协商。');
+    expect(aiProvider.calls).toHaveLength(2);
+    const finalPrompt = String(aiProvider.calls[1].input);
+    const finalMessages = aiProvider.calls[1].messages as Array<{ content: string }> | undefined;
+    expect(finalPrompt).not.toContain('## Recent agent logs');
+    expect(finalPrompt).not.toContain('secret-diagnostic-marker');
+    expect(finalPrompt).not.toContain('fallback.local_context');
+    expect(String(aiProvider.calls[1].instructions)).toContain('不要提及工具名、执行链路、fallback、运行日志或内部风险模型');
+    expect(finalMessages?.map((message) => message.content).join('\n')).not.toContain('secret-diagnostic-marker');
+  });
+
+  it('lets open-ended Agent chat run multiple read-only tools before answering', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'answer',
+        intent: 'chat',
+        userVisiblePlan: 'Inspect the room, deadline, and relevant files before giving one recommendation.',
+        toolCalls: [
+          { tool: 'room.summarize', args: {} },
+          { tool: 'deadline.answer', args: { question: 'What should we do next before the deadline?' } },
+          { tool: 'file.search', args: { query: 'interview notes action plan' } },
+          { tool: 'chat.answer', args: {} }
+        ],
+        risk: { level: 'low', score: 0.1, reason: 'Read-only goal analysis.', model: 'planner-test' },
+        citations: ['msg-02']
+      }),
+      JSON.stringify({
+        headline: 'The team must finish the report, slides, and interview evidence before submission.',
+        deadlines: ['May 12 23:59'],
+        todos: ['Verify interview quotes', 'Lock the final slide deck'],
+        sources: ['msg-02', 'task-report']
+      }),
+      JSON.stringify({
+        answer: 'The deadline is May 12 at 23:59, so the next step is to verify interview quotes before locking slides.',
+        sources: ['msg-02', 'task-report']
+      }),
+      '先核对访谈引用，再锁定最终演示稿；我已经把当前群聊、截止时间和可见文件一起看过了。'
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '你自己判断一下，我们现在下一步最应该做什么？需要看文件也可以一起看。'
+      })
+    });
+    const state = await requestJson(`${app.url}/api/state`);
+
+    expect(response.intent).toBe('chat');
+    expect(response.requiresHuman).toBe(false);
+    expect(response.actionRequest).toBeUndefined();
+    expect(response.result.reply).toContain('先核对访谈引用');
+    expect(response.goalPlan).toMatchObject({
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      status: 'completed',
+      summary: 'Inspect the room, deadline, and relevant files before giving one recommendation.'
+    });
+    expect(response.goalPlan.steps.map((step: { tool: string; status: string; sideEffect: string }) => ({
+      tool: step.tool,
+      status: step.status,
+      sideEffect: step.sideEffect
+    }))).toEqual([
+      { tool: 'room.summarize', status: 'completed', sideEffect: 'read' },
+      { tool: 'deadline.answer', status: 'completed', sideEffect: 'read' },
+      { tool: 'file.search', status: 'completed', sideEffect: 'read' },
+      { tool: 'chat.answer', status: 'completed', sideEffect: 'read' }
+    ]);
+    expect(response.log.toolCalls).toContain('room.summarize');
+    expect(response.log.toolCalls).toContain('deadline.answer');
+    expect(response.log.toolCalls).toContain('file_library.search');
+    expect(response.log.toolCalls).not.toContain('message.send');
+    expect(response.log.toolCalls).not.toContain('file.share');
+    expect(state.actionRequests).toHaveLength(0);
+    expect(state.agentGoalPlans).toContainEqual(expect.objectContaining({ id: response.goalPlan.id }));
+    expect(aiProvider.calls).toHaveLength(4);
+    const finalPrompt = String(aiProvider.calls[3].input);
+    expect(finalPrompt).toContain('## Agent Workspace');
+    expect(finalPrompt).toContain('Room summary');
+    expect(finalPrompt).toContain('Deadline check');
+    expect(finalPrompt).toContain('File search');
+    expect(finalPrompt).toContain('May 12 at 23:59');
+    expect(finalPrompt).not.toContain('## Recent agent logs');
+
+    const continued = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        goalPlanId: response.goalPlan.id,
+        userText: '继续'
+      })
+    });
+
+    expect(continued.intent).toBe('chat');
+    expect(continued.goalPlan.id).toBe(response.goalPlan.id);
+    expect(continued.result.reply).toContain('接着上次计划');
+    expect(continued.result.reply).toContain('当前没有待确认动作');
+    expect(continued.log.toolCalls).toContain('goal_plan.resume');
+    expect(aiProvider.calls).toHaveLength(4);
+  });
+
   it('queues medium or high risk coordination instead of sending it directly', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'agent-plan-'));
     tempDirs.push(dir);

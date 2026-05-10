@@ -45,6 +45,13 @@ describe('runtime upgrade APIs', () => {
     expect(reply.message.body).toContain('访谈截图');
     expect(reply.log.toolCalls).toContain('deepseek.flash.chat.completions');
     expect(aiProvider.calls[0]).toMatchObject({ actorRole: 'human_user', actorId: 'user-chen' });
+    expect(aiProvider.calls[0].messages).toEqual([
+      expect.objectContaining({ role: 'system' }),
+      expect.objectContaining({ role: 'user', content: expect.stringContaining('# Authorized Agent Context') }),
+      expect.objectContaining({ role: 'user', content: expect.stringContaining('## Human Reply Request') })
+    ]);
+    expect(String((aiProvider.calls[0].messages as Array<{ content: string }>)[1].content)).toContain('## Members');
+    expect(String((aiProvider.calls[0].messages as Array<{ content: string }>)[1].content)).not.toContain('## Recent messages');
     expect(state.messages.some((message: { id: string; body: string }) => message.id.startsWith('$') && message.body.includes('访谈截图'))).toBe(true);
   });
 
@@ -146,7 +153,128 @@ describe('runtime upgrade APIs', () => {
     expect(response.intent).toBe('chat');
     expect(response.plan).toBe('Answer directly from the structured room context.');
     expect(response.result.reply).toContain('assignment planning');
-    expect(aiProvider.calls).toHaveLength(1);
+    expect(aiProvider.calls).toHaveLength(2);
+    expect(String(aiProvider.calls[1].instructions)).toContain('用户回复指引');
+    expect(String(aiProvider.calls[1].input)).not.toContain('## Recent agent logs');
+  });
+
+  it('treats tell-me phrasing as a direct Agent answer instead of delegated message sending', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        mode: 'execute',
+        intent: 'send_message',
+        userVisiblePlan: 'Incorrectly treat the phrase as message sending.',
+        toolCalls: [{ tool: 'message.send', args: { targetRoomId: 'room-team', messageBody: '下一步' } }],
+        risk: { level: 'low', score: 0.1, reason: 'misclassified direct answer', model: 'test-planner' }
+      }),
+      '下一步先确认报告 PDF 和演示稿版本，再处理需要人工确认的文件代发。'
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '请告诉我下一步需要做什么'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('下一步先确认');
+    expect(response.message).toBeUndefined();
+    expect(response.log.toolCalls).not.toContain('message.send');
+  });
+
+  it('answers next-step fallback questions from current room tasks before file excerpts', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: '请告诉我下一步需要做什么'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('下一步先处理');
+    expect(response.result.reply).toContain('截止时间');
+    expect(response.result.reply).not.toContain('agent-collaboration-protocol');
+  });
+
+  it('keeps local Agent run results when Matrix delivery is unavailable', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    const bootstrapPath = join(dir, 'matrix-bootstrap.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    await writeBootstrap(bootstrapPath, 'http://127.0.0.1:1');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: bootstrapPath, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'send_message',
+        targetRoomId: 'room-team',
+        messageBody: '我稍后加入讨论',
+        userText: '帮我发消息：我稍后加入讨论'
+      })
+    });
+
+    expect(response.intent).toBe('send_message');
+    expect(response.message).toMatchObject({
+      roomId: 'room-team',
+      body: '我稍后加入讨论'
+    });
+    expect(response.log.toolCalls).toContain('message.send');
+  });
+
+  it('sanitizes LLM-directed chat responses before returning them to the UI', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const aiProvider = createSequenceAiProvider([
+      JSON.stringify({
+        intent: 'chat',
+        plan: 'Answer directly.',
+        answer: '**Chen owns the interview notes.**\nTool trace: deepseek.pro.chat.completions -> room_search -> memory.search\nReasoning: inspected room context first.',
+        citations: ['msg-05']
+      })
+    ]);
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        userText: 'Who owns the interview notes?'
+      })
+    });
+
+    expect(response.intent).toBe('chat');
+    expect(response.result.reply).toContain('Chen owns the interview notes');
+    expect(response.result.reply).not.toContain('**');
+    expect(response.result.reply).not.toContain('Tool trace');
+    expect(response.result.reply).not.toContain('deepseek.pro');
+    expect(response.result.reply).not.toContain('Reasoning');
   });
 
   it('uses the LLM decision intent instead of the legacy request intent', async () => {
@@ -366,6 +494,28 @@ describe('runtime upgrade APIs', () => {
     expect(response.files[0].id).toBe('file-slides-v3');
     expect(response.files.map((file: { id: string }) => file.id)).toContain('file-slides-v3');
     expect(new Set(response.files.map((file: { name: string }) => file.name)).size).toBe(response.files.length);
+  });
+
+  it('finds authorized files from approximate fuzzy wording', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-runtime-'));
+    tempDirs.push(dir);
+    const dbPath = join(dir, 'db.json');
+    await writeFile(dbPath, JSON.stringify(createDemoState(), null, 2), 'utf8');
+    const app = await createAppServer({ dbPath, port: 0, matrixBootstrapPath: null, aiProvider: null });
+    servers.push(app);
+
+    const response = await requestJson(`${app.url}/api/agent/run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        intent: 'find_file',
+        userText: 'intervew material'
+      })
+    });
+
+    expect(response.files[0].id).toBe('file-interview-notes-txt');
+    expect(response.files[0].name).toContain('访谈纪要');
   });
 
   it('surfaces metadata-only shareable files instead of saying no file was found', async () => {

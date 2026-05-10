@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/*.json
+data/*.jsonl
 data/media/
 data/backups/
 .env*
@@ -8,6 +9,7 @@ data/backups/
 synapse-data/
 .playwright-mcp/
 tmp/
+.tmp/
 *.tsbuildinfo
 *.log
 agent-im-ui*.png
