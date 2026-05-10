@@ -16,6 +16,8 @@ export type AiAutoreplyTriggerMode = 'all_messages' | 'mentions_only';
 export type AiReplyJobStatus = 'pending' | 'completed' | 'skipped' | 'failed';
 export type MemoryKind = 'summary' | 'deadline' | 'file' | 'coordination' | 'note';
 export type AgentPlanMode = 'answer' | 'execute' | 'request_confirmation';
+export type AgentGoalPlanStatus = 'active' | 'completed' | 'needs_confirmation' | 'blocked';
+export type AgentGoalPlanStepStatus = 'pending' | 'running' | 'completed' | 'needs_confirmation' | 'blocked' | 'skipped';
 export type AgentAutopilotAction =
   | 'reply'
   | 'search_files'
@@ -84,6 +86,12 @@ export interface User {
   status: 'online' | 'offline' | 'busy';
   agentId: string;
   matrixUserId?: string;
+  collaborationProfile?: {
+    responsibility: string;
+    currentFocus: string;
+    availability: string;
+    assistantScope: string[];
+  };
 }
 
 export interface PersonalAgent {
@@ -188,6 +196,35 @@ export interface AgentPlan {
   risk: RiskAssessment;
   citations: string[];
   needsConfirmationReason?: string;
+}
+
+export interface AgentGoalPlanStep {
+  id: string;
+  title: string;
+  tool: AgentToolName;
+  sideEffect: 'read' | 'write';
+  status: AgentGoalPlanStepStatus;
+  requiresHuman: boolean;
+  evidenceIds: string[];
+  outputSummary?: string;
+  risk?: RiskAssessment;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentGoalPlan {
+  id: string;
+  agentId: string;
+  roomId: string;
+  originRunId?: string;
+  userText: string;
+  summary: string;
+  status: AgentGoalPlanStatus;
+  steps: AgentGoalPlanStep[];
+  contextIds: string[];
+  actionRequestIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AgentActionLog {
@@ -412,6 +449,7 @@ export interface DemoState {
   actionLogs: AgentActionLog[];
   actionRequests: AgentActionRequest[];
   a2aSessions: A2ASession[];
+  agentGoalPlans: AgentGoalPlan[];
   agentAutopilotPolicies: AgentAutopilotPolicy[];
   memories: MemoryItem[];
   matrixObserverCheckpoints: MatrixObserverCheckpoint[];
@@ -470,6 +508,7 @@ export interface AgentRunRequest {
   messageBody?: string;
   fileId?: string;
   fileVersion?: number;
+  goalPlanId?: string;
 }
 
 export interface ChatResult {
@@ -504,4 +543,5 @@ export interface AgentRunResult {
   memory?: MemoryItem;
   log: AgentActionLog;
   actionRequest?: AgentActionRequest;
+  goalPlan?: AgentGoalPlan;
 }

@@ -161,6 +161,66 @@ describe('personal agent behavior', () => {
     expect(answer.answer).not.toContain('5月12日 23:59');
   });
 
+  it('sanitizes LLM deadline answers before showing them to users', async () => {
+    const state = createDemoState();
+    const aiProvider: AiProvider = {
+      async generateText() {
+        return JSON.stringify({
+          answer: '**Deadline: May 12 23:59.**\nTool trace: deepseek.pro.chat.completions -> room_search -> file_library.search\nReasoning: I inspected tasks first.',
+          sources: ['msg-02']
+        });
+      }
+    };
+
+    const answer = await answerDeadlineQuestion(
+      state,
+      {
+        agentId: 'agent-lin',
+        roomId: 'room-class',
+        question: 'deadline?'
+      },
+      aiProvider
+    );
+
+    expect(answer.answer).toContain('May 12 23:59');
+    expect(answer.answer).not.toContain('**');
+    expect(answer.answer).not.toContain('Tool trace');
+    expect(answer.answer).not.toContain('deepseek.pro');
+    expect(answer.answer).not.toContain('Reasoning');
+  });
+
+  it('uses cache-friendly messages for LLM deadline prompts', async () => {
+    const state = createDemoState();
+    const aiProvider = createRecordingProvider(
+      JSON.stringify({
+        answer: '5月12日 23:59 前提交。',
+        sources: ['msg-02']
+      })
+    );
+
+    await answerDeadlineQuestion(
+      state,
+      {
+        agentId: 'agent-lin',
+        roomId: 'room-class',
+        question: '这次作业什么时候截止？'
+      },
+      aiProvider
+    );
+
+    const messages = aiProvider.calls[0].messages;
+    expect(messages).toEqual([
+      expect.objectContaining({ role: 'system' }),
+      expect.objectContaining({ role: 'user', content: expect.stringContaining('# Authorized Agent Context') }),
+      expect.objectContaining({ role: 'user', content: expect.stringContaining('## Current User Question') })
+    ]);
+    expect(messages?.[1].content).toContain('## Tasks');
+    expect(messages?.[1].content).toContain('## Files');
+    expect(messages?.[1].content).toContain('## Members');
+    expect(messages?.[1].content).not.toContain('## Recent messages');
+    expect(messages?.[2].content).toContain('## Recent messages');
+  });
+
   it('auto-shares the newest authorized file when risk is controllable', async () => {
     const baseState = createDemoState();
     const state = {
@@ -395,6 +455,43 @@ describe('personal agent behavior', () => {
     expect(result.proposedPlan).toContain('建议先在群里确认所有成员是否同意改到周三 23:00');
   });
 
+  it('sanitizes LLM coordination suggestions and risk reasons before display', async () => {
+    const state = createDemoState();
+    const aiProvider: AiProvider = {
+      async generateText() {
+        return JSON.stringify({
+          hasScheduleChange: true,
+          risk: {
+            level: 'medium',
+            score: 0.62,
+            reason: 'fallback.local_rules -> agent.coordinate; Needs confirmation.'
+          },
+          suggestion: '**Ask Chen to confirm 23:00.**\nTool trace: calendar.inspect -> agent_to_agent.negotiate',
+          reasoning: 'Hidden model chain of thought should never be displayed.'
+        });
+      }
+    };
+
+    const result = await coordinateAgents(
+      state,
+      {
+        fromAgentId: 'agent-chen',
+        toAgentId: 'agent-lin',
+        roomId: 'room-team',
+        proposal: 'Move the final review to 23:00.'
+      },
+      aiProvider
+    );
+
+    expect(result.proposedPlan).toContain('Ask Chen to confirm 23:00');
+    expect(result.proposedPlan).not.toContain('**');
+    expect(result.proposedPlan).not.toContain('Tool trace');
+    expect(result.proposedPlan).not.toContain('agent_to_agent');
+    expect(result.risk.reason).toContain('Needs confirmation');
+    expect(result.risk.reason).not.toContain('fallback.local_rules');
+    expect(result.risk.reason).not.toContain('agent.coordinate');
+  });
+
   it('does not add fixed coordination context ids when calendar and task evidence is absent', async () => {
     const state = {
       ...createDemoState(),
@@ -413,3 +510,16 @@ describe('personal agent behavior', () => {
     expect(result.log.contextIds).toEqual([]);
   });
 });
+
+function createRecordingProvider(text: string): AiProvider & {
+  calls: Array<Parameters<AiProvider['generateText']>[0]>;
+} {
+  const calls: Array<Parameters<AiProvider['generateText']>[0]> = [];
+  return {
+    calls,
+    async generateText(prompt) {
+      calls.push(prompt);
+      return text;
+    }
+  };
+}

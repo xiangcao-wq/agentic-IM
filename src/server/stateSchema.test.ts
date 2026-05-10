@@ -22,6 +22,7 @@ describe('state schema helpers', () => {
     expect(collections.calendar).toHaveLength(state.calendar.length);
     expect(collections.actionLogs).toHaveLength(state.actionLogs.length);
     expect(collections.actionRequests).toHaveLength(state.actionRequests.length);
+    expect(collections.agentGoalPlans).toHaveLength(state.agentGoalPlans.length);
   });
 
   it('accepts a valid DemoState shape', () => {
@@ -48,6 +49,7 @@ describe('state schema helpers', () => {
     delete (oldSnapshot as Partial<typeof state>).fileTextChunks;
     delete (oldSnapshot as Partial<typeof state>).a2aSessions;
     delete (oldSnapshot as Partial<typeof state>).agentAutopilotPolicies;
+    delete (oldSnapshot as Partial<typeof state>).agentGoalPlans;
     delete (oldSnapshot as Partial<typeof state>).aiAutoreplyPolicies;
     delete (oldSnapshot as Partial<typeof state>).aiReplyJobs;
 
@@ -55,6 +57,7 @@ describe('state schema helpers', () => {
     expect(upgraded.actionRequests).toEqual([]);
     expect(upgraded.fileTextChunks).toEqual([]);
     expect(upgraded.a2aSessions).toEqual([]);
+    expect(upgraded.agentGoalPlans).toEqual([]);
     expect(upgraded.agentAutopilotPolicies).toContainEqual(
       expect.objectContaining({
         agentId: 'agent-lin',
@@ -71,6 +74,27 @@ describe('state schema helpers', () => {
         allowedRoomIds: ['room-team'],
         triggerMode: 'all_messages'
       })
+    );
+  });
+
+  it('upgrades older user snapshots with collaboration profiles for the demo cast', () => {
+    const state = createDemoState();
+    const oldSnapshot = {
+      ...state,
+      users: state.users.map((user) => {
+        const { collaborationProfile: _profile, ...legacyUser } = user;
+        return legacyUser;
+      })
+    };
+
+    const upgraded = validateDemoStateShape(oldSnapshot);
+
+    expect(upgraded.users.find((user) => user.id === 'user-lin')?.collaborationProfile).toMatchObject({
+      currentFocus: '等陈晨补齐访谈截图后更新演示稿第 5 页和结论页',
+      assistantScope: ['查找授权文件', '代发演示稿', '发起日程协商']
+    });
+    expect(upgraded.users.find((user) => user.id === 'user-chen')?.collaborationProfile?.responsibility).toBe(
+      '访谈材料、引用来源和流程截图'
     );
   });
 

@@ -69,6 +69,7 @@ type ContextFocus = 'summary' | 'deadline' | 'file_share' | 'coordinate' | 'chat
 interface StructuredContextOptions {
   focus?: ContextFocus;
   userText?: string;
+  includeDiagnostics?: boolean;
 }
 
 export interface AgentContextBundleInput {
@@ -76,6 +77,7 @@ export interface AgentContextBundleInput {
   agentId: string;
   userText?: string;
   focus?: ContextFocus;
+  includeDiagnostics?: boolean;
 }
 
 export interface AgentContextMessage {
@@ -177,7 +179,8 @@ export function buildStructuredContext(
       roomId,
       agentId,
       userText: options?.userText,
-      focus: options?.focus ?? 'chat'
+      focus: options?.focus ?? 'chat',
+      includeDiagnostics: options?.includeDiagnostics
     }).text;
   }
 
@@ -206,6 +209,7 @@ export function buildStructuredContext(
 
 export function buildAgentContextBundle(state: DemoState, input: AgentContextBundleInput): AgentContextBundle {
   const focus = input.focus ?? 'chat';
+  const includeDiagnostics = input.includeDiagnostics ?? true;
   const agent = getAgent(state, input.agentId);
   const room = state.rooms.find((candidate) => candidate.id === input.roomId);
   if (!room) {
@@ -280,17 +284,19 @@ export function buildAgentContextBundle(state: DemoState, input: AgentContextBun
     .filter((memory) => memory.kind !== 'note' || memory.sourceIds.length > 0)
     .slice(0, 10);
 
-  const actionLogs = (state.actionLogs ?? [])
-    .filter((log) => log.agentId === agent.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 8)
-    .map((log) => ({
-      id: log.id,
-      action: log.action,
-      status: log.status,
-      riskLevel: log.risk.level,
-      createdAt: log.createdAt
-    }));
+  const actionLogs = includeDiagnostics
+    ? (state.actionLogs ?? [])
+        .filter((log) => log.agentId === agent.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 8)
+        .map((log) => ({
+          id: log.id,
+          action: log.action,
+          status: log.status,
+          riskLevel: log.risk.level,
+          createdAt: log.createdAt
+        }))
+    : [];
 
   const partial: Omit<AgentContextBundle, 'text'> = {
     room: {
@@ -318,7 +324,7 @@ export function buildAgentContextBundle(state: DemoState, input: AgentContextBun
 
   return {
     ...partial,
-    text: renderAgentContextBundle(partial)
+    text: renderAgentContextBundle(partial, { includeDiagnostics })
   };
 }
 
@@ -466,7 +472,10 @@ function scoreChunkText(chunk: FileTextChunk, terms: string[]): number {
   return terms.reduce((score, term) => (haystack.includes(term) ? score + Math.max(1, term.length) : score), 0);
 }
 
-function renderAgentContextBundle(bundle: Omit<AgentContextBundle, 'text'>): string {
+function renderAgentContextBundle(
+  bundle: Omit<AgentContextBundle, 'text'>,
+  options: { includeDiagnostics: boolean } = { includeDiagnostics: true }
+): string {
   const sections = [
     '# Authorized Agent Context',
     'Boundary: Do not assume hidden room, private chat, or missing file contents are visible.',
@@ -522,13 +531,18 @@ function renderAgentContextBundle(bundle: Omit<AgentContextBundle, 'text'>): str
     'Note: memories are lower-confidence prior notes. Use them only when supported by messages, tasks, files, or file excerpts.',
     ...(bundle.memories.length > 0
       ? bundle.memories.map((memory) => `- ${memory.id}: [${memory.kind}] ${memory.content}`)
-      : ['- none']),
-    '',
-    '## Recent agent logs',
-    ...(bundle.actionLogs.length > 0
-      ? bundle.actionLogs.map((log) => `- ${log.id}: ${log.action}; status=${log.status}; risk=${log.riskLevel}`)
       : ['- none'])
   ];
+
+  if (options.includeDiagnostics) {
+    sections.push(
+      '',
+      '## Recent agent logs',
+      ...(bundle.actionLogs.length > 0
+        ? bundle.actionLogs.map((log) => `- ${log.id}: ${log.action}; status=${log.status}; risk=${log.riskLevel}`)
+        : ['- none'])
+    );
+  }
 
   return sections.join('\n');
 }

@@ -22,6 +22,9 @@ describe('agent run prompt cache layout', () => {
       '## Files',
       '- file-1: report.md; downloadable=true; summary=stable file metadata',
       '',
+      '## Calendar availability',
+      '- cal-1: final review; startsAt=2026-05-05T20:30:00+08:00',
+      '',
       '## File text excerpts',
       '- chunk-1: query-dependent text',
       '',
@@ -41,7 +44,13 @@ describe('agent run prompt cache layout', () => {
     expect(messages?.[1].content).toContain('# Authorized Agent Context');
     expect(messages?.[1].content).toContain('## Tasks');
     expect(messages?.[1].content).toContain('## Files');
+    expect(messages?.[1].content).toContain('## Calendar availability');
     expect(messages?.[1].content).toContain('## Members');
+    expect(messages?.[1].content.indexOf('## Members')).toBeLessThan(messages?.[1].content.indexOf('## Files'));
+    expect(messages?.[1].content.indexOf('## Files')).toBeLessThan(messages?.[1].content.indexOf('## Tasks'));
+    expect(messages?.[1].content.indexOf('## Tasks')).toBeLessThan(
+      messages?.[1].content.indexOf('## Calendar availability')
+    );
     expect(messages?.[1].content).not.toContain('## Recent messages');
     expect(messages?.[1].content).not.toContain('new message that changes every run');
 

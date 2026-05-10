@@ -233,4 +233,43 @@ describe('agent context bundle', () => {
     expect(bundle.text).toContain('user-chen');
     expect(bundle.text).toContain('cal-interview-sync');
   });
+
+  it('omits runtime diagnostics from user-facing reply context', () => {
+    const state = {
+      ...createDemoState(),
+      actionLogs: [
+        {
+          id: 'log-secret-diagnostic-marker',
+          agentId: 'agent-lin',
+          roomId: 'room-team',
+          action: 'agent_run:deadline:secret-diagnostic-marker',
+          status: 'executed' as const,
+          risk: {
+            level: 'low' as const,
+            score: 0.1,
+            reason: 'debug-only',
+            model: 'risk-mini-v1'
+          },
+          contextIds: [],
+          toolCalls: ['fallback.local_context', 'memory.write'],
+          createdAt: '2026-05-04T16:00:00+08:00'
+        },
+        ...createDemoState().actionLogs
+      ]
+    };
+
+    const bundle = buildAgentContextBundle(state, {
+      roomId: 'room-team',
+      agentId: 'agent-lin',
+      userText: '你能帮我做什么？',
+      focus: 'chat',
+      includeDiagnostics: false
+    });
+
+    expect(bundle.text).toContain('## Recent messages');
+    expect(bundle.text).toContain('## Tasks');
+    expect(bundle.text).not.toContain('## Recent agent logs');
+    expect(bundle.text).not.toContain('secret-diagnostic-marker');
+    expect(bundle.text).not.toContain('fallback.local_context');
+  });
 });

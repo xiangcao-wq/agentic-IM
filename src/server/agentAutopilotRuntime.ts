@@ -423,11 +423,18 @@ function selectAutopilotCandidates(
     .flatMap((policy) => {
       const agent = state.agents.find((candidate) => candidate.id === policy.agentId);
       const owner = agent ? state.users.find((candidate) => candidate.id === agent.ownerId) : undefined;
-      if (!agent || !owner || owner.id === triggerMessage.senderId) {
+      const ownDelegation = Boolean(
+        agent &&
+        owner &&
+        owner.id === triggerMessage.senderId &&
+        inferredIntent &&
+        isOwnAssistantDelegationCommand(triggerMessage.body, inferredIntent)
+      );
+      if (!agent || !owner || (owner.id === triggerMessage.senderId && !ownDelegation)) {
         return [];
       }
-      const explicitlyMentioned = mentionsAgent(triggerMessage.body, agent.displayName, owner.name, owner.id);
-      const explicitAgentMention = mentionsAgentDirectly(triggerMessage.body, agent.displayName, owner.name, owner.id);
+      const explicitlyMentioned = ownDelegation || mentionsAgent(triggerMessage.body, agent.displayName, owner.name, owner.id);
+      const explicitAgentMention = ownDelegation || mentionsAgentDirectly(triggerMessage.body, agent.displayName, owner.name, owner.id);
       const intent = inferredIntent ?? (explicitAgentMention ? 'chat' : undefined);
       if (!intent || !policyAllowsIntent(policy, intent)) {
         return [];
@@ -454,6 +461,29 @@ function selectRunnableCandidates<T extends { explicitlyMentioned: boolean; inte
     return explicit.slice(0, 3);
   }
   return candidates.slice(0, 1);
+}
+
+function isOwnAssistantDelegationCommand(text: string, intent: AgentRunIntent): boolean {
+  const lowered = text.toLowerCase();
+  const asksOwnAssistant =
+    includesAny(text, ['帮我', '替我', '麻烦你', '请你', '帮忙', '帮我和']) ||
+    includesAny(lowered, ['help me', 'for me', 'on my behalf']);
+  if (!asksOwnAssistant) {
+    return false;
+  }
+  if (intent === 'coordinate') {
+    return (
+      includesAny(text, ['商量', '协商', '协调', '确认', '改到', '调整', '安排']) ||
+      includesAny(lowered, ['negotiate', 'coordinate', 'reschedule'])
+    );
+  }
+  if (intent === 'share_file') {
+    return (
+      includesAny(text, ['发', '发送', '代发', '转发', '分享']) ||
+      includesAny(lowered, ['send', 'share', 'forward'])
+    );
+  }
+  return intent === 'deadline' || intent === 'find_file' || intent === 'chat';
 }
 
 function inferAutopilotIntent(text: string): AgentRunIntent | undefined {

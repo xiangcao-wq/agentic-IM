@@ -39,6 +39,7 @@ describe('App runtime upgrade controls', () => {
   let eventListeners: Record<string, (event: { type: string; data: string }) => void>;
 
   beforeEach(() => {
+    window.localStorage.clear();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -97,8 +98,11 @@ describe('App runtime upgrade controls', () => {
 
     expect(host.textContent).toContain('聊天');
     expect(host.querySelector('input[aria-label="search rooms"]')).toBeTruthy();
-    expect(host.textContent).toContain('Agent 找文件');
-    expect(host.textContent).toContain('请求代发');
+    expect(host.querySelector('.agent-workbench')).toBeNull();
+    expect(host.querySelector('.agent-console')).toBeNull();
+    expect(host.querySelector('.app-shell-im')).toBeTruthy();
+    expect(host.textContent).toContain('Agent 操作台');
+    expect([...host.querySelectorAll('.action-grid button')].some((button) => button.textContent?.includes('请求代发'))).toBe(false);
     expect(host.textContent).toContain('陈晨');
     expect(host.textContent).not.toContain('从当前对话中提取的任务');
     expect(host.textContent).not.toContain('让陈晨回复');
@@ -111,6 +115,78 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('同步 Matrix');
     expect(host.textContent).not.toContain('结构化记忆');
     expect(host.textContent).not.toContain('Agent 设置');
+  });
+
+  it('shows the reviewer guide on first load and keeps a reopen entry', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(host.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(host.textContent).toContain('AgentBridge / A2A 原生聊天');
+    expect(host.textContent).toContain('从消息流到 Agent 协作网络');
+    expect(host.textContent).toContain('Agent 数量会多于人类用户');
+    expect(host.textContent).toContain('聊天仍是入口');
+    expect(host.textContent).toContain('A2A 是协作层');
+    expect(host.textContent).toContain('风险门控是边界');
+    expect(host.textContent).not.toContain('AI 用户');
+    expect(host.textContent).not.toContain('演示角色');
+    expect(host.textContent).not.toContain('评委');
+    expect(host.textContent).toContain('Agent 操作台');
+    expect(host.textContent).toContain('触发 A2A 交换约束和提案');
+    expect(host.textContent).toContain('这不是内置了 Agent 的 IM');
+
+    const startButton = host.querySelector<HTMLButtonElement>('.review-guide-primary');
+    expect(startButton).toBeTruthy();
+    await act(async () => {
+      startButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await waitForMotionExit();
+    });
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(window.localStorage.getItem('agentbridge-review-guide-dismissed')).toBe('true');
+
+    const reopenButton = host.querySelector<HTMLButtonElement>('.review-guide-button');
+    expect(reopenButton).toBeTruthy();
+    await act(async () => {
+      reopenButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(host.textContent).toContain('你正在以林雯视角查看');
+  });
+
+  it('shows natural member presence and assistant delegation without exposing demo mechanics', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    expect(host.querySelector('.brand-row p')?.textContent).toBe('个人助手协作空间');
+    expect(host.textContent).toContain('林雯 · 离线，个人助手托管中');
+    expect(host.textContent).toContain('陈晨在线');
+    expect(host.textContent).toContain('赵一鸣忙碌');
+    expect(host.textContent).toContain('陈晨 · 在线');
+    expect(host.textContent).toContain('林雯 · 托管中');
+    expect(host.textContent).not.toContain('AI Agent 协作工作台');
+    expect(host.textContent).not.toContain('AI 成员协作');
+  });
+
+  it('shows each room member identity, current focus, and assistant scope in the member panel', async () => {
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const memberTab = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('成员'));
+    expect(memberTab).toBeTruthy();
+    await act(async () => {
+      memberTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('演示稿结构、课堂展示和最终视觉表达');
+    expect(host.textContent).toContain('等陈晨补齐访谈截图后更新演示稿第 5 页和结论页');
+    expect(host.textContent).toContain('今天 18:30 后离线，19:30-21:30 是演示稿专注时间');
+    expect(host.textContent).toContain('可托管：查找授权文件、代发演示稿、发起日程协商');
+    expect(host.textContent).toContain('访谈材料、引用来源和流程截图');
   });
 
   it('keeps room intelligence panels collapsed until their top tabs are clicked', async () => {
@@ -209,21 +285,40 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('群聊 0');
   });
 
-  it('keeps both chat and Agent composers in bottom dock positions', async () => {
+  it('opens Agent shortcuts from the chat composer and switches to the full Agent console', async () => {
     await act(async () => {
       root.render(<App />);
     });
 
     const chatComposer = host.querySelector('.chat-panel > .composer input[aria-label="chat composer"]');
     expect(chatComposer).toBeTruthy();
+    expect(host.querySelector('.agent-workbench')).toBeNull();
 
-    const workbenchChildren = [...host.querySelector('.agent-workbench')!.children];
-    const outputIndex = workbenchChildren.findIndex((node) => node.classList.contains('agent-output-area'));
-    const dockIndex = workbenchChildren.findIndex((node) => node.classList.contains('agent-dock'));
-    expect(outputIndex).toBeGreaterThan(-1);
-    expect(dockIndex).toBeGreaterThan(outputIndex);
-    expect(host.querySelector('.agent-dock .agent-query #agent-prompt')).toBeTruthy();
-    expect(host.querySelector('.agent-dock .action-grid')).toBeTruthy();
+    await openComposerAgentMenu(host);
+    expect(host.textContent).toContain('总结当前群聊');
+    expect(host.textContent).toContain('问截止');
+    expect(host.textContent).toContain('Agent 找文件');
+    expect(host.textContent).toContain('Agent 写回复');
+
+    const consoleButton = [...host.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('进入 Agent 操作台')
+    );
+    expect(consoleButton).toBeTruthy();
+
+    await act(async () => {
+      consoleButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await waitForMotionExit();
+    });
+
+    expect(host.querySelector('.app-shell-im')).toBeNull();
+    expect(host.querySelector('.agent-console')).toBeTruthy();
+    expect(host.textContent).toContain('返回聊天');
+    expect(host.querySelector('.agent-console-command #agent-prompt')).toBeTruthy();
+    expect(host.querySelector('.agent-inspector')).toBeTruthy();
+    expect(host.textContent).toContain('Timeline');
+    expect(host.textContent).toContain('Permission');
+    expect(host.textContent).toContain('Files');
+    expect(host.textContent).toContain('No permission decision');
   });
 
   it('renders the global AI connection status from server state', async () => {
@@ -249,6 +344,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.textContent).toContain('LLM connected');
     expect(host.textContent).toContain('deepseek-chat');
@@ -292,12 +388,61 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.querySelector('[data-testid="a2a-session-panel"]')).toBeTruthy();
     expect(host.querySelector('.autopilot-policy.enabled')).toBeTruthy();
-    expect(host.textContent).toContain('Chen asked Lin Agent to send the latest slides.');
-    expect(host.textContent).toContain('Delivered file-slides-v3 to the room.');
+    expect(host.textContent).toContain('文件代发请求：对方请求发送最新材料，等待人工确认。');
+    expect(host.textContent).toContain('Agent 已完成授权文件代发。');
+    expect(host.textContent).not.toContain('Chen asked Lin Agent to send the latest slides.');
+    expect(host.textContent).not.toContain('Delivered file-slides-v3 to the room.');
     expect(host.textContent).toContain('low');
+  });
+
+  it('keeps A2A session rows as concise user-facing summaries', async () => {
+    const state = createDemoState();
+    const noisyMessage = 'Negotiation produced a schedule-change proposal and is waiting for human confirmation.';
+    state.a2aSessions = [
+      {
+        id: 'a2a-session-noisy',
+        roomId: 'room-team',
+        initiatorAgentId: 'agent-chen',
+        targetAgentIds: ['agent-lin'],
+        goal: '我看到了赵一鸣的Agent要求我的Agent协商把合稿检查从周二20:30改到周三23:00。但我是陈晨本人，不是我的Agent。这段很长，不应该完整展示给用户。',
+        status: 'needs_confirmation',
+        turns: [
+          {
+            id: 'a2a-turn-noisy',
+            agentId: 'agent-lin',
+            kind: 'response',
+            message: noisyMessage,
+            toolCalls: ['agent.coordinate'],
+            createdAt: '2026-05-04T08:04:00.000Z'
+          }
+        ],
+        proposedActionRequestIds: [],
+        contextIds: ['msg-03'],
+        risk: {
+          level: 'medium',
+          score: 0.48,
+          reason: 'Schedule change requires confirmation.',
+          model: 'runtime-confirmation-gate-v1'
+        },
+        createdAt: '2026-05-04T08:04:00.000Z',
+        updatedAt: '2026-05-04T08:04:00.000Z'
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    expect(host.textContent).toContain('日程协调提案：把合稿检查从周二 20:30 调整到周三 23:00，等待人工确认。');
+    expect(host.textContent).toContain('Agent 已完成上下文检查，并将日程变更提交人工确认。');
+    expect(host.textContent).not.toContain('不是我的Agent');
+    expect(host.textContent).not.toContain(noisyMessage);
   });
 
   it('toggles current-room Agent autopilot from the workbench', async () => {
@@ -322,6 +467,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const toggle = host.querySelector<HTMLButtonElement>('.autopilot-policy button');
     expect(toggle).toBeTruthy();
@@ -378,6 +524,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const sweep = host.querySelector<HTMLButtonElement>('.autopilot-sweep-button');
     expect(sweep).toBeTruthy();
@@ -420,7 +567,8 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('实时连接已断开');
 
     apiMocks.runAgent.mockRejectedValueOnce(new Error('operation failed'));
-    const deadlineButton = [...host.querySelectorAll('.action-grid button')].find((button) =>
+    await openComposerAgentMenu(host);
+    const deadlineButton = [...host.querySelectorAll('.agent-command-menu button')].find((button) =>
       button.textContent?.includes('问截止')
     );
     expect(deadlineButton).toBeTruthy();
@@ -493,6 +641,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.textContent).toContain('LLM configured, not checked');
     expect(host.textContent).not.toContain('检查 LLM');
@@ -540,7 +689,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).not.toContain('收到 Agent 请求');
   });
 
-  it('does not render a separate runtime progress list in the compact workbench', async () => {
+  it('keeps runtime progress out of the default IM view until the Agent console opens', async () => {
     await act(async () => {
       root.render(<App />);
     });
@@ -567,6 +716,20 @@ describe('App runtime upgrade controls', () => {
 
     expect(host.textContent).not.toContain('检索截止信息');
     expect(host.textContent).not.toContain('写入 Agent 记忆');
+
+    await openAgentConsole(host);
+    expect(host.textContent).toContain('Agent 活动');
+    expect(host.textContent).toContain('写入 Agent 记忆');
+    expect(host.textContent).not.toContain('检索截止信息');
+
+    const auditToggle = host.querySelector<HTMLButtonElement>('.audit-disclosure-button');
+    expect(auditToggle).toBeTruthy();
+    await act(async () => {
+      auditToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('实时步骤');
+    expect(host.textContent).toContain('检索截止信息');
   });
 
   it('does not render a separate evidence panel in the compact workbench', async () => {
@@ -617,34 +780,13 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
-    const actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')];
-    const summaryButton = actionButtons.find((button) => button.textContent?.includes('总结群聊'));
-    const deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
-    const findFileButton = actionButtons.find((button) => button.textContent?.includes('Agent 找文件'));
-    const fileShareButton = actionButtons.find((button) => button.textContent?.includes('请求代发'));
-    const coordinateButton = actionButtons.find((button) => button.textContent?.includes('Agent 协调'));
-    expect(summaryButton).toBeTruthy();
-    expect(deadlineButton).toBeTruthy();
-    expect(findFileButton).toBeTruthy();
-    expect(fileShareButton).toBeTruthy();
-    expect(coordinateButton).toBeTruthy();
-
-    await act(async () => {
-      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      deadlineButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      findFileButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      fileShareButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      coordinateButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await clickAgentAction(host, '总结群聊');
+    await clickAgentAction(host, '问截止');
+    await clickAgentAction(host, 'Agent 找文件');
+    await clickAgentAction(host, '请求代发');
+    await clickAgentAction(host, 'Agent 协调');
 
     expect(apiMocks.runAgent).toHaveBeenNthCalledWith(1, '', {
       agentId: 'agent-lin',
@@ -695,10 +837,12 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
-    const actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')];
-    const summaryButton = actionButtons.find((button) => button.textContent?.includes('总结群聊'));
-    const deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
+    await openAgentActionMenu(host);
+    let actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.agent-command-menu button')];
+    let summaryButton = actionButtons.find((button) => button.textContent?.includes('总结群聊'));
+    let deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
     expect(summaryButton).toBeTruthy();
     expect(deadlineButton).toBeTruthy();
 
@@ -710,6 +854,10 @@ describe('App runtime upgrade controls', () => {
     expect(summaryButton!.disabled).toBe(true);
     expect(deadlineButton!.disabled).toBe(false);
 
+    await openAgentActionMenu(host);
+    actionButtons = [...host.querySelectorAll<HTMLButtonElement>('.agent-command-menu button')];
+    deadlineButton = actionButtons.find((button) => button.textContent?.includes('问截止'));
+    expect(deadlineButton).toBeTruthy();
     await act(async () => {
       deadlineButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
@@ -735,21 +883,119 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
-    const summaryButton = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')].find((button) =>
-      button.textContent?.includes('总结群聊')
-    );
-    expect(summaryButton).toBeTruthy();
-    await act(async () => {
-      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await clickAgentAction(host, '总结群聊');
 
     const planLine = host.querySelector('.agent-thought');
-    expect(planLine).toBeTruthy();
-    expect(planLine!.textContent).toContain('\u5904\u7406\u65b9\u5f0f');
-    expect(planLine!.textContent).not.toContain('\u601d\u8003\u8fc7\u7a0b');
-    expect(planLine!.textContent).not.toContain('item 18');
-    expect(planLine!.textContent!.length).toBeLessThan(180);
+    expect(planLine).toBeNull();
+    expect(host.textContent).not.toContain('处理方式');
+    expect(host.textContent).not.toContain('思考过程');
+    expect(host.textContent).not.toContain('item 18');
+    expect(host.textContent).toContain('回答');
+  });
+
+  it('renders goal plans as user-facing progress without exposing raw tool traces', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      result: {
+        reply: 'Use the latest report and confirm the handoff.'
+      },
+      log: {
+        toolCalls: ['deepseek.pro.chat.completions', 'room.summarize', 'deadline.answer', 'file.search']
+      },
+      goalPlan: {
+        id: 'goal-plan-ui',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        originRunId: 'agent-run-goal-plan',
+        userText: 'Plan the next action',
+        summary: 'Confirm the deadline, find the latest file, and prepare the next reply.',
+        status: 'active',
+        contextIds: ['msg-01', 'file-01'],
+        actionRequestIds: [],
+        createdAt: '2026-05-04T08:03:00.000Z',
+        updatedAt: '2026-05-04T08:03:05.000Z',
+        steps: [
+          {
+            id: 'step-context',
+            title: 'Collect room context',
+            tool: 'room.summarize',
+            sideEffect: 'read',
+            status: 'completed',
+            requiresHuman: false,
+            evidenceIds: ['msg-01'],
+            outputSummary: 'Found the latest deadline and discussion owner.',
+            createdAt: '2026-05-04T08:03:00.000Z',
+            updatedAt: '2026-05-04T08:03:01.000Z'
+          },
+          {
+            id: 'step-file',
+            title: 'Find the current report',
+            tool: 'file.search',
+            sideEffect: 'read',
+            status: 'completed',
+            requiresHuman: false,
+            evidenceIds: ['file-01'],
+            outputSummary: 'Matched the newest authorized file.',
+            createdAt: '2026-05-04T08:03:01.000Z',
+            updatedAt: '2026-05-04T08:03:03.000Z'
+          },
+          {
+            id: 'step-confirm',
+            title: 'Wait for handoff confirmation',
+            tool: 'message.send',
+            sideEffect: 'write',
+            status: 'needs_confirmation',
+            requiresHuman: true,
+            evidenceIds: [],
+            outputSummary: 'Needs one confirmation before sending.',
+            createdAt: '2026-05-04T08:03:03.000Z',
+            updatedAt: '2026-05-04T08:03:05.000Z'
+          }
+        ]
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Plan the next action');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const goalPlanCard = host.querySelector('[data-testid="agent-goal-plan-card"]');
+    expect(goalPlanCard).toBeTruthy();
+    expect(goalPlanCard!.textContent).toContain('Confirm the deadline');
+    expect(goalPlanCard!.querySelectorAll('.goal-plan-step')).toHaveLength(3);
+    expect(goalPlanCard!.textContent).toContain('Collect room context');
+    expect(goalPlanCard!.textContent).toContain('Wait for handoff confirmation');
+    expect(goalPlanCard!.textContent).not.toContain('room.summarize');
+    expect(goalPlanCard!.textContent).not.toContain('deadline.answer');
+    expect(goalPlanCard!.textContent).not.toContain('file.search');
+
+    const continueButton = goalPlanCard!.querySelector<HTMLButtonElement>('button[aria-label="continue goal plan"]');
+    expect(continueButton).toBeTruthy();
+    await act(async () => {
+      continueButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.runAgent).toHaveBeenLastCalledWith('', expect.objectContaining({
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      goalPlanId: 'goal-plan-ui'
+    }));
   });
 
   it('renders pending Agent actions and lets the current user confirm them', async () => {
@@ -769,6 +1015,25 @@ describe('App runtime upgrade controls', () => {
           level: 'medium',
           score: 0.48,
           reason: '请求意图不够明确，建议确认后执行。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T08:00:00.000Z',
+        updatedAt: '2026-05-04T08:00:00.000Z',
+        requiresHuman: true
+      },
+      {
+        id: 'action-review-2',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        kind: 'coordinate',
+        status: 'needs_confirmation',
+        input: {
+          proposal: '??? 20:30 ????????? 23:00,??????????'
+        },
+        risk: {
+          level: 'medium',
+          score: 0.52,
+          reason: '日程影响范围有限，但仍建议记录协商过程。',
           model: 'risk-mini-v1'
         },
         createdAt: '2026-05-04T08:00:00.000Z',
@@ -800,9 +1065,12 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.textContent).toContain('待确认动作');
     expect(host.textContent).toContain('请求意图不够明确');
+    expect(host.textContent).toContain('日程协调提案：把周二 20:30 的合稿检查改到周三 23:00');
+    expect(host.textContent).not.toContain('??? 20:30');
 
     const confirmButton = [...host.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('确认')
@@ -874,6 +1142,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.textContent).toContain('visible action');
     expect(host.textContent).toContain('visible confirmation');
@@ -914,17 +1183,123 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
-    const deadlineButton = [...host.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('问截止')
-    );
+    await openAgentConsole(host);
+    await clickAgentAction(host, '问截止');
 
+    expect(host.textContent).toContain('依据：消息 1 条 · 文件 1 个');
+    expect(host.textContent).not.toContain('王老师 09:15 的消息');
+    expect(host.textContent).not.toContain('信息系统课程作业要求.pdf');
+    expect(host.textContent).not.toContain('msg-02');
+
+    const evidenceButton = host.querySelector<HTMLButtonElement>('.source-summary-button');
+    expect(evidenceButton).toBeTruthy();
     await act(async () => {
-      deadlineButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      evidenceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(host.textContent).toContain('王老师 09:15 的消息');
     expect(host.textContent).toContain('信息系统课程作业要求.pdf');
-    expect(host.textContent).not.toContain('msg-02');
+  });
+
+  it('keeps routine Agent answers focused and hides source details until requested', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue({
+      intent: 'deadline',
+      requiresHuman: false,
+      result: {
+        answer: '截止时间是 5月12日 23:59，需要提交调研报告 PDF 和 8 分钟演示稿。',
+        citations: ['msg-02', 'msg-03', 'file-brief']
+      },
+      log: {
+        id: 'log-focused-deadline',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        action: 'agent_run:deadline:这次作业什么时候截止？',
+        status: 'executed',
+        risk: {
+          level: 'low',
+          score: 0.12,
+          reason: '只读检索授权房间、文件和结构化记忆。',
+          model: 'risk-mini-v1'
+        },
+        contextIds: ['msg-02', 'msg-03', 'file-brief'],
+        toolCalls: ['room_search', 'file_library.search'],
+        createdAt: '2026-05-04T08:02:00.000Z'
+      }
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+    await clickAgentAction(host, '问截止');
+
+    expect(host.textContent).toContain('截止时间是 5月12日 23:59');
+    expect(host.textContent).toContain('依据：消息 2 条 · 文件 1 个');
+    expect(host.querySelector('.citation-row')).toBeNull();
+    expect(host.textContent).not.toContain('王老师 09:15 的消息');
+    expect(host.textContent).not.toContain('只读检索授权房间');
+
+    const evidenceButton = host.querySelector<HTMLButtonElement>('.source-summary-button');
+    expect(evidenceButton).toBeTruthy();
+    await act(async () => {
+      evidenceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('.citation-row')).toBeTruthy();
+    expect(host.textContent).toContain('王老师 09:15 的消息');
+  });
+
+  it('renders unmatched Agent citations as user-facing context labels', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue({
+      intent: 'deadline',
+      requiresHuman: false,
+      result: {
+        answer: '截止时间来自任务、日程和 Agent 记忆的综合判断。',
+        citations: ['task-report', 'task-slides', 'mem-agent-lin-1778401496762-bfe7aae3f9d9b8']
+      },
+      log: {
+        id: 'log-context-labels',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        action: 'agent_run:deadline:这次作业什么时候截止？',
+        status: 'executed',
+        risk: {
+          level: 'low',
+          score: 0.12,
+          reason: '只读检索授权房间、任务和记忆。',
+          model: 'risk-mini-v1'
+        },
+        contextIds: ['task-report', 'task-slides', 'mem-agent-lin-1778401496762-bfe7aae3f9d9b8'],
+        toolCalls: ['room_search', 'memory.search'],
+        createdAt: '2026-05-04T08:02:00.000Z'
+      }
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+    await clickAgentAction(host, '问截止');
+
+    expect(host.textContent).toContain('依据：上下文 3 条');
+    expect(host.textContent).not.toContain('task-report');
+    expect(host.textContent).not.toContain('mem-agent-lin');
+
+    const evidenceButton = host.querySelector<HTMLButtonElement>('.source-summary-button');
+    expect(evidenceButton).toBeTruthy();
+    await act(async () => {
+      evidenceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('任务：调研报告');
+    expect(host.textContent).toContain('任务：演示稿');
+    expect(host.textContent).toContain('Agent 记忆');
+    expect(host.textContent).not.toContain('task-report');
+    expect(host.textContent).not.toContain('mem-agent-lin');
   });
 
   it('fetches trace replay after an Agent run and renders audit timeline data', async () => {
@@ -952,6 +1327,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     expect(prompt).toBeTruthy();
@@ -968,14 +1344,81 @@ describe('App runtime upgrade controls', () => {
 
     expect(apiMocks.getAgentTrace).toHaveBeenCalledWith('', 'agent-run-ui');
     expect(host.querySelector('[data-testid="agent-trace-panel"]')).toBeTruthy();
-    expect(host.textContent).toContain('Agent Timeline');
-    expect(host.textContent).toContain('Permission Center');
+    expect(host.textContent).toContain('Agent 活动');
+    expect(host.textContent).toContain('完成 5 个步骤');
+    expect(host.textContent).toContain('Permission');
+    expect(host.textContent).not.toContain('Tool requested');
+    expect(host.textContent).not.toContain('message.send');
+
+    const auditToggle = host.querySelector<HTMLButtonElement>('.audit-disclosure-button');
+    expect(auditToggle).toBeTruthy();
+    await act(async () => {
+      auditToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
     expect(host.textContent).toContain('Tool requested');
     expect(host.textContent).toContain('Permission allowed');
     expect(host.textContent).toContain('message.send');
-    expect(host.textContent).toContain('message:send');
     expect(host.querySelector('.agent-timeline-list .trace-row')).toBeTruthy();
     expect(host.querySelector('.permission-center-list .permission-row')).toBeTruthy();
+  });
+
+  it('summarizes Agent runtime by default and keeps technical trace details behind an audit disclosure', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    const baseResult = createAgentRunResult();
+    apiMocks.runAgent.mockResolvedValue({
+      ...baseResult,
+      runId: 'agent-run-audit-disclosure',
+      eventCursor: 'seq:5',
+      intent: 'deadline',
+      result: {
+        answer: '截止时间是 5月12日 23:59。',
+        citations: ['msg-02']
+      },
+      log: {
+        ...baseResult.log,
+        action: 'agent_run:deadline:这次作业什么时候截止？',
+        toolCalls: ['deepseek.pro.chat.completions', 'room_search', 'file_library.search']
+      }
+    });
+    apiMocks.getAgentTrace.mockResolvedValueOnce(createAgentTrace({
+      runId: 'agent-run-audit-disclosure',
+      toolName: 'deepseek.pro.chat.completions'
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, '这次作业什么时候截止？');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const runtimePanel = host.querySelector('[data-testid="agent-trace-panel"]');
+    expect(runtimePanel).toBeTruthy();
+    expect(runtimePanel!.textContent).toContain('Agent 活动');
+    expect(runtimePanel!.textContent).toContain('完成 5 个步骤');
+    expect(runtimePanel!.textContent).not.toContain('deepseek.pro.chat.completions');
+    expect(runtimePanel!.textContent).not.toContain('Tool requested');
+
+    const auditToggle = runtimePanel!.querySelector<HTMLButtonElement>('.audit-disclosure-button');
+    expect(auditToggle).toBeTruthy();
+    await act(async () => {
+      auditToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(runtimePanel!.textContent).toContain('deepseek.pro.chat.completions');
+    expect(runtimePanel!.textContent).toContain('Tool requested');
   });
 
   it('marks trace replay as partial when the server truncated it', async () => {
@@ -996,6 +1439,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
@@ -1027,6 +1471,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
@@ -1063,6 +1508,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
@@ -1097,6 +1543,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     expect(prompt).toBeTruthy();
@@ -1112,7 +1559,7 @@ describe('App runtime upgrade controls', () => {
     });
 
     expect(host.textContent).toContain('The answer still renders.');
-    expect(host.textContent).toContain('Trace unavailable');
+    expect(host.textContent).toContain('审计记录暂不可用');
     expect(host.textContent).not.toContain('trace not found');
   });
 
@@ -1131,6 +1578,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     expect(prompt).toBeTruthy();
@@ -1150,7 +1598,7 @@ describe('App runtime upgrade controls', () => {
     expect(sendButton!.disabled).toBe(false);
     expect(host.querySelector('.agent-busy-panel')).toBeNull();
     expect(host.textContent).toContain('Primary answer rendered.');
-    expect(host.textContent).toContain('Loading trace');
+    expect(host.textContent).toContain('正在读取执行记录');
   });
 
   it('does not fetch trace replay when the Agent result has no run id', async () => {
@@ -1161,15 +1609,10 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
     apiMocks.getAgentTrace.mockClear();
 
-    const summaryButton = [...host.querySelectorAll<HTMLButtonElement>('.action-grid button')].find((button) =>
-      button.textContent?.includes('总结群聊')
-    );
-    expect(summaryButton).toBeTruthy();
-    await act(async () => {
-      summaryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await clickAgentAction(host, '总结群聊');
 
     expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
   });
@@ -1187,6 +1630,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
     apiMocks.getAgentTrace.mockClear();
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
@@ -1203,7 +1647,7 @@ describe('App runtime upgrade controls', () => {
 
     expect(apiMocks.getAgentTrace).not.toHaveBeenCalled();
     expect(host.textContent).toContain('Result without persisted events.');
-    expect(host.textContent).not.toContain('Trace unavailable');
+    expect(host.textContent).not.toContain('审计记录暂不可用');
   });
 
   it('keeps stale trace replay responses from overwriting a newer Agent run', async () => {
@@ -1237,6 +1681,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
@@ -1269,6 +1714,11 @@ describe('App runtime upgrade controls', () => {
       await Promise.resolve();
     });
     expect(host.textContent).toContain('Second trace reason');
+    const auditToggle = host.querySelector<HTMLButtonElement>('.audit-disclosure-button');
+    expect(auditToggle).toBeTruthy();
+    await act(async () => {
+      auditToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     expect(host.textContent).toContain('second.tool');
 
     await act(async () => {
@@ -1301,6 +1751,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
@@ -1317,7 +1768,7 @@ describe('App runtime upgrade controls', () => {
 
     expect(apiMocks.fetchState).toHaveBeenCalledTimes(2);
     expect(host.textContent).toContain('Refresh still happens.');
-    expect(host.textContent).toContain('Trace unavailable');
+    expect(host.textContent).toContain('审计记录暂不可用');
   });
 
   it('submits the Agent input as free chat and renders the chat reply', async () => {
@@ -1351,6 +1802,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
     expect(prompt).toBeTruthy();
@@ -1370,11 +1822,114 @@ describe('App runtime upgrade controls', () => {
       roomId: 'room-team',
       userText: 'What is this room about?'
     });
-    expect(host.textContent).toContain('处理方式');
+    expect(host.textContent).not.toContain('处理方式');
     expect(host.textContent).not.toContain('思考过程');
-    expect(host.textContent).toContain('最终回答');
+    expect(host.textContent).toContain('回答');
     expect(host.textContent).toContain('This room is coordinating the assignment handoff.');
-    expect(host.textContent).toContain('Answer from room context.');
+    expect(host.textContent).not.toContain('Answer from room context.');
+  });
+
+  it('keeps tell-me planning prompts as free Agent chat instead of message sending', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      intent: 'chat',
+      result: {
+        reply: 'Next, confirm the deadline and gather the latest files.'
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, '告诉我下一步需要做什么');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(apiMocks.runAgent).toHaveBeenCalledWith('', {
+      agentId: 'agent-lin',
+      roomId: 'room-team',
+      userText: '告诉我下一步需要做什么'
+    });
+    expect(apiMocks.runAgent.mock.calls[0]?.[1]).not.toHaveProperty('intent', 'send_message');
+    expect(apiMocks.runAgent.mock.calls[0]?.[1]).not.toHaveProperty('messageBody');
+  });
+
+  it('keeps a successful Agent answer visible when post-run state refresh fails', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState
+      .mockResolvedValueOnce(state)
+      .mockRejectedValueOnce(new Error('state refresh failed'));
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      intent: 'chat',
+      result: {
+        reply: 'The Agent answer succeeded.'
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'What should I do next?');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('The Agent answer succeeded.');
+    expect(host.textContent).not.toContain('state refresh failed');
+    expect(host.textContent).not.toContain('fetch failed');
+  });
+
+  it('renders Agent markdown replies as clean readable text', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+    apiMocks.runAgent.mockResolvedValue(createAgentRunResult({
+      intent: 'chat',
+      result: {
+        reply: '这次作业截止时间是 **5月12日 23:59**。 临近时间点： - 5月10日补齐访谈材料 - 周二 20:30 合稿检查'
+      }
+    }));
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    const prompt = host.querySelector<HTMLInputElement>('#agent-prompt');
+    const sendButton = host.querySelector<HTMLButtonElement>('button[aria-label="send agent prompt"]');
+    expect(prompt).toBeTruthy();
+    expect(sendButton).toBeTruthy();
+    await act(async () => {
+      setInputValue(prompt!, 'Give deadline');
+      prompt!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('5月12日 23:59');
+    expect(host.textContent).toContain('5月10日补齐访谈材料');
+    expect(host.textContent).not.toContain('**');
+    expect(host.querySelectorAll('.agent-final li')).toHaveLength(2);
   });
 
   it('submits Agent commands from natural language without visible target controls', async () => {
@@ -1385,6 +1940,7 @@ describe('App runtime upgrade controls', () => {
     await act(async () => {
       root.render(<App />);
     });
+    await openAgentConsole(host);
 
     expect(host.querySelector('.agent-command-controls')).toBeNull();
     expect(host.textContent).not.toContain('目标房间');
@@ -1413,6 +1969,50 @@ describe('App runtime upgrade controls', () => {
   });
 });
 
+async function openAgentConsole(host: HTMLElement) {
+  const consoleButton = [...host.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+    button.textContent?.includes('Agent 操作台')
+  );
+  expect(consoleButton).toBeTruthy();
+  await act(async () => {
+    consoleButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForMotionExit();
+  });
+}
+
+async function openComposerAgentMenu(host: HTMLElement) {
+  const menuButton = host.querySelector<HTMLButtonElement>('button[aria-label="打开 Agent 快捷菜单"]');
+  expect(menuButton).toBeTruthy();
+  await act(async () => {
+    menuButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForMotionExit();
+  });
+}
+
+async function openAgentActionMenu(host: HTMLElement) {
+  if (host.querySelector('.agent-command-menu')) {
+    return;
+  }
+  const menuButton = host.querySelector<HTMLButtonElement>('button[aria-label="打开 Agent 操作菜单"]');
+  expect(menuButton).toBeTruthy();
+  await act(async () => {
+    menuButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForMotionExit();
+  });
+}
+
+async function clickAgentAction(host: HTMLElement, label: string) {
+  await openAgentActionMenu(host);
+  const actionButton = [...host.querySelectorAll<HTMLButtonElement>('.agent-command-menu button')].find((button) =>
+    button.textContent?.includes(label)
+  );
+  expect(actionButton).toBeTruthy();
+  await act(async () => {
+    actionButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+  });
+}
+
 function createAutopilotWorkerStatus(overrides: Record<string, unknown> = {}) {
   return {
     enabled: true,
@@ -1427,7 +2027,11 @@ function createAutopilotWorkerStatus(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createAgentRunResult(overrides: Partial<AgentRunResult> = {}): AgentRunResult {
+type AgentRunResultOverrides = Partial<Omit<AgentRunResult, 'log'>> & {
+  log?: Partial<AgentRunResult['log']>;
+};
+
+function createAgentRunResult(overrides: AgentRunResultOverrides = {}): AgentRunResult {
   const base: AgentRunResult = {
     intent: 'chat',
     requiresHuman: false,
@@ -1626,7 +2230,7 @@ function createAgentTraceWithoutPermissionEvents(): AgentTrace {
 }
 
 function waitForMotionExit(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, 250));
+  return new Promise((resolve) => window.setTimeout(resolve, 500));
 }
 
 function setInputValue(input: HTMLInputElement, value: string): void {
