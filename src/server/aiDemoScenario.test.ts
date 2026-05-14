@@ -10,11 +10,11 @@ describe('AI demo scenario', () => {
     const aiProvider: AiProvider = {
       async generateText(prompt) {
         expect(prompt.actorRole).toMatch(/human_user|personal_agent/);
-        if (prompt.instructions.includes('陈晨的 Agent')) {
-          return '我是陈晨的 Agent：陈晨需要补访谈材料，我建议把截图补充时间定在今晚 21:30。';
+        if (prompt.instructions.includes('陈晨的个人助手')) {
+          return '我是陈晨的个人助手：陈晨需要补访谈材料，我建议把截图补充时间定在今晚 21:30。';
         }
-        if (prompt.instructions.includes('林雯的 Agent')) {
-          return '我是林雯的 Agent：我已读取授权文件和小组任务，文件可代发，时间变更需要人工确认。';
+        if (prompt.instructions.includes('林雯的个人助手')) {
+          return '我是林雯的个人助手：我已读取授权文件和小组任务，文件可代发，时间变更需要人工确认。';
         }
         if (prompt.instructions.includes('赵一鸣')) {
           return '今晚先把报告结构锁定，林雯负责演示稿，陈晨补访谈附件。';
@@ -59,8 +59,8 @@ describe('AI demo scenario', () => {
     });
 
     expect(result.state.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(6);
-    expect(sentMessages.some((message) => message.agentLabel === '林雯的 Agent 代发')).toBe(true);
-    expect(sentMessages.some((message) => message.agentLabel === '陈晨的 Agent 协调')).toBe(true);
+    expect(sentMessages.some((message) => message.agentLabel === '个人助手代发')).toBe(true);
+    expect(sentMessages.some((message) => message.agentLabel === '个人助手协商')).toBe(true);
     expect(result.state.actionRequests.some((request) => request.kind === 'share_file')).toBe(true);
     expect(result.state.actionLogs.some((log) => log.toolCalls.includes('ai_provider.generate_text'))).toBe(true);
     expect(result.state.actionLogs.some((log) => log.toolCalls.includes('deepseek.flash.chat.completions'))).toBe(true);

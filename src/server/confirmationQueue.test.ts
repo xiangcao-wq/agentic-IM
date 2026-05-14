@@ -223,8 +223,10 @@ describe('agent confirmation queue API', () => {
       status: 'executed',
       requiresHuman: false
     });
-    expect(state.messages.some((message: { fileId?: string; agentLabel?: string }) =>
-      message.fileId === 'file-slides-v3' && message.agentLabel === '林雯的 Agent 代发'
+    expect(state.messages.some((message: { fileId?: string; senderName?: string; agentLabel?: string }) =>
+      message.fileId === 'file-slides-v3' &&
+      message.senderName === '林雯' &&
+      message.agentLabel === '个人助手代发'
     )).toBe(true);
     expect(state.actionLogs[0]).toMatchObject({
       action: `confirm_action:${action.id}`,
@@ -274,6 +276,71 @@ describe('agent confirmation queue API', () => {
     expect(afterConfirm.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
       '2026-05-06T23:00:00+08:00'
     );
+  });
+
+  it('turns a natural A2A schedule negotiation into calendar and task updates after confirmation', async () => {
+    const app = await startTestServer();
+
+    const sent = await requestJson(`${app.url}/api/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        body: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。'
+      })
+    });
+    const beforeConfirm = await requestJson(`${app.url}/api/state`);
+    const action = beforeConfirm.actionRequests.find(
+      (candidate: { kind: string; status: string }) =>
+        candidate.kind === 'coordinate' && candidate.status === 'needs_confirmation'
+    );
+
+    expect(sent.autopilotSessions.some((session: { status: string }) => session.status === 'needs_confirmation')).toBe(true);
+    expect(action).toBeTruthy();
+    expect(action.input.calendarPatch).toMatchObject({
+      itemId: 'cal-review',
+      oldStartsAt: '2026-05-05T20:30:00+08:00',
+      newStartsAt: '2026-05-06T23:00:00+08:00'
+    });
+    expect(action.input.taskPatch).toMatchObject({
+      taskId: 'task-check',
+      oldStatus: 'pending',
+      newStatus: 'in_progress'
+    });
+    expect(beforeConfirm.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-05T20:30:00+08:00'
+    );
+    expect(beforeConfirm.tasks.find((task: { id: string }) => task.id === 'task-check').status).toBe('pending');
+
+    const confirmed = await requestJson(`${app.url}/api/agent/actions/${action.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewerId: 'user-lin',
+        reason: '确认按 A2A 协商结果调整'
+      })
+    });
+    const afterConfirm = await requestJson(`${app.url}/api/state`);
+
+    expect(confirmed.action).toMatchObject({
+      status: 'executed',
+      requiresHuman: false
+    });
+    expect(afterConfirm.calendar.find((item: { id: string }) => item.id === 'cal-review').startsAt).toBe(
+      '2026-05-06T23:00:00+08:00'
+    );
+    expect(afterConfirm.tasks.find((task: { id: string }) => task.id === 'task-check').status).toBe('in_progress');
+    expect(afterConfirm.a2aSessions.find((session: { proposedActionRequestIds: string[] }) =>
+      session.proposedActionRequestIds.includes(action.id)
+    )).toMatchObject({
+      status: 'completed'
+    });
+    expect(afterConfirm.messages.some((message: { roomId: string; senderName?: string; agentLabel?: string; body: string }) =>
+      message.roomId === 'room-team' &&
+      message.senderName === '林雯' &&
+      message.agentLabel === '个人助手协商' &&
+      message.body.includes('周三 23:00') &&
+      message.body.includes('任务已推进')
+    )).toBe(true);
   });
 
   it('updates task status only after confirming a queued task update suggestion', async () => {

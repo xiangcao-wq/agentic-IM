@@ -5,6 +5,7 @@ import {
 } from '../domain/agentEngine';
 import { enqueueAgentAction, requireActionConfirmation } from '../domain/actionQueue';
 import { normalizeAgentRiskReason, normalizeAgentUserText } from '../domain/agentText';
+import { assistantAgentLabel, assistantSenderName } from '../domain/assistantMessage';
 import { buildAgentSystemPrompt, buildStructuredContext, listAgentMemories, writeMemory } from '../domain/memory';
 import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type {
@@ -505,6 +506,7 @@ async function executeAgentPlan(
       riskLevel: result.risk.level
     });
     const log = { ...result.log, toolCalls: uniqueStrings([...modelToolCalls(aiProvider, plan), ...plannedToolNames, ...result.log.toolCalls, 'memory.write']) };
+    const calendarPatch = createCalendarPatch(state, input.roomId, input.userText);
     const queued = result.requiresHuman
       ? queueActionForConfirmation(memoryWrite.state, {
           agentId: input.agentId,
@@ -515,7 +517,8 @@ async function executeAgentPlan(
             toAgentId,
             proposal: input.userText,
             proposedPlan: result.proposedPlan,
-            calendarPatch: createCalendarPatch(state, input.roomId, input.userText)
+            calendarPatch,
+            taskPatch: calendarPatch ? createTaskPatchForCalendarPatch(state, calendarPatch) : undefined
           },
           risk: result.risk,
           log
@@ -1217,11 +1220,11 @@ function createAgentCoordinationMessage(state: DemoState, agentId: string, body:
     id: `msg-agent-coordinate-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId,
     senderId: owner.id,
-    senderName: agent.displayName,
+    senderName: assistantSenderName(owner.name),
     body,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${owner.name}的 Agent 协调`,
+    agentLabel: assistantAgentLabel('coordination'),
     sourceAgentId: agent.id
   };
 }
@@ -1420,6 +1423,24 @@ function createCalendarPatch(state: DemoState, roomId: string, text: string):
     title: item.title,
     oldStartsAt: item.startsAt,
     newStartsAt
+  };
+}
+
+function createTaskPatchForCalendarPatch(
+  state: DemoState,
+  patch: { itemId: string }
+):
+  | { taskId: string; oldStatus: DemoState['tasks'][number]['status']; newStatus: DemoState['tasks'][number]['status'] }
+  | undefined {
+  const calendarItem = state.calendar.find((item) => item.id === patch.itemId);
+  const task = state.tasks.find((candidate) => candidate.id === calendarItem?.sourceTaskId);
+  if (!task || task.status !== 'pending') {
+    return undefined;
+  }
+  return {
+    taskId: task.id,
+    oldStatus: task.status,
+    newStatus: 'in_progress'
   };
 }
 
@@ -1941,11 +1962,11 @@ function createAgentDelegatedMessage(input: {
     id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: input.roomId,
     senderId: input.agent.ownerId,
-    senderName: input.agent.displayName,
+    senderName: assistantSenderName(input.ownerName),
     body: input.body,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${input.ownerName}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_message'),
     sourceAgentId: input.agent.id
   };
 }

@@ -64,7 +64,10 @@ describe('real local agent IM server', () => {
       })
     });
     expect(fileShare.result.status).toBe('executed');
-    expect(fileShare.result.message.agentLabel).toBe('林雯的 Agent 代发');
+    expect(fileShare.result.message).toMatchObject({
+      senderName: '林雯',
+      agentLabel: '个人助手代发'
+    });
 
     const coordination = await requestJson(`${baseUrl}/api/agent/coordinate`, {
       method: 'POST',
@@ -80,7 +83,9 @@ describe('real local agent IM server', () => {
 
     const finalState = await requestJson(`${baseUrl}/api/state`);
     expect(finalState.messages.some((message: { body: string }) => message.body.includes('我刚检查了一遍'))).toBe(true);
-    expect(finalState.messages.some((message: { agentLabel?: string }) => message.agentLabel === '林雯的 Agent 代发')).toBe(true);
+    expect(finalState.messages.some((message: { senderName?: string; agentLabel?: string }) =>
+      message.senderName === '林雯' && message.agentLabel === '个人助手代发'
+    )).toBe(true);
     expect(
       finalState.actionRequests.some(
         (request: { kind: string; status: string; logId?: string }) =>
@@ -184,10 +189,10 @@ describe('real local agent IM server', () => {
     expect(result.message).toMatchObject({
       roomId: 'room-agent',
       senderId: 'user-lin',
-      senderName: '林雯的 Agent',
+      senderName: '林雯',
       body: '我晚点发演示稿',
       type: 'agent',
-      agentLabel: '林雯的 Agent 代发'
+      agentLabel: '个人助手代发'
     });
     expect(result.log.toolCalls).toContain('message.send');
     expect(result.requiresHuman).toBe(false);
@@ -445,6 +450,31 @@ describe('real local agent IM server', () => {
     } finally {
       await rm(repoEventLogPath, { force: true });
     }
+  });
+
+  it('can keep the local JSONL event log when a custom state store is injected', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-im-'));
+    tempDirs.push(dir);
+    const eventLogPath = join(dir, 'agent-events.jsonl');
+    const app = await createAppServer({
+      dbPath: join(dir, 'db.json'),
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: null,
+      stateStore: createMemoryStateStore(createDemoState()),
+      agentEventLogMode: 'jsonl-local'
+    });
+    servers.push(app);
+
+    const readiness = await requestJson(`${app.url}/api/readiness`);
+
+    expect(readiness.checks.eventLog).toMatchObject({
+      mode: 'jsonl-local',
+      readable: true,
+      writable: true,
+      valid: true
+    });
+    await expect(readFile(eventLogPath, 'utf8')).resolves.toBe('');
   });
 
   it('returns successful agent response without eventCursor when event log append fails', async () => {
@@ -1380,6 +1410,12 @@ describe('real local agent IM server', () => {
 
     expect(generated.files.length).toBeGreaterThanOrEqual(19);
     expect(generated.files.every((file: { localPath?: string; mxcUri?: string }) => file.localPath && !file.mxcUri)).toBe(true);
+    expect(generated.messages).toHaveLength(0);
+
+    const afterGenerate = await requestJson(`${app.url}/api/state`);
+    expect(
+      afterGenerate.messages.filter((message: { id: string }) => message.id.startsWith('msg-demo-asset-'))
+    ).toHaveLength(0);
 
     const poster = generated.files.find((file: { name: string; id: string }) => file.name.endsWith('.svg'));
     expect(poster?.id).toBeTruthy();
@@ -1392,7 +1428,7 @@ describe('real local agent IM server', () => {
     expect(posterResponse.headers.get('cache-control')).toBe('private, no-store');
     expect(await posterResponse.text()).toContain('<svg');
 
-    const image2 = generated.files.find((file: { name: string; id: string }) => file.name === 'image2-agent-im-a2a-poster.png');
+    const image2 = generated.files.find((file: { name: string; id: string }) => file.name === 'image2-agentbridge-a2a-poster.png');
     expect(image2?.id).toBeTruthy();
     const image2Response = await fetch(`${app.url}/api/files/${image2!.id}/download`);
     expect(image2Response.ok).toBe(true);

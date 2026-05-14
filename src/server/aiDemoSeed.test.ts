@@ -101,7 +101,7 @@ describe('AI demo seed runner', () => {
     expect(summary.agentActionRequests).toBeGreaterThanOrEqual(1);
     expect(writtenState?.files.filter((file) => file.tags.includes('ai-seed'))).toHaveLength(6);
     expect(writtenState?.actionLogs.some((log) => log.toolCalls.includes('ai_provider.generate_text'))).toBe(true);
-    expect(sentMessages.some((message) => message.agentLabel === '陈晨的 Agent 协调')).toBe(true);
+    expect(sentMessages.some((message) => message.agentLabel === '个人助手协商')).toBe(true);
   });
 
   it('uses DeepSeek V4 Flash for humans and V4 Pro thinking mode for Agents by default', async () => {

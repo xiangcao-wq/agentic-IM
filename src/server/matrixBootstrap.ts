@@ -36,7 +36,7 @@ rooms['room-team'] = await createMatrixRoom(homeserverUrl, users['user-zhao'].ac
   invite: [users['user-lin'].matrixUserId, users['user-chen'].matrixUserId]
 });
 rooms['room-agent'] = await createMatrixRoom(homeserverUrl, users['user-lin'].accessToken, {
-  name: 'Agent 协调记录',
+  name: 'A2A 协商记录',
   invite: [users['user-chen'].matrixUserId]
 });
 

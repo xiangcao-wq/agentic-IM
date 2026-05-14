@@ -69,7 +69,7 @@ async function main() {
     await page.locator('.agent-workbench').waitFor({ timeout: 90_000 });
     await installOverlay(page);
 
-    await caption(page, 'Agent IM 实机演示', '真实浏览器、真实本地数据、DeepSeek 已连接。下面展示 Agent 如何读上下文、代发文件、协商日程并托管跟进任务。');
+    await caption(page, 'AgentBridge 实机演示', '真实浏览器、真实本地数据、DeepSeek 已连接。下面展示聊天分身如何读上下文、代发文件、协商日程并托管跟进任务。');
     await sleep(8_000);
 
     await caption(page, '1. DeepSeek 在线', '右侧显示 LLM connected。Agent 的自然语言理解由 DeepSeek 驱动，动作仍由本地白名单工具和风险门控执行。');
@@ -79,11 +79,11 @@ async function main() {
     await runAgentPrompt(page, '谁负责访谈材料？我今天先做什么？');
     await sleep(14_000);
 
-    await caption(page, '3. 离线代发真实文件', '陈晨在群里请求：林雯睡觉了，能否让 Lin Agent 发昨晚生成的图片？Agent 会匹配真实可下载文件并低风险自动代发。');
+    await caption(page, '3. 离线代发真实文件', '陈晨在群里请求：林雯不在电脑前，她的个人助手能否发送昨晚生成的图片？系统会匹配真实可下载文件并低风险自动代发。');
     const handoff = await postJson(`${apiBaseUrl}/api/messages`, {
       roomId: 'room-team',
       senderId: 'user-chen',
-      body: '林雯现在睡觉了，能让 Lin Agent 把昨晚生成的图片发给陈晨吗？'
+      body: '林雯现在不在电脑前，她的个人助手能把昨晚生成的图片发给陈晨吗？'
     });
     if (!handoff.autopilotSessions?.length) {
       throw new Error('Expected delegated file handoff to create an A2A session.');
@@ -91,14 +91,14 @@ async function main() {
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 });
     await page.locator('.agent-workbench').waitFor({ timeout: 90_000 });
     await installOverlay(page);
-    await caption(page, '3. 离线代发真实文件', '消息已经进入群聊，Lin Agent 代发的是有 localPath/mxcUri 的真实文件，不是只显示一个文件名。');
+    await caption(page, '3. 离线代发真实文件', '消息已经进入群聊，个人助手代发的是有 localPath/mxcUri 的真实文件，不是只显示一个文件名。');
     await sleep(16_000);
 
-    await caption(page, '4. Agent 与 Agent 协商日程', '赵一鸣提出改期，Lin Agent 和 Chen Agent 会形成 A2A 协商记录；中高风险日程变更进入确认队列，确认前不会改内部日程。');
+    await caption(page, '4. 聊天分身协商日程', '赵一鸣提出改期，林雯和陈晨的聊天分身会形成 A2A 协商记录；中高风险日程变更进入确认队列，确认前不会改内部日程。');
     const negotiation = await postJson(`${apiBaseUrl}/api/messages`, {
       roomId: 'room-team',
       senderId: 'user-zhao',
-      body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
+      body: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。'
     });
     if (!negotiation.autopilotSessions?.some((session) => session.status === 'needs_confirmation')) {
       throw new Error('Expected schedule negotiation to require confirmation.');
@@ -106,7 +106,7 @@ async function main() {
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 });
     await page.locator('[data-testid="a2a-session-panel"]').waitFor({ timeout: 90_000 });
     await installOverlay(page);
-    await caption(page, '4. Agent 与 Agent 协商日程', '右侧展示协作过程和待确认动作。这里的关键点是：Agent 能提出 patch，但不能绕过人类确认。');
+    await caption(page, '4. 聊天分身协商日程', '右侧展示协作过程和待确认动作。这里的关键点是：聊天分身能提出 patch，但不能绕过人类确认。');
     await sleep(17_000);
 
     await caption(page, '5. 托管模式自动跟进任务', '后台 worker 会巡检待处理任务。发现临近截止且还没开始的任务，会生成 A2A 跟进和任务更新确认请求。');

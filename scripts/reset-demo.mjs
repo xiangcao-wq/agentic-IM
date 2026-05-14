@@ -6,5 +6,5 @@ const dbPath = process.env.AGENT_IM_DB_PATH ?? join(process.cwd(), 'data', 'agen
 
 await writeFile(dbPath, `${JSON.stringify(createDemoState(), null, 2)}\n`, 'utf8');
 
-console.log(`Reset Agent IM demo database: ${dbPath}`);
+console.log(`Reset AgentBridge demo database: ${dbPath}`);
 console.log('Matrix room history is not pulled into /api/state until you run the explicit sync action.');

@@ -12,6 +12,7 @@ import type {
 } from './types';
 import { buildStructuredContext, buildAgentSystemPrompt } from './memory';
 import { normalizeAgentRiskReason, normalizeAgentUserText } from './agentText';
+import { assistantAgentLabel, assistantFileShareBody, assistantSenderName } from './assistantMessage';
 import { buildCacheFriendlyMessages } from './promptCache';
 import type { AiProvider } from '../server/aiProvider';
 
@@ -766,11 +767,11 @@ function createAgentFileMessage(input: {
     id: `msg-agent-share-${input.file.id}`,
     roomId: input.roomId,
     senderId: input.agent.ownerId,
-    senderName: input.agent.displayName,
-    body: `我代表${input.ownerName}发送最新文件：${input.file.name}`,
+    senderName: assistantSenderName(input.ownerName),
+    body: assistantFileShareBody({ ownerName: input.ownerName, fileName: input.file.name, latest: true }),
     sentAt: '2026-05-04T14:06:12+08:00',
     type: 'file',
-    agentLabel: `${input.ownerName}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_file'),
     sourceAgentId: input.agent.id,
     fileId: input.file.id,
     mxcUri: input.file.mxcUri,

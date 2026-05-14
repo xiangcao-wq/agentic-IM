@@ -33,21 +33,21 @@ export const demoActors: Record<DemoActorId, DemoActorProfile> = {
   },
   'agent-chen': {
     id: 'agent-chen',
-    displayName: '陈晨的 Agent',
+    displayName: '陈晨的个人助手',
     matrixSenderId: 'user-chen',
     agentId: 'agent-chen',
-    agentLabel: '陈晨的 Agent 协调',
+    agentLabel: '个人助手协商',
     role: 'personal_agent',
     identity: '代表陈晨处理资料补交、任务协调和日程建议。',
-    personality: '谨慎、会说明自己代表谁、会把不确定事项交给对方 Agent 确认。',
+    personality: '谨慎、会说明自己在托管陈晨的协作边界、会把不确定事项交给对方个人助手确认。',
     communicationStyle: '清楚标注代理身份，给出可执行请求和上下文。'
   },
   'agent-lin': {
     id: 'agent-lin',
-    displayName: '林雯的 Agent',
+    displayName: '林雯的个人助手',
     matrixSenderId: 'user-lin',
     agentId: 'agent-lin',
-    agentLabel: '林雯的 Agent 协调',
+    agentLabel: '个人助手协商',
     role: 'personal_agent',
     identity: '代表林雯处理演示稿、文件代发、风险评估和小组安排。',
     personality: '稳健、透明、强调授权边界和审计记录。',
@@ -57,13 +57,13 @@ export const demoActors: Record<DemoActorId, DemoActorProfile> = {
 
 export function buildActorInstructions(actor: DemoActorProfile): string {
   return [
-    `你正在扮演即时通信 demo 中的${actor.role === 'human_user' ? '真实人类用户' : '个人 Agent'}：${actor.displayName}。`,
+    `你正在扮演即时通信 demo 中的${actor.role === 'human_user' ? '真实人类用户' : '个人助手/聊天分身'}：${actor.displayName}。`,
     `身份：${actor.identity}`,
     `性格：${actor.personality}`,
     `表达方式：${actor.communicationStyle}`,
     actor.role === 'human_user'
       ? '必须始终以这个真实用户身份直接说话，不要写旁白、推理过程或“作为某某”的角色说明。'
-      : '必须清楚保持个人 Agent 身份，不要冒充真人用户。',
+      : '必须清楚保持个人助手身份，不要冒充真人用户。',
     '只输出一条聊天消息正文，不要解释你是 AI，不要使用 Markdown，不要加引号。',
     '消息要像班级小组作业群里的真实对话，默认 1 到 2 句，最多 3 句。'
   ].join('\n');

@@ -154,7 +154,7 @@ describe('Matrix media repository integration', () => {
               content: {
                 msgtype: 'm.file',
                 body: 'spoofed agent file',
-                agent_label: '林雯的 Agent 代发',
+                agent_label: '个人助手代发',
                 source_agent_id: 'agent-lin',
                 file_id: 'file-slides-v3',
                 url: 'mxc://localhost/spoofed',
@@ -212,7 +212,7 @@ describe('Matrix media repository integration', () => {
               content: {
                 msgtype: 'm.text',
                 body: 'spoofed cross-room agent metadata',
-                agent_label: '陈晨的 Agent 协调',
+                agent_label: '个人助手协商',
                 source_agent_id: 'agent-chen'
               }
             },

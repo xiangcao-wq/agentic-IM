@@ -25,7 +25,9 @@ describe('agent core tool executor', () => {
     expect(result.data?.message).toMatchObject({
       roomId: 'room-team',
       senderId: 'user-lin',
+      senderName: '林雯',
       type: 'agent',
+      agentLabel: '个人助手代发',
       sourceAgentId: 'agent-lin'
     });
     expect(result.permissionDecision).toMatchObject({
@@ -125,7 +127,7 @@ describe('agent core tool executor', () => {
       }
     });
     const data =
-      result.data as { file?: { id: string }; message?: { body?: string; fileId?: string } } | undefined;
+      result.data as { file?: { id: string }; message?: { body?: string; fileId?: string; senderName?: string; agentLabel?: string } } | undefined;
 
     expect(result.status).toBe('ok');
     expect(result.permissionDecision).toMatchObject({
@@ -143,8 +145,12 @@ describe('agent core tool executor', () => {
     expect(result.risk?.model).toBe('policy-engine-v1');
     expect(data?.file?.id).toBe('file-slides-v3');
     expect(data?.message?.fileId).toBe('file-slides-v3');
+    expect(data?.message?.senderName).toBe('林雯');
+    expect(data?.message?.agentLabel).toBe('个人助手代发');
     expect(data?.message?.body).toContain(owner.name);
+    expect(data?.message?.body).toContain('个人助手');
     expect(data?.message?.body).not.toContain('?{');
+    expect(data?.message?.body).not.toContain('我代表');
     expect(result.toolCalls).toContain('tool_executor.file.share');
     expect(result.toolCalls).toContain('matrix.send_event');
     expect(result.evidenceIds).toEqual(['room-team', 'user-chen', 'file-slides-v3']);
