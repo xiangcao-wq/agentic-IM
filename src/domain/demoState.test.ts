@@ -68,4 +68,49 @@ describe('demo scenario seed', () => {
     expect(chunksByFile.get('file-action-plan-md')?.join('\n')).toContain('今天优先处理访谈材料');
     expect(state.fileTextChunks.every((chunk) => state.files.some((file) => file.id === chunk.fileId))).toBe(true);
   });
+
+  it('stages the default demo around a natural assistant handoff and visible A2A negotiation loop', () => {
+    const state = createDemoState();
+    const visibleText = state.messages.map((message) => message.body).join('\n');
+    const serialized = JSON.stringify({
+      messages: state.messages,
+      a2aSessions: state.a2aSessions,
+      files: state.files.map((file) => ({ name: file.name, summary: file.summary }))
+    });
+
+    expect(serialized).not.toMatch(/Lin Agent|Chen Agent|Lin is offline|Agent IM|agent-im|not my Agent/i);
+    expect(visibleText).not.toMatch(/我是.+不是.*Agent|不是我的\s*Agent/);
+
+    expect(state.messages).toContainEqual(
+      expect.objectContaining({
+        id: 'msg-assistant-file-handoff',
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        senderName: '林雯',
+        type: 'agent',
+        agentLabel: '托管代发',
+        body: expect.stringContaining('我不在电脑前')
+      })
+    );
+
+    expect(state.a2aSessions).toContainEqual(
+      expect.objectContaining({
+        id: 'a2a-seed-review-reschedule',
+        roomId: 'room-team',
+        initiatorAgentId: 'agent-zhao',
+        targetAgentIds: ['agent-lin', 'agent-chen'],
+        status: 'needs_confirmation',
+        goal: '赵一鸣希望把最后一次合稿检查从周二 20:30 调整到周三 23:00。',
+        proposedActionRequestIds: ['action-seed-calendar-review']
+      })
+    );
+
+    const reviewSession = state.a2aSessions.find((session) => session.id === 'a2a-seed-review-reschedule');
+    expect(reviewSession?.turns.map((turn) => turn.message)).toEqual([
+      '赵一鸣请求调整合稿检查时间，并要求保留每个人的材料边界。',
+      '林雯的分身确认：林雯 19:30-21:30 专注演示稿，23:00 可以参加最终确认。',
+      '陈晨的分身确认：陈晨 21:00 前补齐访谈材料，23:00 可以参加合稿检查。',
+      '形成提案：周三 23:00 合稿检查；陈晨 21:00 前补材料；林雯会在确认后更新演示稿第 5 页和结论页。'
+    ]);
+  });
 });

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   Bot,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   Download,
@@ -33,6 +34,7 @@ import {
   type AutopilotWorkerStatus
 } from './client/apiClient';
 import type {
+  AgentActionRequest,
   AgentProgressEvent,
   AgentTrace,
   AgentRunIntent,
@@ -46,10 +48,15 @@ import type {
   TaskItem
 } from './domain/types';
 import { sortMessagesChronologically } from './domain/messages';
-import { AgentWorkbench } from './components/agent-console-workbench';
 import type { AgentResult } from './components/agent-result-panel';
 import { AgentShortcutPopover } from './components/agent-shortcut-popover';
 import { ReviewerGuideModal } from './components/reviewer-guide-modal';
+
+const AgentWorkbench = lazy(() =>
+  import('./components/agent-console-workbench').then((module) => ({
+    default: module.AgentWorkbench
+  }))
+);
 
 type RoomFilter = 'all' | 'group' | 'direct';
 type EventStreamStatus = 'connecting' | 'connected' | 'disconnected';
@@ -249,7 +256,7 @@ function App() {
       <main className="empty-shell">
         <div className="empty-panel">
           <Bot size={28} />
-          <h1>正在连接 Agent IM API</h1>
+          <h1>正在连接 AgentBridge API</h1>
           <p>{error ?? '读取真实本地数据库和事件流。'}</p>
         </div>
       </main>
@@ -570,6 +577,7 @@ function App() {
               files={state.files}
               tasks={roomTasks}
               calendar={state.calendar}
+              actionRequests={state.actionRequests}
               users={state.users}
               aiStatus={state.aiStatus}
               error={error}
@@ -588,46 +596,50 @@ function App() {
             />
           </main>
         ) : (
-          <AgentWorkbench
-            agent={currentAgent}
-            rooms={filteredRooms}
-            allRooms={state.rooms}
-            roomSearch={roomSearch}
-            roomFilter={roomFilter}
-            selectedRoom={selectedRoom}
-            prompt={agentPrompt}
-            error={error}
-            busyAction={busyAction}
-            result={agentResult}
-            trace={agentTrace}
-            traceStatus={agentTraceStatus}
-            progressEvents={agentProgressEvents}
-            aiStatus={state.aiStatus}
-            actions={state.actionRequests}
-            logs={state.actionLogs}
-            a2aSessions={state.a2aSessions}
-            autopilotPolicies={state.agentAutopilotPolicies}
-            autopilotWorker={autopilotWorker}
-            selectedRoomId={selectedRoom.id}
-            sourceMessages={state.messages}
-            sourceFiles={state.files}
-            onBackToChat={() => setWorkspaceMode('im')}
-            onFilterChange={setRoomFilter}
-            onSearchChange={setRoomSearch}
-            onSelectRoom={setSelectedRoomId}
-            onPromptChange={setAgentPrompt}
-            onAgentChat={handleAgentChat}
-            onContinueGoalPlan={handleContinueGoalPlan}
-            onSummarize={handleSummarize}
-            onDeadlineQuestion={handleDeadlineQuestion}
-            onFindFile={handleFindFile}
-            onFileShare={handleFileShare}
-            onCoordinate={handleCoordinate}
-            onConfirmAction={handleConfirmAgentAction}
-            onRejectAction={handleRejectAgentAction}
-            onToggleAutopilot={handleToggleAutopilot}
-            onRunAutopilotWorker={handleRunAutopilotWorker}
-          />
+          <Suspense fallback={<AgentConsoleLoading />}>
+            <AgentWorkbench
+              agent={currentAgent}
+              rooms={filteredRooms}
+              allRooms={state.rooms}
+              roomSearch={roomSearch}
+              roomFilter={roomFilter}
+              selectedRoom={selectedRoom}
+              prompt={agentPrompt}
+              error={error}
+              busyAction={busyAction}
+              result={agentResult}
+              trace={agentTrace}
+              traceStatus={agentTraceStatus}
+              progressEvents={agentProgressEvents}
+              aiStatus={state.aiStatus}
+              actions={state.actionRequests}
+              logs={state.actionLogs}
+              a2aSessions={state.a2aSessions}
+              autopilotPolicies={state.agentAutopilotPolicies}
+              autopilotWorker={autopilotWorker}
+              selectedRoomId={selectedRoom.id}
+              sourceMessages={state.messages}
+              sourceFiles={state.files}
+              onBackToChat={() => setWorkspaceMode('im')}
+              onFilterChange={setRoomFilter}
+              onSearchChange={setRoomSearch}
+              onSelectRoom={setSelectedRoomId}
+              onPromptChange={setAgentPrompt}
+              onAgentChat={handleAgentChat}
+              onContinueGoalPlan={handleContinueGoalPlan}
+              onSummarize={handleSummarize}
+              onDeadlineQuestion={handleDeadlineQuestion}
+              onFindFile={handleFindFile}
+              onFileShare={handleFileShare}
+              onCoordinate={handleCoordinate}
+              onConfirmAction={handleConfirmAgentAction}
+              onRejectAction={handleRejectAgentAction}
+              onToggleAutopilot={handleToggleAutopilot}
+              onRunAutopilotWorker={handleRunAutopilotWorker}
+              agents={state.agents}
+              users={state.users}
+            />
+          </Suspense>
         )}
       <ReviewerGuideModal
         agentName={currentAgent.displayName}
@@ -637,6 +649,22 @@ function App() {
         roomName={selectedRoom.name}
       />
     </Tooltip.Provider>
+  );
+}
+
+function AgentConsoleLoading() {
+  return (
+    <main className="agent-console-loading" aria-busy="true" aria-live="polite">
+      <div className="agent-console-loading-card">
+        <span className="agent-console-loading-orb">
+          <Bot size={22} />
+        </span>
+        <div>
+          <strong>正在打开 Agent 操作台</strong>
+          <p>正在加载协作流、边界确认和文件上下文。</p>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -667,8 +695,8 @@ function Sidebar(props: {
       <div className="brand-row">
         <div className="brand-mark">A</div>
         <div>
-          <h1>Agent IM</h1>
-          <p>个人助手协作空间</p>
+          <h1>AgentBridge</h1>
+          <p>A2A 原生聊天空间</p>
         </div>
       </div>
 
@@ -765,6 +793,7 @@ function ChatPanel(props: {
   files: FileItem[];
   tasks: TaskItem[];
   calendar: CalendarItem[];
+  actionRequests: AgentActionRequest[];
   users: DemoState['users'];
   aiStatus?: AiRuntimeStatus;
   error: string | null;
@@ -786,6 +815,24 @@ function ChatPanel(props: {
   const roomFilesById = useMemo(() => new Map(props.files.map((file) => [file.id, file])), [props.files]);
   const roomFiles = props.files.filter((file) => file.roomId === props.room.id);
   const roomCalendar = props.calendar.filter((item) => item.roomId === props.room.id);
+  const pendingActions = props.actionRequests.filter(
+    (action) =>
+      action.roomId === props.room.id &&
+      action.agentId === currentAgentId &&
+      action.status === 'needs_confirmation' &&
+      action.requiresHuman
+  );
+  const primaryPendingAction = pendingActions[0];
+  const completedActions = props.actionRequests
+    .filter(
+      (action) =>
+        action.roomId === props.room.id &&
+        action.agentId === currentAgentId &&
+        action.status === 'executed' &&
+        isVisibleCompletedAction(action)
+    )
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const primaryCompletedAction = completedActions[0];
   const roomMembers = props.room.memberIds
     .map((memberId) => props.users.find((candidate) => candidate.id === memberId))
     .filter((user): user is DemoState['users'][number] => Boolean(user));
@@ -871,6 +918,22 @@ function ChatPanel(props: {
         <motion.div className="error-banner chat-error-banner" key="chat-error" {...softAppear}>
           {props.error}
         </motion.div>
+      ) : null}
+
+      {primaryPendingAction ? (
+        <PendingActionBanner
+          action={primaryPendingAction}
+          pendingCount={pendingActions.length}
+          onOpenAgentConsole={props.onOpenAgentConsole}
+        />
+      ) : null}
+
+      {!primaryPendingAction && primaryCompletedAction ? (
+        <CompletedActionBanner
+          action={primaryCompletedAction}
+          onShowCalendar={() => setActiveTab('calendar')}
+          onShowTasks={() => setActiveTab('tasks')}
+        />
       ) : null}
 
       {activeTab !== 'chat' ? (
@@ -992,6 +1055,176 @@ function ChatPanel(props: {
 
     </section>
   );
+}
+
+function CompletedActionBanner(props: {
+  action: AgentActionRequest;
+  onShowCalendar: () => void;
+  onShowTasks: () => void;
+}) {
+  return (
+    <motion.div className="chat-completed-action-banner" key={props.action.id} {...softAppear}>
+      <span className="chat-completed-action-icon">
+        <CheckCircle2 size={19} />
+      </span>
+      <div className="chat-completed-action-copy">
+        <strong>{formatCompletedActionHeadline(props.action)}</strong>
+        <span>{formatCompletedActionSummary(props.action)}</span>
+      </div>
+      <div className="chat-completed-action-buttons">
+        {Boolean(props.action.input.calendarPatch) ? (
+          <button type="button" onClick={props.onShowCalendar}>
+            查看日程
+          </button>
+        ) : null}
+        {Boolean(props.action.input.taskPatch) ? (
+          <button type="button" onClick={props.onShowTasks}>
+            查看任务
+          </button>
+        ) : null}
+      </div>
+    </motion.div>
+  );
+}
+
+function isVisibleCompletedAction(action: AgentActionRequest): boolean {
+  return (
+    action.kind === 'coordinate' ||
+    action.kind === 'calendar_update' ||
+    action.kind === 'task_update' ||
+    action.kind === 'task_update_suggest'
+  );
+}
+
+function formatCompletedActionHeadline(action: AgentActionRequest): string {
+  if (action.kind === 'coordinate') {
+    return 'A2A 协商已完成';
+  }
+  if (action.kind === 'calendar_update') {
+    return '日程已更新';
+  }
+  if (action.kind === 'task_update' || action.kind === 'task_update_suggest') {
+    return '任务已更新';
+  }
+  return 'Agent 动作已完成';
+}
+
+function formatCompletedActionSummary(action: AgentActionRequest): string {
+  const calendarTime = getCalendarPatchNewTime(action);
+  const taskText = action.input.taskPatch ? '，任务已进入进行中' : '';
+  if (calendarTime) {
+    return `协商结果已生效：合稿检查调整到${calendarTime}${taskText}。`;
+  }
+  if (action.input.taskPatch) {
+    return '协商结果已生效：任务状态已经更新。';
+  }
+  return '协商结果已同步到当前聊天室。';
+}
+
+function getCalendarPatchNewTime(action: AgentActionRequest): string | undefined {
+  const patch = action.input.calendarPatch;
+  if (!patch || typeof patch !== 'object' || !('newStartsAt' in patch)) {
+    return undefined;
+  }
+  const newStartsAt = (patch as { newStartsAt?: unknown }).newStartsAt;
+  if (typeof newStartsAt !== 'string') {
+    return undefined;
+  }
+  return formatWeekdayTime(newStartsAt);
+}
+
+function formatWeekdayTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const weekday = new Intl.DateTimeFormat('zh-CN', {
+    weekday: 'short',
+    timeZone: 'Asia/Shanghai'
+  }).format(date);
+  const time = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
+  }).format(date);
+  return `${weekday} ${time}`;
+}
+
+function PendingActionBanner(props: {
+  action: AgentActionRequest;
+  pendingCount: number;
+  onOpenAgentConsole: () => void;
+}) {
+  return (
+    <motion.div className="chat-pending-action-banner" key={props.action.id} {...softAppear}>
+      <span className="chat-pending-action-icon">
+        <ShieldCheck size={18} />
+      </span>
+      <div className="chat-pending-action-copy">
+        <strong>{formatPendingActionHeadline(props.action)}</strong>
+        <span>{formatPendingActionSummary(props.action)}</span>
+        <small>
+          {formatPendingActionImpact(props.action)}
+          {props.pendingCount > 1 ? ` 另有 ${props.pendingCount - 1} 项等待处理。` : ''}
+        </small>
+      </div>
+      <button type="button" onClick={props.onOpenAgentConsole}>
+        去确认
+      </button>
+    </motion.div>
+  );
+}
+
+function formatPendingActionHeadline(action: AgentActionRequest): string {
+  if (action.kind === 'coordinate') {
+    return 'A2A 协商待确认';
+  }
+  if (action.kind === 'share_file') {
+    return '文件代发待确认';
+  }
+  if (action.kind === 'send_message') {
+    return '消息代发待确认';
+  }
+  if (action.kind === 'calendar_update') {
+    return '日程更新待确认';
+  }
+  if (action.kind === 'task_update' || action.kind === 'task_update_suggest') {
+    return '任务更新待确认';
+  }
+  return 'Agent 动作待确认';
+}
+
+function formatPendingActionSummary(action: AgentActionRequest): string {
+  const raw = String(action.input.requestText ?? action.input.proposal ?? action.input.messageBody ?? '').trim();
+  if (raw) {
+    return raw.replace(/\s+/g, ' ');
+  }
+  if (action.kind === 'coordinate') {
+    return 'Agent 已完成协商，等待你确认是否写入日程和任务。';
+  }
+  if (action.kind === 'share_file') {
+    return 'Agent 找到了可代发文件，等待你确认后再发送。';
+  }
+  return 'Agent 已准备好下一步动作，等待你确认。';
+}
+
+function formatPendingActionImpact(action: AgentActionRequest): string {
+  const hasCalendarPatch = Boolean(action.input.calendarPatch);
+  const hasTaskPatch = Boolean(action.input.taskPatch);
+  if (action.kind === 'coordinate' && hasCalendarPatch && hasTaskPatch) {
+    return '确认后写入日程并推进相关任务。';
+  }
+  if (action.kind === 'coordinate' && hasCalendarPatch) {
+    return '确认后写入日程，确认前不会改变数据。';
+  }
+  if (action.kind === 'share_file') {
+    return '确认前不会发送任何文件。';
+  }
+  if (action.kind === 'send_message') {
+    return '确认前不会替你发出消息。';
+  }
+  return '确认前不会改变聊天、文件、任务或日程。';
 }
 
 function RoomDetailPanel(props: {

@@ -338,6 +338,36 @@ describe('agent autopilot runtime', () => {
     expect(result.state.messages.some((message) => message.id === result.messages[0].id)).toBe(true);
   });
 
+  it('recognizes natural personal-assistant addressing without English Agent phrasing', async () => {
+    const state = createDemoState();
+    const trigger: Message = {
+      id: 'msg-natural-assistant-address',
+      roomId: 'room-team',
+      senderId: 'user-chen',
+      senderName: '陈晨',
+      body: '林雯的个人助手，谁负责访谈材料？',
+      sentAt: '2026-05-04T20:45:00.000Z',
+      type: 'text'
+    };
+
+    const result = await runAgentAutopilotForMessage({
+      state: { ...state, messages: [...state.messages, trigger] },
+      triggerMessage: trigger
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.responses[0].intent).toBe('chat');
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({
+      senderId: 'user-lin',
+      senderName: '林雯',
+      type: 'agent',
+      agentLabel: '个人助手回复',
+      sourceAgentId: 'agent-lin'
+    });
+    expect(result.messages[0].body).toContain('访谈');
+  });
+
   it('sweeps pending room messages without duplicating completed A2A sessions', async () => {
     const state = withDownloadableSlides(createDemoState());
     const trigger: Message = {

@@ -93,7 +93,7 @@ export async function runAiDemoScenario(input: AiDemoScenarioInput): Promise<AiD
     agentId: 'agent-lin',
     roomId: 'room-team',
     requesterId: 'user-chen',
-    requestText: '陈晨请求把最新 action plan 文件发到小组群，林雯已授权 Agent 代发。',
+    requestText: '陈晨请求把最新 action plan 文件发到小组群，林雯已授权个人助手代发。',
     createdAt: now
   });
   state = runtime.state;
@@ -211,17 +211,17 @@ function createHumanAndAgentTurns(): Array<{ actorId: DemoActorId; roomId: strin
     {
       actorId: 'user-chen',
       roomId: 'room-team',
-      goal: '作为资料负责人，说明访谈材料状态，并自然请求林雯或她的 Agent 发送最新材料。'
+      goal: '作为资料负责人，说明访谈材料状态，并自然请求林雯或她的个人助手发送最新材料。'
     },
     {
       actorId: 'agent-chen',
       roomId: 'room-agent',
-      goal: '代表陈晨向林雯的 Agent 发起任务协调，请求确认文件代发和补截图时间。'
+      goal: '代表陈晨向林雯的个人助手发起任务协调，请求确认文件代发和补截图时间。'
     },
     {
       actorId: 'agent-lin',
       roomId: 'room-agent',
-      goal: '代表林雯回应陈晨的 Agent，说明可自动代发文件，但日程变更需要人工确认。'
+      goal: '代表林雯回应陈晨的个人助手，说明可自动代发文件，但日程变更需要人工确认。'
     }
   ];
 }
@@ -229,7 +229,7 @@ function createHumanAndAgentTurns(): Array<{ actorId: DemoActorId; roomId: strin
 function buildTurnPrompt(state: DemoState, goal: string): string {
   const files = state.files
     .slice(0, 5)
-    .map((file) => `${file.name} v${file.version} ${file.agentCanShare ? '可由 Agent 代发' : '不可代发'}`)
+    .map((file) => `${file.name} v${file.version} ${file.agentCanShare ? '可由个人助手代发' : '不可代发'}`)
     .join('\n');
   const tasks = state.tasks.map((task) => `${task.title} - ${task.deadline} - ${task.status}`).join('\n');
 

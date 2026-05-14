@@ -36,7 +36,6 @@ const preparedFiles = [];
 for (const [index, asset] of createRuntimeDemoAssets().entries()) {
   const slug = safeId(asset.name);
   const fileId = `file-demo-runtime-${slug}`;
-  const messageId = `msg-demo-runtime-${slug}`;
   const localPath = `${fileId}-${safePathSegment(asset.name)}`;
   const updatedAt = new Date(Date.parse('2026-05-04T16:00:00+08:00') + index * 60_000).toISOString();
 
@@ -58,19 +57,6 @@ for (const [index, asset] of createRuntimeDemoAssets().entries()) {
     localPath
   };
 
-  const message = {
-    id: messageId,
-    roomId: room.id,
-    senderId: sender.id,
-    senderName: sender.name,
-    body: asset.name,
-    sentAt: updatedAt,
-    type: 'file',
-    fileId: file.id,
-    contentType: file.contentType,
-    size: file.size
-  };
-
   const log = {
     id: `log-demo-runtime-${slug}`,
     agentId: sender.agentId,
@@ -83,7 +69,7 @@ for (const [index, asset] of createRuntimeDemoAssets().entries()) {
       reason: 'Deployment seed created a room-visible downloadable demo asset with Agent sharing permission.',
       model: 'demo-seed-v1'
     },
-    contextIds: [file.id, message.id],
+    contextIds: [file.id],
     toolCalls: ['demo_assets.prepare', 'local.media.write', 'file_text.index'],
     createdAt: updatedAt
   };
@@ -95,7 +81,6 @@ for (const [index, asset] of createRuntimeDemoAssets().entries()) {
       ...extractTextChunks(file, asset.bytes),
       ...nextState.fileTextChunks.filter((chunk) => chunk.fileId !== file.id)
     ],
-    messages: [...nextState.messages.filter((candidate) => candidate.id !== message.id), message],
     actionLogs: [log, ...nextState.actionLogs.filter((candidate) => candidate.id !== log.id)]
   };
 

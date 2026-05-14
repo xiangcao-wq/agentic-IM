@@ -24,4 +24,13 @@ describe('mobile IM layout styles', () => {
     expectMobileRule('.chat-panel', ['min-height: 0', 'grid-template-rows: auto auto auto minmax(0, 1fr) auto']);
     expectMobileRule('.composer', ['position: sticky', 'bottom: 0']);
   });
+
+  it('keeps the Agent Console vertically stacked and prevents room list overflow on small screens', () => {
+    expect(styles).toContain('grid-template-areas:');
+    expect(styles).toContain('"rooms"');
+    expect(styles).toContain('"inspector"');
+    expect(styles).toContain('.agent-console .console-room-list');
+    expect(styles).toContain('grid-auto-flow: row');
+    expect(styles).toContain('overflow-x: hidden');
+  });
 });

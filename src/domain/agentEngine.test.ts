@@ -247,13 +247,17 @@ describe('personal agent behavior', () => {
     expect(action.requiresHuman).toBe(false);
     expect(action.risk.level).toBe('low');
     expect(action.file?.id).toBe('file-slides-v3');
-    expect(action.message?.agentLabel).toBe('林雯的 Agent 代发');
     expect(action.message).toMatchObject({
+      senderId: 'user-lin',
+      senderName: '林雯',
+      agentLabel: '个人助手代发',
       fileId: 'file-slides-v3',
       mxcUri: 'mxc://localhost/slides-v3',
       contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       size: 4096
     });
+    expect(action.message?.body).toContain('个人助手');
+    expect(action.message?.body).not.toContain('我代表');
   });
 
   it('does not add fixed message ids to file-share audit context when those messages are absent', async () => {

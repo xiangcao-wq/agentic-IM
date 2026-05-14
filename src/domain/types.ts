@@ -26,7 +26,7 @@ export type AgentAutopilotAction =
   | 'coordinate_schedule'
   | 'a2a_negotiate';
 export type A2ASessionStatus = 'active' | 'completed' | 'needs_confirmation' | 'blocked';
-export type A2ATurnKind = 'observation' | 'proposal' | 'response' | 'counter_proposal' | 'tool_result';
+export type A2ATurnKind = 'request' | 'observation' | 'proposal' | 'response' | 'counter_proposal' | 'tool_result';
 export type AiRuntimeProvider = 'deepseek' | 'fallback';
 export type AiRuntimeHealth = 'missing' | 'unknown' | 'connected' | 'failed';
 export type AgentRunIntent =

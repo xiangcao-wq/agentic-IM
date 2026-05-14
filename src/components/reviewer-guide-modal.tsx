@@ -97,7 +97,7 @@ export function ReviewerGuideModal({
                 </li>
                 <li>
                   <CheckCircle2 size={16} />
-                  <span>进入 Agent 操作台，查看 Timeline / Permission / Files，并确认或拒绝高风险动作。</span>
+                  <span>进入 Agent 操作台，查看 Agent 活动、边界确认和文件范围，并确认或拒绝高风险动作。</span>
                 </li>
               </ol>
             </div>

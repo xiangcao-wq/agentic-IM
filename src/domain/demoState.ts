@@ -137,7 +137,7 @@ export function createDemoState(): DemoState {
       },
       {
         id: 'room-agent',
-        name: 'Agent 协调记录',
+        name: 'A2A 协商记录',
         type: 'direct',
         memberIds: ['user-lin', 'user-chen'],
         unreadCount: 3,
@@ -186,7 +186,7 @@ export function createDemoState(): DemoState {
         roomId: 'room-class',
         senderId: 'user-teacher',
         senderName: '王老师',
-        body: '如果你们用 Agent 辅助协作，只能处理授权群内的信息；个人备注、私聊和未授权文件不要让 Agent 代发。',
+        body: '如果你们用个人助手辅助协作，只能处理授权群内的信息；个人备注、私聊和未授权文件不要让助手代发。',
         sentAt: '2026-05-04T10:40:00+08:00',
         type: 'text'
       },
@@ -204,7 +204,7 @@ export function createDemoState(): DemoState {
         roomId: 'room-team',
         senderId: 'user-lin',
         senderName: '林雯',
-        body: '我已经把演示稿 v3 上传到文件库，允许我的 Agent 在我离线时发给本组成员。',
+        body: '我已经把演示稿 v3 上传到文件库，晚上我不一定在线；同组成员如果要最新版，可以让我的个人助手在授权范围内代发。',
         sentAt: '2026-05-04T13:42:00+08:00',
         type: 'text'
       },
@@ -218,25 +218,36 @@ export function createDemoState(): DemoState {
         type: 'text'
       },
       {
+        id: 'msg-assistant-file-handoff',
+        roomId: 'room-team',
+        senderId: 'user-lin',
+        senderName: '林雯',
+        body: '我不在电脑前，个人助手已确认陈晨是本组成员、演示稿 v3 是授权文件；当前只有文件记录，等真实文件可下载后会直接代发。',
+        sentAt: '2026-05-04T14:06:00+08:00',
+        type: 'agent',
+        agentLabel: '托管代发',
+        sourceAgentId: 'agent-lin'
+      },
+      {
         id: 'msg-07',
         roomId: 'room-agent',
         senderId: 'user-chen',
-        senderName: '陈晨的 Agent',
-        body: '请求林雯的 Agent 确认：演示稿最新版是否可以发给陈晨？',
-        sentAt: '2026-05-04T14:06:00+08:00',
+        senderName: '陈晨',
+        body: '陈晨的分身向林雯确认：请求发送组内最新版演示稿，仅限当前小组成员可见。',
+        sentAt: '2026-05-04T14:06:30+08:00',
         type: 'agent',
-        agentLabel: '陈晨的 Agent',
+        agentLabel: '协商请求',
         sourceAgentId: 'agent-chen'
       },
       {
         id: 'msg-agent-file-gate',
         roomId: 'room-agent',
         senderId: 'user-lin',
-        senderName: '林雯的 Agent',
-        body: '已评估：陈晨是同组成员、演示稿 v3 已授权，但当前文件只有元数据，没有 Matrix media backing，不能自动代发。',
+        senderName: '林雯',
+        body: '林雯的分身已评估：陈晨是同组成员，演示稿 v3 已授权；当前缺少可下载文件实体，所以先记录请求，不做虚假代发。',
         sentAt: '2026-05-04T14:08:00+08:00',
         type: 'agent',
-        agentLabel: '林雯的 Agent',
+        agentLabel: '边界确认',
         sourceAgentId: 'agent-lin'
       },
       {
@@ -312,11 +323,11 @@ export function createDemoState(): DemoState {
         id: 'msg-agent-patch-gate',
         roomId: 'room-agent',
         senderId: 'user-zhao',
-        senderName: '赵一鸣的 Agent',
-        body: '记录：日程变更和任务状态更新只生成结构化 patch，必须人工确认后才会修改内部 calendar 或 tasks。',
+        senderName: '赵一鸣',
+        body: '赵一鸣的分身记录规则：日程变更和任务状态更新只生成结构化提案，必须人工确认后才会写入日程或任务。',
         sentAt: '2026-05-04T15:30:00+08:00',
         type: 'agent',
-        agentLabel: '赵一鸣的 Agent',
+        agentLabel: '托管规则',
         sourceAgentId: 'agent-zhao'
       }
     ],
@@ -401,7 +412,7 @@ export function createDemoState(): DemoState {
         visibility: 'owner',
         agentCanShare: false,
         tags: ['个人备注'],
-        summary: '仅林雯可见的个人答辩备注，不允许 Agent 代发。',
+        summary: '仅林雯可见的个人答辩备注，不允许个人助手代发。',
         contentType: 'text/markdown; charset=utf-8',
         size: 920
       }
@@ -520,7 +531,7 @@ export function createDemoState(): DemoState {
         risk: {
           level: 'low',
           score: 0.18,
-          reason: '请求来自同组成员，目标文件已被上传者授权在本组内由 Agent 代发；但种子文件缺少真实媒体元数据时不能自动发送。',
+          reason: '请求来自同组成员，目标文件已被上传者授权在本组内由个人助手代发；但种子文件缺少真实媒体元数据时不能自动发送。',
           model: 'risk-mini-v1'
         },
         contextIds: ['msg-05', 'msg-06', 'file-slides-v3'],
@@ -545,7 +556,60 @@ export function createDemoState(): DemoState {
       }
     ],
     actionRequests: [],
-    a2aSessions: [],
+    a2aSessions: [
+      {
+        id: 'a2a-seed-review-reschedule',
+        roomId: 'room-team',
+        initiatorAgentId: 'agent-zhao',
+        targetAgentIds: ['agent-lin', 'agent-chen'],
+        goal: '赵一鸣希望把最后一次合稿检查从周二 20:30 调整到周三 23:00。',
+        status: 'needs_confirmation',
+        turns: [
+          {
+            id: 'a2a-seed-review-reschedule-turn-1',
+            agentId: 'agent-zhao',
+            kind: 'request',
+            message: '赵一鸣请求调整合稿检查时间，并要求保留每个人的材料边界。',
+            toolCalls: ['room_search', 'calendar_suggest'],
+            createdAt: '2026-05-04T15:31:00+08:00'
+          },
+          {
+            id: 'a2a-seed-review-reschedule-turn-2',
+            agentId: 'agent-lin',
+            kind: 'response',
+            message: '林雯的分身确认：林雯 19:30-21:30 专注演示稿，23:00 可以参加最终确认。',
+            toolCalls: ['calendar.read', 'memory.read'],
+            createdAt: '2026-05-04T15:31:20+08:00'
+          },
+          {
+            id: 'a2a-seed-review-reschedule-turn-3',
+            agentId: 'agent-chen',
+            kind: 'response',
+            message: '陈晨的分身确认：陈晨 21:00 前补齐访谈材料，23:00 可以参加合稿检查。',
+            toolCalls: ['task.read', 'calendar.read'],
+            createdAt: '2026-05-04T15:31:40+08:00'
+          },
+          {
+            id: 'a2a-seed-review-reschedule-turn-4',
+            agentId: 'agent-zhao',
+            kind: 'proposal',
+            message: '形成提案：周三 23:00 合稿检查；陈晨 21:00 前补材料；林雯会在确认后更新演示稿第 5 页和结论页。',
+            toolCalls: ['calendar.patch.suggest', 'task.patch.suggest'],
+            createdAt: '2026-05-04T15:32:00+08:00'
+          }
+        ],
+        proposedActionRequestIds: ['action-seed-calendar-review'],
+        contextIds: ['msg-04', 'msg-10', 'msg-11', 'msg-12', 'cal-review', 'task-check'],
+        risk: {
+          level: 'medium',
+          score: 0.54,
+          reason: '涉及共享日程变更，需要人类确认后才能写入。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T15:31:00+08:00',
+        updatedAt: '2026-05-04T15:32:00+08:00'
+      }
+    ],
     agentGoalPlans: [],
     agentAutopilotPolicies: [
       {

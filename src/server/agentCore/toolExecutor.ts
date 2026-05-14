@@ -1,4 +1,5 @@
 import type { DemoState, FileItem, Message, RiskAssessment } from '../../domain/types';
+import { assistantAgentLabel, assistantFileShareBody, assistantSenderName } from '../../domain/assistantMessage';
 import { assessFileSharePolicy, assessMessageSendPolicy } from './policyEngine';
 import { createToolPermissionDecision, type ToolPermissionDecision } from './permissionBroker';
 import {
@@ -469,11 +470,11 @@ function createAgentDelegatedMessage(input: {
     id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: input.roomId,
     senderId: input.agent.ownerId,
-    senderName: input.agent.displayName,
+    senderName: assistantSenderName(input.ownerName),
     body: input.body,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${input.ownerName}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_message'),
     sourceAgentId: input.agent.id
   };
 }
@@ -488,11 +489,11 @@ function createAgentFileMessage(input: {
     id: `msg-agent-share-${input.file.id}`,
     roomId: input.roomId,
     senderId: input.agent.ownerId,
-    senderName: input.agent.displayName,
-    body: `我代表${input.ownerName}发送文件：${input.file.name}`,
+    senderName: assistantSenderName(input.ownerName),
+    body: assistantFileShareBody({ ownerName: input.ownerName, fileName: input.file.name }),
     sentAt: new Date().toISOString(),
     type: 'file',
-    agentLabel: `${input.ownerName}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_file'),
     sourceAgentId: input.agent.id,
     fileId: input.file.id,
     mxcUri: input.file.mxcUri,

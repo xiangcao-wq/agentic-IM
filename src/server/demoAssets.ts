@@ -19,7 +19,7 @@ export function createDemoAssets(): DemoAsset[] {
         '访谈对象：校园服务中心值班老师、两名学生志愿者。',
         '核心发现：学生最关心报修进度透明、服务入口分散、通知到达率。',
         '可引用观点：如果系统能把报修、预约、反馈集中在一个入口，会减少重复询问。',
-        'A2A 演示用途：陈晨的 Agent 可以引用本文件补齐访谈材料和引用一致性。',
+        'A2A 演示用途：陈晨的个人助手可以引用本文件补齐访谈材料和引用一致性。',
         '待补齐：陈晨需要在 5 月 10 日 21:00 前补一张流程截图。'
       ],
       'Interview notes for campus service digitalization research.',
@@ -28,22 +28,22 @@ export function createDemoAssets(): DemoAsset[] {
     textAsset(
       'a2a-autopilot-demo-runbook.txt',
       [
-        'Agent IM A2A Autopilot Demo Runbook',
+        'AgentBridge A2A Autopilot Demo Runbook',
         '',
-        'Goal: show three personal agents negotiating a file handoff and a schedule change with risk gates.',
-        'Lin Agent: may share files uploaded by Lin when agentCanShare=true and the file is downloadable.',
-        'Chen Agent: may request interview material updates and propose task status changes.',
-        'Zhao Agent: may coordinate the final review time but must request confirmation for calendar changes.',
-        'Do not fake private-room visibility. Each Agent can only cite rooms, tasks and files it is authorized to see.',
+        'Goal: show three personal assistants negotiating a file handoff and a schedule change with risk gates.',
+        '林雯的个人助手：当 agentCanShare=true 且文件可下载时，可以在本组范围内代发林雯上传的文件。',
+        '陈晨的个人助手：可以说明访谈材料进度，并参与合稿时间协商。',
+        '赵一鸣的个人助手：可以发起最终合稿时间协调，但日程变更必须请求确认。',
+        '不要伪造私聊可见性。每个个人助手只能引用授权聊天室、任务和文件。',
         'Interesting query: “引用一致性在哪里提到？” should match the interview notes and this runbook.'
       ],
       'A2A autopilot runbook with rules, roles, and searchable instructions.',
       ['a2a', 'autopilot', 'runbook', 'ai-seed']
     ),
     {
-      name: 'agent-im-a2a-demo-brief.pdf',
+      name: 'agentbridge-a2a-demo-brief.pdf',
       contentType: 'application/pdf',
-      bytes: createMinimalPdf('Agent IM A2A Demo Brief', [
+      bytes: createMinimalPdf('AgentBridge A2A Demo Brief', [
         'Scenario: Lin, Chen and Zhao each have a personal agent.',
         'Low risk: read context, search files, answer deadline questions.',
         'Medium risk: share a downloadable authorized file after request assessment.',
@@ -66,14 +66,14 @@ export function createDemoAssets(): DemoAsset[] {
       tags: ['pdf', 'risk', 'research', 'ai-seed']
     },
     {
-      name: 'agent-im-a2a-demo-poster.svg',
+      name: 'agentbridge-a2a-demo-poster.svg',
       contentType: 'image/svg+xml',
       bytes: textBytes(createPosterSvg()),
-      summary: 'Openable poster-style visual asset for the Agent IM A2A demo.',
+      summary: 'Openable poster-style visual asset for the AgentBridge A2A demo.',
       tags: ['poster', 'image', 'a2a', 'ai-seed']
     },
     {
-      name: 'agent-im-a2a-flow-board.svg',
+      name: 'agentbridge-a2a-flow-board.svg',
       contentType: 'image/svg+xml',
       bytes: textBytes(createFlowBoardSvg()),
       summary: 'Openable workflow board showing planner, tools, risk gate, confirmation, and audit log.',
@@ -96,13 +96,13 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
         '- 日程和任务状态修改必须进入确认队列。',
         '- 自动托管模式需要记录每一步：计划、工具、风险、确认、审计。'
       ],
-      'Markdown protocol for the real Agent IM collaboration runtime.',
+      'Markdown protocol for the real AgentBridge collaboration runtime.',
       ['markdown', 'agent', 'protocol', 'ai-seed']
     ),
     textAsset(
       'image-2-material-prompts-ai-seed.txt',
       [
-        'Image-2 material prompts for Agent IM demo',
+        'Image-2 material prompts for AgentBridge demo',
         '',
         '1. Poster: premium enterprise AI collaboration dashboard, teal and graphite palette, real-time agent handoff, risk gate, file cards, clean typography.',
         '2. Flow board: product design diagram showing User -> Planner -> Tool Registry -> Risk Gate -> Confirmation Queue -> Audit Log.',
@@ -115,12 +115,12 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
     textAsset(
       'demo-scene-lin-asleep-file-handoff.md',
       [
-        '# Demo Scene: Lin is asleep, her Agent handles the file handoff',
+        '# Demo Scene: 林雯离线，个人助手处理文件交接',
         '',
-        'Trigger message: Chen asks whether Lin Agent can send the image generated last night.',
-        'Expected behavior: Lin Agent searches authorized room files, matches the latest Image-2 poster or research board, checks that the file is downloadable, and sends it only when risk is low.',
-        'Evidence to show: the outgoing chat message contains a real file chip and the file download endpoint returns bytes.',
-        'Boundary: if a file is metadata-only or not authorized, the Agent must not claim that it sent the file.'
+        '自然触发语：林雯现在不在电脑前，她的个人助手能不能把最新演示稿发给陈晨？',
+        'Expected behavior: 林雯的个人助手检索授权文件，匹配最新演示稿或研究看板，确认文件可下载，并且只有低风险时才代发。',
+        'Evidence to show: outgoing chat message contains a real file chip and the file download endpoint returns bytes.',
+        'Boundary: if a file is metadata-only or not authorized, the assistant must not claim that it sent the file.'
       ],
       'Runbook for the offline file handoff demo scene.',
       ['a2a', 'handoff', 'file', 'runbook', 'ai-seed']
@@ -128,10 +128,10 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
     textAsset(
       'demo-scene-a2a-calendar-negotiation.md',
       [
-        '# Demo Scene: Agents coordinate a schedule change',
+        '# Demo Scene: 个人助手协商合稿时间',
         '',
-        'Trigger message: Zhao asks Lin Agent to negotiate with Chen Agent and move the final review from Tuesday 20:30 to Wednesday 23:00.',
-        'Expected behavior: the runtime creates an A2A session with multiple turns, proposes a calendarPatch, and places the change in the confirmation queue.',
+        '自然触发语：帮我和陈晨商量一下，把合稿检查改到周三 23:00。',
+        'Expected behavior: runtime creates an A2A session with multiple turns, proposes a calendarPatch, and places the change in the confirmation queue.',
         'Human confirmation: before approval, internal calendar data must not change. After approval, calendar.startsAt is updated and an audit log is written.',
         'Presenter line: Agents can negotiate and prepare a patch, but they do not bypass human control for high-impact changes.'
       ],
@@ -169,15 +169,15 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
       ['policy', 'permission', 'risk', 'autopilot', 'ai-seed']
     ),
     textAsset(
-      'presenter-script-agent-im-2min.md',
+      'presenter-script-agentbridge-2min.md',
       [
-        '# Agent IM two-minute presenter script',
+        '# AgentBridge two-minute presenter script',
         '',
         '1. Show LLM connected and explain that every member has a personal Agent.',
         '2. Ask: Who owns interview material and what should I do first today?',
-        '3. Trigger: Chen asks Lin Agent to send the Image-2 research board while Lin is offline.',
+        '3. Trigger: 陈晨在群里问：林雯不在电脑前，她的个人助手能不能把最新演示稿发给陈晨？',
         '4. Show that the Agent sends a real downloadable file only after matching authorization and risk.',
-        '5. Trigger: Zhao asks Lin Agent and Chen Agent to coordinate a final review time.',
+        '5. Trigger: 赵一鸣说：帮我和陈晨商量一下，把合稿检查改到周三 23:00。',
         '6. Show the A2A session, confirmation queue, and audit-backed calendar update after approval.',
         'Close: The product is not only chat. It lets personal Agents represent people in real collaboration while keeping humans in control.'
       ],
@@ -185,16 +185,16 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
       ['script', 'demo', 'a2a', 'presentation', 'ai-seed']
     ),
     {
-      name: 'agent-im-a2a-investor-demo-onepager.pdf',
+      name: 'agentbridge-a2a-investor-demo-onepager.pdf',
       contentType: 'application/pdf',
-      bytes: createMinimalPdf('Agent IM A2A Investor Demo Onepager', [
+      bytes: createMinimalPdf('AgentBridge A2A Investor Demo Onepager', [
         'Core promise: personal agents represent people in collaboration.',
         'Demo moment 1: answer from authorized context.',
         'Demo moment 2: send a real downloadable file while the owner is offline.',
         'Demo moment 3: coordinate schedule changes with confirmation gates.',
         'Why it matters: work continues without losing permission, accountability, or auditability.'
       ]),
-      summary: 'One-page PDF explaining the Agent IM A2A product story.',
+      summary: 'One-page PDF explaining the AgentBridge A2A product story.',
       tags: ['pdf', 'onepager', 'product', 'a2a', 'ai-seed']
     },
     {
@@ -223,10 +223,11 @@ export function createRuntimeDemoAssets(): DemoAsset[] {
       tags: ['pdf', 'risk', 'permission', 'policy', 'ai-seed']
     },
     binaryAsset(
-      'image2-agent-im-a2a-poster.png',
+      'image2-agentbridge-a2a-poster.png',
       'image/png',
-      'Openable Image-2 generated poster for Agent IM A2A collaboration.',
-      ['image-2', 'png', 'poster', 'a2a', 'ai-seed']
+      'Openable Image-2 generated poster for AgentBridge A2A collaboration.',
+      ['image-2', 'png', 'poster', 'a2a', 'ai-seed'],
+      'image2-agent-im-a2a-poster.png'
     ),
     binaryAsset(
       'image2-campus-service-research-board.png',
@@ -257,11 +258,11 @@ function textBytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
 
-function binaryAsset(name: string, contentType: string, summary: string, tags: string[]): DemoAsset {
+function binaryAsset(name: string, contentType: string, summary: string, tags: string[], sourceName = name): DemoAsset {
   return {
     name,
     contentType,
-    bytes: readWorkspaceAsset(name),
+    bytes: readWorkspaceAsset(sourceName),
     summary,
     tags
   };
@@ -313,7 +314,7 @@ function byteLength(value: string): number {
 
 function createPosterSvg(): string {
   return [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Agent IM A2A demo poster">',
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="AgentBridge A2A demo poster">',
     '<defs>',
     '<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#071518"/><stop offset="0.58" stop-color="#0d7378"/><stop offset="1" stop-color="#f7faf9"/></linearGradient>',
     '<linearGradient id="card" x1="0" x2="1"><stop stop-color="#ffffff" stop-opacity="0.96"/><stop offset="1" stop-color="#e9f6f4" stop-opacity="0.92"/></linearGradient>',
@@ -321,14 +322,14 @@ function createPosterSvg(): string {
     '</defs>',
     '<rect width="1280" height="720" fill="url(#bg)"/>',
     '<circle cx="1080" cy="104" r="260" fill="#ffffff" opacity="0.1"/>',
-    '<text x="80" y="110" fill="#f8fbfb" font-family="IBM Plex Sans, Arial, sans-serif" font-size="54" font-weight="700">Agent IM</text>',
+    '<text x="80" y="110" fill="#f8fbfb" font-family="IBM Plex Sans, Arial, sans-serif" font-size="54" font-weight="700">AgentBridge</text>',
     '<text x="82" y="158" fill="#d9eeee" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24">A2A autonomous collaboration demo</text>',
     '<g filter="url(#shadow)">',
     '<rect x="78" y="220" width="342" height="270" rx="22" fill="url(#card)"/>',
     '<rect x="468" y="180" width="342" height="330" rx="22" fill="url(#card)"/>',
     '<rect x="858" y="220" width="342" height="270" rx="22" fill="url(#card)"/>',
     '</g>',
-    '<text x="112" y="276" fill="#102326" font-family="IBM Plex Sans, Arial, sans-serif" font-size="26" font-weight="700">Lin Agent</text>',
+    '<text x="112" y="276" fill="#102326" font-family="IBM Plex Sans, Arial, sans-serif" font-size="26" font-weight="700">Lin Assistant</text>',
     '<text x="112" y="325" fill="#536469" font-family="IBM Plex Sans, Arial, sans-serif" font-size="20">Shares authorized files</text>',
     '<text x="112" y="365" fill="#536469" font-family="IBM Plex Sans, Arial, sans-serif" font-size="20">Answers with citations</text>',
     '<text x="502" y="240" fill="#102326" font-family="IBM Plex Sans, Arial, sans-serif" font-size="26" font-weight="700">Planner + Tools</text>',
@@ -368,7 +369,7 @@ function createFlowBoardSvg(): string {
     })
     .join('');
   return [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Agent IM A2A flow board">',
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="AgentBridge A2A flow board">',
     '<rect width="1280" height="720" fill="#f3f7f7"/>',
     '<text x="70" y="80" fill="#071518" font-family="IBM Plex Sans, Arial, sans-serif" font-size="42" font-weight="700">A2A execution loop</text>',
     '<text x="72" y="112" fill="#64777c" font-family="IBM Plex Sans, Arial, sans-serif" font-size="20">The agent can plan freely, but execution stays inside trusted tools and risk gates.</text>',

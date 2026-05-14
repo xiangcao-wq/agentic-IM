@@ -292,9 +292,9 @@ function InspectorPermissionPanel(props: {
       <div className="inspector-section-heading">
         <div>
           <span>02</span>
-          <h3>Permission</h3>
+          <h3>边界与确认</h3>
         </div>
-        <em>{props.pendingCount > 0 ? `${props.pendingCount} pending` : 'guarded'}</em>
+        <em>{props.pendingCount > 0 ? `${props.pendingCount} 待确认` : '已守护'}</em>
       </div>
       <div className="permission-scope-grid">
         <span>当前对话</span>
@@ -306,7 +306,7 @@ function InspectorPermissionPanel(props: {
       </div>
       <div className="compact-list permission-center-list">
         {props.permissionItems.length > visiblePermissionItems.length ? (
-          <div className="trace-list-summary">Showing latest 8 of {props.permissionItems.length}</div>
+          <div className="trace-list-summary">显示最近 8 条，共 {props.permissionItems.length} 条</div>
         ) : null}
         {props.permissionItems.length > 0 ? (
           visiblePermissionItems.map((item) => (
@@ -322,10 +322,15 @@ function InspectorPermissionPanel(props: {
               </small>
             </div>
           ))
+        ) : props.pendingCount > 0 ? (
+          <div className="compact-row permission-row outcome-neutral">
+            <strong>{props.pendingCount} 个动作等待确认</strong>
+            <span>确认前不会发送文件、改日程或更新任务。</span>
+          </div>
         ) : (
           <div className="compact-row permission-row outcome-neutral">
-            <strong>No permission decision</strong>
-            <span>当前操作尚未触发权限决策。</span>
+            <strong>暂无边界决策</strong>
+            <span>当前操作没有触发文件、日程或任务变更。</span>
           </div>
         )}
       </div>

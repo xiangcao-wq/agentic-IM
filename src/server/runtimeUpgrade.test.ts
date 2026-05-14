@@ -117,7 +117,8 @@ describe('runtime upgrade APIs', () => {
       mxcUri: 'mxc://localhost/plan'
     });
     expect(share.result.message).toMatchObject({
-      agentLabel: '林雯的 Agent 代发',
+      senderName: '林雯',
+      agentLabel: '个人助手代发',
       mxcUri: 'mxc://localhost/plan',
       contentType: 'application/pdf',
       size: 708
@@ -689,7 +690,7 @@ describe('runtime upgrade APIs', () => {
         roomId: 'room-team',
         intent: 'coordinate',
         targetUserId: 'user-chen',
-        userText: '把周二 20:30 的合稿检查改到周三 23:00，请和陈晨的 Agent 协调。'
+        userText: '把周二 20:30 的合稿检查改到周三 23:00，请和陈晨的个人助手协调。'
       })
     });
     const state = await requestJson(`${app.url}/api/state`);
@@ -698,7 +699,7 @@ describe('runtime upgrade APIs', () => {
     expect(state.messages.some((message: { id: string; roomId: string; agentLabel?: string }) =>
       message.id.startsWith('$') &&
       message.roomId === 'room-agent' &&
-      message.agentLabel === '林雯的 Agent 协调'
+      message.agentLabel === '个人助手协商'
     )).toBe(false);
     expect(coordination.actionRequest).toMatchObject({
       kind: 'coordinate',
