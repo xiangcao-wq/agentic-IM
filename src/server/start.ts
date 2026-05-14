@@ -1,15 +1,22 @@
 import { join } from 'node:path';
 import { createAppServer } from './appServer';
 import { loadLocalEnvFile } from './env';
+import { createConfiguredStateStoreAsync } from './stateStoreFactory';
 
 await loadLocalEnvFile(join(process.cwd(), '.env.local'));
 
 const port = Number(process.env.AGENT_IM_API_PORT ?? 8791);
 const dbPath = process.env.AGENT_IM_DB_PATH ?? join(process.cwd(), 'data', 'agent-im-db.json');
+const stateStoreConfig = await createConfiguredStateStoreAsync({
+  dbPath,
+  env: process.env
+});
 
 const server = await createAppServer({
   dbPath,
   port,
+  stateStore: stateStoreConfig.stateStore,
+  agentEventLogMode: stateStoreConfig.agentEventLogMode,
   autopilotWorker: {
     enabled: parseBooleanEnv(process.env.AGENT_IM_AUTOPILOT_WORKER, true),
     intervalMs: parseNumberEnv(process.env.AGENT_IM_AUTOPILOT_WORKER_INTERVAL_MS, 60_000),
@@ -19,8 +26,8 @@ const server = await createAppServer({
   }
 });
 
-console.log(`Agent IM API running at ${server.url}`);
-console.log(`Persistent database: ${dbPath}`);
+console.log(`AgentBridge API running at ${server.url}`);
+console.log(`Persistent database: ${stateStoreConfig.description}`);
 
 process.on('SIGINT', async () => {
   await server.close();

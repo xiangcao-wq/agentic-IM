@@ -156,12 +156,29 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('你正在以林雯视角查看');
   });
 
+  it('uses a loading boundary when opening the Agent Console from chat', async () => {
+    window.localStorage.setItem('agentbridge-review-guide-dismissed', 'true');
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const entry = host.querySelector<HTMLButtonElement>('.agent-console-entry');
+    expect(entry).toBeTruthy();
+    act(() => {
+      entry!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('.agent-console-loading')).toBeTruthy();
+    expect(host.textContent).toContain('正在打开 Agent 操作台');
+  });
+
   it('shows natural member presence and assistant delegation without exposing demo mechanics', async () => {
     await act(async () => {
       root.render(<App />);
     });
 
-    expect(host.querySelector('.brand-row p')?.textContent).toBe('个人助手协作空间');
+    expect(host.querySelector('.brand-row h1')?.textContent).toBe('AgentBridge');
+    expect(host.querySelector('.brand-row p')?.textContent).toBe('A2A 原生聊天空间');
     expect(host.textContent).toContain('林雯 · 离线，个人助手托管中');
     expect(host.textContent).toContain('陈晨在线');
     expect(host.textContent).toContain('赵一鸣忙碌');
@@ -212,6 +229,146 @@ describe('App runtime upgrade controls', () => {
     });
     expect(host.textContent).toContain('可用文件');
     expect(host.textContent).not.toContain('从当前对话中提取的任务');
+  });
+
+  it('surfaces pending A2A confirmations from the chat view without exposing implementation details', async () => {
+    window.localStorage.setItem('agentbridge-review-guide-dismissed', 'true');
+    const state = createDemoState();
+    state.actionRequests = [
+      {
+        id: 'action-a2a-confirm-chat',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        kind: 'coordinate',
+        status: 'needs_confirmation',
+        input: {
+          requestText: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。',
+          calendarPatch: {
+            itemId: 'cal-review',
+            oldStartsAt: '2026-05-05T20:30:00+08:00',
+            newStartsAt: '2026-05-06T23:00:00+08:00'
+          },
+          taskPatch: {
+            taskId: 'task-check',
+            oldStatus: 'pending',
+            newStatus: 'in_progress'
+          }
+        },
+        risk: {
+          level: 'medium',
+          score: 0.52,
+          reason: '日程影响范围有限，但仍建议记录协商过程。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T08:00:00.000Z',
+        updatedAt: '2026-05-04T08:00:00.000Z',
+        requiresHuman: true
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const banner = host.querySelector<HTMLElement>('.chat-pending-action-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.textContent).toContain('A2A 协商待确认');
+    expect(banner!.textContent).toContain('确认后写入日程并推进相关任务');
+    expect(banner!.textContent).toContain('周三 23:00');
+    expect(banner!.textContent).not.toContain('action-a2a-confirm-chat');
+    expect(banner!.textContent).not.toContain('calendarPatch');
+
+    const confirmEntry = [...banner!.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('去确认')
+    );
+    expect(confirmEntry).toBeTruthy();
+    await act(async () => {
+      confirmEntry!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await waitForMotionExit();
+    });
+
+    expect(host.querySelector('.agent-console')).toBeTruthy();
+    expect(host.textContent).toContain('待确认动作');
+  });
+
+  it('shows confirmed A2A outcomes as a concise chat result with task and calendar entry points', async () => {
+    window.localStorage.setItem('agentbridge-review-guide-dismissed', 'true');
+    const state = createDemoState();
+    state.calendar = state.calendar.map((item) =>
+      item.id === 'cal-review' ? { ...item, startsAt: '2026-05-06T23:00:00+08:00' } : item
+    );
+    state.tasks = state.tasks.map((task) =>
+      task.id === 'task-check' ? { ...task, status: 'in_progress' } : task
+    );
+    state.actionRequests = [
+      {
+        id: 'action-a2a-confirmed-chat',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        kind: 'coordinate',
+        status: 'executed',
+        input: {
+          requestText: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。',
+          calendarPatch: {
+            itemId: 'cal-review',
+            oldStartsAt: '2026-05-05T20:30:00+08:00',
+            newStartsAt: '2026-05-06T23:00:00+08:00'
+          },
+          taskPatch: {
+            taskId: 'task-check',
+            oldStatus: 'pending',
+            newStatus: 'in_progress'
+          }
+        },
+        risk: {
+          level: 'medium',
+          score: 0.52,
+          reason: '日程影响范围有限，但仍建议记录协商过程。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T08:00:00.000Z',
+        updatedAt: '2026-05-04T08:05:00.000Z',
+        requiresHuman: false,
+        logId: 'log-a2a-confirmed-chat'
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    const banner = host.querySelector<HTMLElement>('.chat-completed-action-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.textContent).toContain('A2A 协商已完成');
+    expect(banner!.textContent).toContain('周三 23:00');
+    expect(banner!.textContent).toContain('任务已进入进行中');
+    expect(banner!.textContent).not.toContain('action-a2a-confirmed-chat');
+    expect(banner!.textContent).not.toContain('calendarPatch');
+    expect(host.querySelector('.chat-pending-action-banner')).toBeNull();
+
+    const calendarButton = [...banner!.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('查看日程')
+    );
+    expect(calendarButton).toBeTruthy();
+    await act(async () => {
+      calendarButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.textContent).toContain('相关日程');
+    expect(host.textContent).toContain('第 4 组最后一次合稿检查');
+    expect(host.textContent).toContain('23:00');
+
+    const taskButton = [...banner!.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('查看任务')
+    );
+    expect(taskButton).toBeTruthy();
+    await act(async () => {
+      taskButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.textContent).toContain('从当前对话中提取的任务');
+    expect(host.textContent).toContain('最后一次合稿检查');
+    expect(host.textContent).toContain('进行中');
   });
 
   it('downloads files without entering global busy state or refreshing state', async () => {
@@ -315,10 +472,10 @@ describe('App runtime upgrade controls', () => {
     expect(host.textContent).toContain('返回聊天');
     expect(host.querySelector('.agent-console-command #agent-prompt')).toBeTruthy();
     expect(host.querySelector('.agent-inspector')).toBeTruthy();
-    expect(host.textContent).toContain('Timeline');
-    expect(host.textContent).toContain('Permission');
+    expect(host.textContent).toContain('Agent 活动');
+    expect(host.textContent).toContain('边界与确认');
     expect(host.textContent).toContain('Files');
-    expect(host.textContent).toContain('No permission decision');
+    expect(host.textContent).toContain('暂无边界决策');
   });
 
   it('renders the global AI connection status from server state', async () => {
@@ -392,11 +549,108 @@ describe('App runtime upgrade controls', () => {
 
     expect(host.querySelector('[data-testid="a2a-session-panel"]')).toBeTruthy();
     expect(host.querySelector('.autopilot-policy.enabled')).toBeTruthy();
+    expect(host.textContent).toContain('陈晨 ↔ 林雯');
     expect(host.textContent).toContain('文件代发请求：对方请求发送最新材料，等待人工确认。');
     expect(host.textContent).toContain('Agent 已完成授权文件代发。');
     expect(host.textContent).not.toContain('Chen asked Lin Agent to send the latest slides.');
     expect(host.textContent).not.toContain('Delivered file-slides-v3 to the room.');
     expect(host.textContent).toContain('low');
+  });
+
+  it('shows the seeded A2A negotiation as a visible collaboration loop instead of a log row', async () => {
+    const state = createDemoState();
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    expect(host.querySelector('[data-testid="a2a-session-panel"]')).toBeTruthy();
+    expect(host.textContent).toContain('A2A 协商流');
+    expect(host.textContent).toContain('赵一鸣 ↔ 林雯 ↔ 陈晨');
+    expect(host.textContent).toContain('发起请求');
+    expect(host.textContent).toContain('读取林雯约束');
+    expect(host.textContent).toContain('读取陈晨约束');
+    expect(host.textContent).toContain('形成提案');
+    expect(host.textContent).toContain('等待确认后写入日程并更新任务；确认前不会改变任何数据。');
+    expect(host.textContent).not.toContain('已阻止');
+    expect(host.textContent).not.toContain('Lin Agent');
+    expect(host.textContent).not.toContain('Chen Agent');
+  });
+
+  it('labels pending file handoff sessions as file confirmation instead of schedule writes', async () => {
+    const state = createDemoState();
+    state.actionRequests = [
+      {
+        id: 'action-file-confirm',
+        agentId: 'agent-lin',
+        roomId: 'room-team',
+        kind: 'share_file',
+        status: 'needs_confirmation',
+        input: {
+          requesterId: 'user-chen',
+          requestText: '林雯不在电脑前，她的个人助手能不能把最新演示稿发给陈晨？'
+        },
+        risk: {
+          level: 'medium',
+          score: 0.46,
+          reason: '文件可见范围需要确认。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T14:06:00+08:00',
+        updatedAt: '2026-05-04T14:06:00+08:00',
+        requiresHuman: true
+      }
+    ];
+    state.a2aSessions = [
+      {
+        id: 'a2a-file-confirm',
+        roomId: 'room-team',
+        initiatorAgentId: 'agent-chen',
+        targetAgentIds: ['agent-lin'],
+        goal: '陈晨请求林雯的个人助手发送最新版演示稿。',
+        status: 'needs_confirmation',
+        turns: [
+          {
+            id: 'a2a-file-turn-1',
+            agentId: 'agent-chen',
+            kind: 'request',
+            message: '陈晨请求发送最新版演示稿。',
+            toolCalls: ['room_search'],
+            createdAt: '2026-05-04T14:06:00+08:00'
+          },
+          {
+            id: 'a2a-file-turn-2',
+            agentId: 'agent-lin',
+            kind: 'proposal',
+            message: '林雯的分身确认文件范围，等待人类确认后才能代发。',
+            toolCalls: ['file_library.lookup_latest', 'action_request.create'],
+            createdAt: '2026-05-04T14:06:10+08:00'
+          }
+        ],
+        proposedActionRequestIds: ['action-file-confirm'],
+        contextIds: ['msg-06', 'file-slides-v3'],
+        risk: {
+          level: 'medium',
+          score: 0.46,
+          reason: '文件代发需要确认。',
+          model: 'risk-mini-v1'
+        },
+        createdAt: '2026-05-04T14:06:00+08:00',
+        updatedAt: '2026-05-04T14:06:10+08:00'
+      }
+    ];
+    apiMocks.fetchState.mockResolvedValue(state);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await openAgentConsole(host);
+
+    expect(host.textContent).toContain('等待确认后代发授权文件；确认前不会发送任何文件。');
+    expect(host.textContent).toContain('等待确认：文件代发');
+    expect(host.textContent).not.toContain('等待人类确认后写入日程');
   });
 
   it('keeps A2A session rows as concise user-facing summaries', async () => {
@@ -1346,7 +1600,7 @@ describe('App runtime upgrade controls', () => {
     expect(host.querySelector('[data-testid="agent-trace-panel"]')).toBeTruthy();
     expect(host.textContent).toContain('Agent 活动');
     expect(host.textContent).toContain('完成 5 个步骤');
-    expect(host.textContent).toContain('Permission');
+    expect(host.textContent).toContain('边界与确认');
     expect(host.textContent).not.toContain('Tool requested');
     expect(host.textContent).not.toContain('message.send');
 
@@ -1487,7 +1741,7 @@ describe('App runtime upgrade controls', () => {
 
     const permissionRows = [...host.querySelectorAll('.permission-center-list .permission-row')];
     expect(permissionRows).toHaveLength(8);
-    expect(host.textContent).toContain('Showing latest 8 of 10');
+    expect(host.textContent).toContain('显示最近 8 条，共 10 条');
     expect(permissionRows[0]?.textContent).toContain('permission reason 3');
     expect(permissionRows.some((row) => row.textContent?.includes('permission reason 2'))).toBe(false);
     expect(host.textContent).toContain('permission reason 10');
@@ -1523,7 +1777,7 @@ describe('App runtime upgrade controls', () => {
     });
 
     const fallback = host.querySelector('.permission-center-list .permission-row');
-    expect(fallback?.textContent).toContain('No permission decision');
+    expect(fallback?.textContent).toContain('暂无边界决策');
     expect(fallback?.classList.contains('outcome-neutral')).toBe(true);
     expect(fallback?.classList.contains('outcome-allow')).toBe(false);
   });

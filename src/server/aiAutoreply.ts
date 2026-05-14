@@ -3,6 +3,7 @@ import { sortMessagesChronologically } from '../domain/messages';
 import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type { AgentActionLog, AiAutoreplyPolicy, AiReplyJob, DemoState, Message } from '../domain/types';
 import { buildHumanReplyInstructions, getAiActorProfile } from './aiActors';
+import { normalizeAiHumanReplyText } from './aiHumanText';
 import type { AiProvider } from './aiProvider';
 
 interface RunAiAutorepliesInput {
@@ -53,10 +54,11 @@ export async function runAiAutoreplies(input: RunAiAutorepliesInput): Promise<{
         messages: buildCacheFriendlyMessages(instructions, context, requestTail),
         maxOutputTokens: 120
       });
+      const replyText = normalizeAiHumanReplyText(text);
       const reply = await input.sendMessage(nextState, {
         roomId: input.triggerMessage.roomId,
         senderId: policy.userId,
-        body: text
+        body: replyText
       });
       const completedJob: AiReplyJob = {
         ...pendingJob,

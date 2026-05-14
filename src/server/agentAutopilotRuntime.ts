@@ -540,6 +540,7 @@ function mentionsAgent(text: string, agentName: string, ownerName: string, owner
   const ownerSlug = ownerId.replace(/^user-/, '').toLowerCase();
   return (
     lowered.includes(agentName.toLowerCase()) ||
+    mentionsPersonalAssistant(text, ownerName, ownerId) ||
     lowered.includes(ownerName.toLowerCase()) ||
     lowered.includes(ownerSlug) ||
     lowered.includes(`${ownerSlug} agent`)
@@ -552,11 +553,36 @@ function mentionsAgentDirectly(text: string, agentName: string, ownerName: strin
   const normalizedOwnerName = ownerName.toLowerCase();
   return (
     lowered.includes(agentName.toLowerCase()) ||
+    mentionsPersonalAssistant(text, ownerName, ownerId) ||
     lowered.includes(`${normalizedOwnerName} agent`) ||
     lowered.includes(`${normalizedOwnerName}的 agent`) ||
     lowered.includes(`${ownerSlug} agent`) ||
     lowered.includes(`${ownerSlug}'s agent`)
   );
+}
+
+function mentionsPersonalAssistant(text: string, ownerName: string, ownerId: string): boolean {
+  const lowered = text.toLowerCase();
+  const compactText = lowered.replace(/\s+/g, '');
+  const ownerSlug = ownerId.replace(/^user-/, '').toLowerCase();
+  const ownerNameLower = ownerName.toLowerCase();
+  const ownerMentioned =
+    compactText.includes(ownerNameLower.replace(/\s+/g, '')) ||
+    compactText.includes(ownerSlug) ||
+    compactText.includes(`${ownerSlug}的`);
+  if (!ownerMentioned) {
+    return false;
+  }
+  return includesAny(compactText, [
+    '个人助手',
+    '聊天分身',
+    'ai分身',
+    '智能分身',
+    '分身',
+    '托管',
+    '代回',
+    '代发'
+  ]);
 }
 
 function inferMentionedTargetUserId(state: DemoState, text: string, actingAgentId: string): string | undefined {
@@ -610,11 +636,11 @@ function createAutopilotTextMessage(
     id: `msg-agent-chat-${triggerMessage.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: triggerMessage.roomId,
     senderId: owner.id,
-    senderName: agent.displayName,
+    senderName: owner.name,
     body: reply,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${owner.name}的 Agent`,
+    agentLabel: '个人助手回复',
     sourceAgentId: agent.id
   };
 }

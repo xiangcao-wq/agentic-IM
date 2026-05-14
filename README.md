@@ -1,6 +1,6 @@
-# Agent IM Demo
+# AgentBridge Demo
 
-一个真实本地可跑通的个人 Agent 融合即时通信 demo。前端不再直接使用内存假状态，聊天、Agent 操作和审计记录都通过本地 API 写入 `data/agent-im-db.json`。
+一个真实本地可跑通的 A2A 原生聊天 demo。前端不再直接使用内存假状态，聊天、Agent 操作和审计记录都通过本地 API 写入 `data/agent-im-db.json`。
 
 ## Run
 
@@ -70,12 +70,13 @@ curl -H "x-agent-im-token: <server-token>" https://your-agentbridge-host.example
 ```
 
 The server runbook is in `docs/deployment/agentbridge-controlled-server-pilot.md`.
+The Postgres cutover and rollback runbook is in `docs/deployment/agentbridge-postgres-cutover-runbook.md`.
 
 ## Verified Flow
 
 1. 发送一条真实用户消息，后端写入 `messages`。
 2. 点击“问截止”，Agent 从服务端状态读取班级群和文件上下文，生成回答和审计记录。
-3. 点击“离线代发”，Agent 评估低风险后创建一条带有“林雯的 Agent 代发”标识的文件消息。
+3. 点击“离线代发”，个人助手评估低风险后创建一条带有“由个人助手代发”标识的文件消息。
 4. 点击“Agent 协调”，Agent 识别多人日程变更为高风险，生成需要人工确认的协调建议。
 
 ## Quality Gates
@@ -117,6 +118,77 @@ npm run infra:smoke
 
 `/api/state` no longer pulls Matrix room history on every read. Matrix events enter the product state only when `POST /api/matrix/sync-once` is called from the UI or smoke script, which keeps old 联调消息 from polluting a clean demo after `npm run infra:reset`.
 
+## Postgres/Supabase State Migration Foundation
+
+The current runtime still uses `JsonStateStore`, so the deployed demo is not being switched to a new database in this slice. The first production-database step is now explicit and test-covered:
+
+- Core state migration: `supabase/migrations/202605140001_agentbridge_core_state.sql`
+- Schema source of truth: `src/server/postgresStateSchema.ts`
+- Optional StateStore adapter: `src/server/postgresStateStore.ts`
+- JSON-to-Postgres seed exporter:
+
+```bash
+npm run db:export:postgres
+```
+
+The exporter reads `data/agent-im-db.json` and writes idempotent SQL inserts to `tmp/agentbridge-postgres-seed.sql`. The safer cutover path is to apply the migration first, run the seed command in dry-run mode, apply the seed through `PostgresStateStore`, and then run the parity smoke check. Runtime still defaults to `JsonStateStore`; switch `AGENT_IM_STATE_STORE=postgres` only after deployed read/write parity checks pass.
+
+Migration dry-run and apply:
+
+```bash
+npm run db:migrate:postgres
+npm run db:migrate:postgres -- --apply
+```
+
+The migration command requires `AGENTBRIDGE_DATABASE_URL` or `DATABASE_URL`. It defaults to dry-run mode and does not write until `--apply` is provided.
+
+Seed dry-run and apply:
+
+```bash
+npm run db:seed:postgres -- --input data/agent-im-db.json --tenant review-demo
+npm run db:seed:postgres -- --apply --input data/agent-im-db.json --tenant review-demo
+```
+
+The seed command validates and counts the JSON snapshot in dry-run mode without opening a database connection. `--apply` imports the snapshot through `PostgresStateStore` using tenant-scoped transactions, so use it only after the migration command has passed. Apply mode refuses to overwrite an existing tenant by default; add `--replace` only when you intentionally want to replace that tenant snapshot.
+
+Read-only cutover smoke check:
+
+```bash
+npm run db:smoke:postgres -- --db data/agent-im-db.json --tenant review-demo
+```
+
+This command requires `AGENTBRIDGE_DATABASE_URL` or `DATABASE_URL`. It checks that migration `202605140001` exists, all 17 state tables have the same collection counts as the JSON snapshot, and `PostgresStateStore` reads the same first message ordering. It does not write to the database.
+
+One-command cutover gate:
+
+```bash
+npm run db:cutover:postgres -- --input data/agent-im-db.json --tenant review-demo
+npm run db:cutover:postgres -- --apply --input data/agent-im-db.json --tenant review-demo
+```
+
+The cutover gate runs the sequence `migrate -> seed -> smoke`. Default mode is a dry-run: it checks the target migration state, validates/counts the JSON seed, skips the final smoke because no writes occurred, and never changes runtime environment variables. `--apply` executes pending migrations, imports the JSON snapshot, then runs the read-only parity smoke check. Apply mode also refuses to overwrite an existing tenant unless `--replace` is provided. Only switch runtime to Postgres after this command returns `PASS`.
+
+Rollback export after Postgres cutover:
+
+```bash
+npm run db:export:json -- --tenant review-demo --out tmp/agentbridge-postgres-export.json
+```
+
+This command reads the Postgres tenant through `PostgresStateStore` and writes a `JsonStateStore`-compatible backup file. It is read-only against Postgres and does not change runtime environment variables. Use it before switching `AGENT_IM_STATE_STORE` back to `json` so messages, tasks, confirmations, and A2A sessions created after cutover are not lost.
+
+Optional runtime switch:
+
+```bash
+AGENT_IM_STATE_STORE=postgres
+AGENTBRIDGE_DATABASE_URL=postgres://...
+AGENTBRIDGE_TENANT_ID=review-demo
+AGENTBRIDGE_DATABASE_SSL=true
+AGENTBRIDGE_DATABASE_SSL_REJECT_UNAUTHORIZED=false
+npm run api
+```
+
+Leave `AGENT_IM_STATE_STORE` unset, or set it to `json`, to keep the current JSON runtime. Postgres mode requires an explicit database URL and keeps the Agent event log on local JSONL unless a future event-log database adapter is configured.
+
 ## Current Boundary
 
 Matrix mode:
@@ -156,6 +228,11 @@ Model routing:
 Optional variables:
 
 - `AGENT_IM_DB_PATH`: override for the JSON state file.
+- `AGENT_IM_STATE_STORE`: `json` by default; set to `postgres` only after applying the Supabase/Postgres migration and seed.
+- `AGENTBRIDGE_DATABASE_URL`: Postgres/Supabase connection string used when `AGENT_IM_STATE_STORE=postgres`.
+- `AGENTBRIDGE_TENANT_ID`: tenant key for Postgres state rows; defaults to `default`.
+- `AGENTBRIDGE_DATABASE_SSL`: set to `true` for hosted Postgres providers that require SSL.
+- `AGENTBRIDGE_DATABASE_SSL_REJECT_UNAUTHORIZED`: SSL certificate verification toggle; defaults to `true` when SSL is enabled.
 - `MATRIX_BOOTSTRAP_PATH`: override for Matrix bootstrap credentials.
 - `AGENT_IM_PUBLIC_MODE`: set to `true` for controlled server or public mode.
 - `AGENT_IM_API_TOKEN`: server token required in controlled server or public mode.

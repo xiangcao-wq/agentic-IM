@@ -523,7 +523,7 @@ describe('agent plan runtime', () => {
       body: JSON.stringify({
         agentId: 'agent-lin',
         roomId: 'room-team',
-        userText: '把周二合稿检查改到周三 23:00，请和陈晨的 Agent 协调。'
+        userText: '把周二合稿检查改到周三 23:00，请和陈晨的个人助手协调。'
       })
     });
 

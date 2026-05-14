@@ -23,7 +23,7 @@ describe('AI actor identity prompts', () => {
 
     expect(humanInstructions).toContain('真实用户身份直接说话');
     expect(humanInstructions).toContain('不要写旁白');
-    expect(agentInstructions).toContain('保持个人 Agent 身份');
+    expect(agentInstructions).toContain('保持个人助手身份');
     expect(agentInstructions).toContain('不要冒充真人用户');
   });
 });

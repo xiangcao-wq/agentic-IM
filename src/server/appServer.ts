@@ -8,6 +8,7 @@ import {
   summarizeRoom
 } from '../domain/agentEngine';
 import { createDemoState } from '../domain/demoState';
+import { assistantAgentLabel, assistantFileShareBody, assistantSenderName } from '../domain/assistantMessage';
 import { buildAgentContextBundle, buildShortTermContext, listAgentMemories } from '../domain/memory';
 import { buildCacheFriendlyMessages } from '../domain/promptCache';
 import type {
@@ -26,6 +27,7 @@ import type {
 import { sortMessagesChronologically } from '../domain/messages';
 import { getAiActorProfile, buildHumanReplyInstructions } from './aiActors';
 import { recordSkippedAiAutoreplies, runAiAutoreplies } from './aiAutoreply';
+import { normalizeAiHumanReplyText } from './aiHumanText';
 import { getAiUsageSnapshot, type AiProvider } from './aiProvider';
 import {
   runAgentAutopilotForMessage,
@@ -152,11 +154,15 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
   const host = options.host ?? '127.0.0.1';
   const db = options.stateStore ?? new JsonStateStore(options.dbPath);
   await db.init();
+  const defaultAgentEventLogPath = join(dirname(resolve(options.dbPath)), 'agent-events.jsonl');
+  const requestedJsonlEventLog = options.agentEventLogMode === 'jsonl-local';
   const agentEventStore =
     options.agentEventStore ??
-    (options.stateStore
+    (requestedJsonlEventLog
+      ? new JsonlAgentEventStore(defaultAgentEventLogPath)
+      : options.stateStore
       ? new MemoryAgentEventStore()
-      : new JsonlAgentEventStore(join(dirname(resolve(options.dbPath)), 'agent-events.jsonl')));
+      : new JsonlAgentEventStore(defaultAgentEventLogPath));
   const agentEventLogMode =
     options.agentEventLogMode ?? (options.agentEventStore ? 'custom' : options.stateStore ? 'memory' : 'jsonl-local');
   await agentEventStore.init();
@@ -798,9 +804,10 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
           messages: buildCacheFriendlyMessages(instructions, context, requestTail),
           maxOutputTokens: 120
         });
+        const replyText = normalizeAiHumanReplyText(text);
         const message = matrixStore
-          ? await matrixStore.sendMessage(state, { roomId: body.roomId, senderId: body.userId, body: text })
-          : createUserMessage(state, { roomId: body.roomId, senderId: body.userId, body: text });
+          ? await matrixStore.sendMessage(state, { roomId: body.roomId, senderId: body.userId, body: replyText })
+          : createUserMessage(state, { roomId: body.roomId, senderId: body.userId, body: replyText });
         const log = createRuntimeLog({
           agentId: `actor-${body.userId}`,
           roomId: body.roomId,
@@ -1257,7 +1264,9 @@ function createFileUploadLog(
     contextIds,
     toolCalls: [
       'file_library.create',
-      ...(usedMatrix ? ['matrix.media.upload', 'matrix.send_event'] : ['local.media.write', 'local.message.create'])
+      ...(usedMatrix
+        ? ['matrix.media.upload', ...(message ? ['matrix.send_event'] : [])]
+        : ['local.media.write', ...(message ? ['local.message.create'] : [])])
     ]
   });
 }
@@ -1282,26 +1291,9 @@ async function generateDemoAssetsForRoom(
         bytes: asset.bytes
       });
       file = { ...file, mxcUri: media.mxcUri, size: media.size };
-      message = await input.matrixStore.sendMessage(
-        runtimeState,
-        {
-          roomId: input.roomId,
-          senderId: input.senderId,
-          body: file.name
-        },
-        {
-          fileId: file.id,
-          fileName: file.name,
-          mxcUri: file.mxcUri,
-          mimeType: file.contentType,
-          size: file.size
-        }
-      );
-      file = { ...file, matrixEventId: message.id };
     } else {
       const localPath = await writeLocalMediaFile(input.mediaDir, file.id, file.name, asset.bytes);
       file = { ...file, localPath, size: asset.bytes.byteLength };
-      message = createFileUploadMessage(runtimeState, file);
     }
 
     const log = createFileUploadLog(nextState, file, message, Boolean(input.matrixStore));
@@ -1746,12 +1738,38 @@ async function executeConfirmedAgentAction(
     if (!current || current.startsAt !== patch.oldStartsAt) {
       return { state, blockedRisk: stalePatchRisk('coordinate calendar patch') };
     }
+    const taskPatch = parseTaskPatch(action.input.taskPatch);
+    const currentTask = taskPatch ? state.tasks.find((task) => task.id === taskPatch.taskId) : undefined;
+    if (taskPatch && (!currentTask || currentTask.status !== taskPatch.oldStatus)) {
+      return { state, blockedRisk: stalePatchRisk('coordinate linked task patch') };
+    }
+    let message = createConfirmedCoordinationMessage(state, action, patch, taskPatch);
+    if (matrixStore) {
+      message = await matrixStore.sendMessage(
+        state,
+        {
+          roomId: message.roomId,
+          senderId: message.senderId,
+          body: message.body
+        },
+        {
+          agentLabel: message.agentLabel,
+          sourceAgentId: message.sourceAgentId
+        }
+      );
+    }
     return {
       state: {
         ...state,
         calendar: state.calendar.map((item) =>
           item.id === patch.itemId ? { ...item, startsAt: patch.newStartsAt } : item
-        )
+        ),
+        tasks: taskPatch
+          ? state.tasks.map((task) =>
+              task.id === taskPatch.taskId ? { ...task, status: taskPatch.newStatus } : task
+            )
+          : state.tasks,
+        messages: appendMessage(state.messages, message)
       }
     };
   }
@@ -1913,11 +1931,11 @@ function createConfirmedFileShareMessage(state: DemoState, action: AgentActionRe
     id: `msg-agent-share-${file.id}`,
     roomId: targetRoomId,
     senderId: agent.ownerId,
-    senderName: agent.displayName,
-    body: `我代表${owner.name}发送最新文件：${file.name}`,
+    senderName: assistantSenderName(owner.name),
+    body: assistantFileShareBody({ ownerName: owner.name, fileName: file.name, latest: true }),
     sentAt: '2026-05-04T14:06:12+08:00',
     type: 'file',
-    agentLabel: `${owner.name}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_file'),
     sourceAgentId: agent.id,
     fileId: file.id,
     mxcUri: file.mxcUri,
@@ -1939,13 +1957,51 @@ function createConfirmedDelegatedMessage(state: DemoState, action: AgentActionRe
     id: `msg-agent-send-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: targetRoomId,
     senderId: agent.ownerId,
-    senderName: agent.displayName,
+    senderName: assistantSenderName(owner.name),
     body: messageBody,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${owner.name}的 Agent 代发`,
+    agentLabel: assistantAgentLabel('delegated_message'),
     sourceAgentId: agent.id
   };
+}
+
+function createConfirmedCoordinationMessage(
+  state: DemoState,
+  action: AgentActionRequest,
+  patch: { itemId: string; oldStartsAt: string; newStartsAt: string; title?: string },
+  taskPatch?: { taskId: string; oldStatus: DemoState['tasks'][number]['status']; newStatus: DemoState['tasks'][number]['status'] }
+): Message {
+  const agent = state.agents.find((candidate) => candidate.id === action.agentId);
+  const owner = state.users.find((candidate) => candidate.id === agent?.ownerId);
+  if (!agent || !owner) {
+    throw new Error(`unknown agent: ${action.agentId}`);
+  }
+  const calendarTitle = patch.title ?? state.calendar.find((item) => item.id === patch.itemId)?.title ?? '协作日程';
+  const task = taskPatch ? state.tasks.find((candidate) => candidate.id === taskPatch.taskId) : undefined;
+  const taskText = task ? `，任务已推进：${task.title}` : '';
+  return {
+    id: `msg-agent-coordinate-confirm-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    roomId: action.roomId,
+    senderId: agent.ownerId,
+    senderName: assistantSenderName(owner.name),
+    body: `已确认：${calendarTitle}已调整到${formatCalendarTimeForMessage(patch.newStartsAt)}${taskText}。`,
+    sentAt: new Date().toISOString(),
+    type: 'agent',
+    agentLabel: assistantAgentLabel('coordination'),
+    sourceAgentId: agent.id
+  };
+}
+
+function formatCalendarTimeForMessage(startsAt: string): string {
+  const date = new Date(startsAt);
+  const timeMatch = startsAt.match(/T(\d{2}:\d{2})/);
+  const time = timeMatch?.[1] ?? startsAt;
+  if (Number.isNaN(date.getTime())) {
+    return time;
+  }
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return `${weekdays[date.getDay()]} ${time}`;
 }
 
 function hasDownloadableBacking(file: FileItem | undefined): boolean {
@@ -2525,11 +2581,11 @@ function createAgentCoordinationMessage(state: DemoState, agentId: string, body:
     id: `msg-agent-coordinate-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     roomId: 'room-agent',
     senderId: owner.id,
-    senderName: agent.displayName,
+    senderName: assistantSenderName(owner.name),
     body,
     sentAt: new Date().toISOString(),
     type: 'agent',
-    agentLabel: `${owner.name}的 Agent 协调`,
+    agentLabel: assistantAgentLabel('coordination'),
     sourceAgentId: agent.id
   };
 }

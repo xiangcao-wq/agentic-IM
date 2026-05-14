@@ -126,7 +126,7 @@ try {
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
-      body: 'Lin is offline. Can her Agent send the latest slides to Chen?'
+      body: '林雯不在电脑前，她的个人助手能不能把最新演示稿发给我？'
     }
   }));
   if (!a2aResponse.ok()) {
@@ -141,7 +141,7 @@ try {
     data: {
       roomId: 'room-team',
       senderId: 'user-chen',
-      body: 'Lin Agent, who is responsible for interview materials?'
+      body: '谁负责访谈材料？我今天应该先补哪一块？'
     }
   }));
   if (!a2aChatResponse.ok()) {
@@ -155,8 +155,8 @@ try {
   const a2aNegotiationResponse = await page.request.post(`${apiBaseUrl}/api/messages`, withApiAuth({
     data: {
       roomId: 'room-team',
-      senderId: 'user-zhao',
-      body: 'Lin Agent, please negotiate with Chen Agent and move the final review to Wednesday 23:00.'
+      senderId: 'user-lin',
+      body: '帮我和陈晨商量一下，把合稿检查改到周三 23:00。'
     }
   }));
   if (!a2aNegotiationResponse.ok()) {
@@ -175,13 +175,13 @@ try {
   await waitForWorkbenchReady();
   await page.locator('[data-testid="a2a-session-panel"]').waitFor({ timeout: 120_000 });
 
-  await page.screenshot({ path: 'tmp/agent-im-browser-smoke.png', fullPage: true });
+  await page.screenshot({ path: 'tmp/agentbridge-browser-smoke.png', fullPage: true });
   console.log(
     JSON.stringify({
       ok: true,
       url: baseUrl,
       apiUrl: apiBaseUrl,
-      screenshot: 'tmp/agent-im-browser-smoke.png',
+      screenshot: 'tmp/agentbridge-browser-smoke.png',
       shortcutIntent: findFilePayload.intent,
       agentIntent: agentRunPayload.intent,
       delegatedMessageIntent: sendMessagePayload.intent,

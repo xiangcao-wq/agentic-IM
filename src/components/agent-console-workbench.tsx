@@ -64,6 +64,8 @@ export function AgentWorkbench(props: {
   selectedRoomId: string;
   sourceMessages: Message[];
   sourceFiles: FileItem[];
+  agents: DemoState['agents'];
+  users: DemoState['users'];
   onBackToChat: () => void;
   onFilterChange: (filter: RoomFilter) => void;
   onSearchChange: (value: string) => void;
@@ -162,7 +164,7 @@ export function AgentWorkbench(props: {
         </div>
         <div>
           <h2>{props.selectedRoom.name}</h2>
-          <p>{props.agent.displayName} 正在处理当前聊天室</p>
+          <p>{formatAssistantUiName(props.agent, props.users)} 正在处理当前聊天室</p>
         </div>
         <span className={`ai-status-pill ${aiStatus.kind}`}>{aiStatus.label}</span>
       </header>
@@ -229,28 +231,46 @@ export function AgentWorkbench(props: {
           <section className="data-section a2a-section" data-testid="a2a-session-panel">
             <div className="section-title">
               <MessageSquare size={17} />
-              <h3>Agent 托管协作</h3>
+              <h3>A2A 协商流</h3>
             </div>
-            <div className="compact-list">
+            <div className="a2a-loop-list">
               {roomA2ASessions.map((session) => {
-                const latestTurn = session.turns.at(-1);
                 const relatedPending = pendingActions.filter((action) =>
                   session.proposedActionRequestIds.includes(action.id)
                 );
+                const participantLabel = formatA2AParticipants(session, props.agents, props.users);
                 return (
-                  <motion.div className={`compact-row a2a-row status-${session.status}`} key={session.id} layout {...workbenchAppear}>
-                    <strong>
-                      <span>{a2aStatusLabel(session.status)}</span>
-                      <em>{session.risk.level}</em>
-                    </strong>
-                    <span>{formatA2ASessionGoal(session.goal)}</span>
-                    {latestTurn ? <small>{formatA2ATurnMessage(latestTurn.message)}</small> : null}
-                    {relatedPending.length > 0 ? (
-                      <small className="a2a-confirmation-hint">
-                        等待确认：{relatedPending.map((action) => agentActionKindLabel(action.kind)).join('、')}
-                      </small>
-                    ) : null}
-                  </motion.div>
+                  <motion.article className={`a2a-loop-card status-${session.status}`} key={session.id} layout {...workbenchAppear}>
+                    <header className="a2a-loop-header">
+                      <div>
+                        <small className="a2a-participants">{participantLabel}</small>
+                        <strong>{formatA2ASessionGoal(session.goal)}</strong>
+                      </div>
+                      <span className="a2a-loop-status">
+                        {a2aStatusLabel(session.status)}
+                        <em>{session.risk.level}</em>
+                      </span>
+                    </header>
+                    <ol className="a2a-step-list" aria-label={`${participantLabel} 协商步骤`}>
+                      {session.turns.map((turn, index) => (
+                        <li key={turn.id}>
+                          <span className="a2a-step-index">{index + 1}</span>
+                          <div>
+                            <strong>{a2aTurnStageLabel(turn, index)}</strong>
+                            <small>{formatA2ATurnMessage(turn.message)}</small>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                    <footer className="a2a-loop-footer">
+                      <span>{a2aOutcomeLabel(session, relatedPending)}</span>
+                      {relatedPending.length > 0 ? (
+                        <small className="a2a-confirmation-hint">
+                          等待确认：{relatedPending.map((action) => agentActionKindLabel(action.kind)).join('、')}
+                        </small>
+                      ) : null}
+                    </footer>
+                  </motion.article>
                 );
               })}
             </div>
@@ -312,7 +332,7 @@ export function AgentWorkbench(props: {
           />
           <div className="console-command-strip-copy">
             <strong>Agent 操作</strong>
-            <span>把低频动作收进菜单，主界面只保留任务和确认流。</span>
+            <span>高影响动作进入确认流，日常聊天保持轻量。</span>
           </div>
         </div>
 
@@ -413,9 +433,107 @@ function a2aStatusLabel(status: DemoState['a2aSessions'][number]['status']) {
     active: '协作中',
     completed: '已完成',
     needs_confirmation: '待确认',
-    blocked: '已阻止'
+    blocked: '已安全拦截'
   };
   return labels[status];
+}
+
+function a2aOutcomeLabel(
+  session: DemoState['a2aSessions'][number],
+  relatedActions: DemoState['actionRequests']
+): string {
+  if (session.status === 'active') {
+    return '协商仍在进行，暂未改变文件、任务或日程。';
+  }
+  if (session.status === 'completed') {
+    return '协商已完成，结果已同步到当前聊天室。';
+  }
+  if (session.status === 'blocked') {
+    return '已安全拦截，未写入文件、任务或日程。';
+  }
+
+  const kinds = new Set(relatedActions.map((action) => action.kind));
+  const evidence = [
+    session.goal,
+    ...session.proposedActionRequestIds,
+    ...session.turns.flatMap((turn) => [turn.message, ...turn.toolCalls])
+  ].join(' ').toLowerCase();
+
+  const isFileAction =
+    kinds.has('share_file') ||
+    evidence.includes('share_file') ||
+    evidence.includes('file') ||
+    evidence.includes('文件') ||
+    evidence.includes('代发');
+  const isTaskAction =
+    kinds.has('task_update') ||
+    kinds.has('task_update_suggest') ||
+    evidence.includes('task') ||
+    evidence.includes('任务');
+  const isScheduleAction =
+    kinds.has('coordinate') ||
+    kinds.has('calendar_update') ||
+    evidence.includes('calendar') ||
+    evidence.includes('schedule') ||
+    evidence.includes('日程') ||
+    evidence.includes('合稿') ||
+    evidence.includes('改到');
+
+  if (isFileAction) {
+    return '等待确认后代发授权文件；确认前不会发送任何文件。';
+  }
+  if (isScheduleAction && isTaskAction) {
+    return '等待确认后写入日程并更新任务；确认前不会改变任何数据。';
+  }
+  if (isScheduleAction) {
+    return '等待人类确认后写入日程；确认前不会改变任何日程。';
+  }
+  if (isTaskAction) {
+    return '等待确认后更新任务；确认前不会改变任务状态。';
+  }
+  return '等待人类确认后执行；确认前不会改变数据。';
+}
+
+function formatA2AParticipants(
+  session: DemoState['a2aSessions'][number],
+  agents: DemoState['agents'],
+  users: DemoState['users']
+): string {
+  const initiator = formatAgentOwnerName(session.initiatorAgentId, agents, users);
+  const targets = session.targetAgentIds
+    .map((agentId) => formatAgentOwnerName(agentId, agents, users))
+    .filter((name) => name !== initiator);
+  return [initiator, ...targets].filter(Boolean).join(' ↔ ') || 'A2A 协商';
+}
+
+function formatAgentOwnerName(agentId: string, agents: DemoState['agents'], users: DemoState['users']): string {
+  const agent = agents.find((candidate) => candidate.id === agentId);
+  const owner = users.find((candidate) => candidate.id === agent?.ownerId);
+  return owner?.name ?? agent?.displayName.replace(/\s*的?\s*Agent/i, '') ?? agentId;
+}
+
+function formatAssistantUiName(agent: DemoState['agents'][number], users: DemoState['users']): string {
+  const owner = users.find((candidate) => candidate.id === agent.ownerId);
+  return owner ? `${owner.name}的个人助手` : agent.displayName.replace(/\s*Agent/i, '个人助手');
+}
+
+function a2aTurnStageLabel(turn: DemoState['a2aSessions'][number]['turns'][number], index: number): string {
+  if (turn.kind === 'request') {
+    return '发起请求';
+  }
+  if (turn.kind === 'proposal') {
+    return '形成提案';
+  }
+  if (turn.kind === 'tool_result') {
+    return '同步结果';
+  }
+  if (turn.message.includes('林雯')) {
+    return '读取林雯约束';
+  }
+  if (turn.message.includes('陈晨')) {
+    return '读取陈晨约束';
+  }
+  return index === 1 ? '交换约束' : '更新协商';
 }
 
 function deriveAiStatus(

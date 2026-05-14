@@ -69,7 +69,7 @@ export function getAgentEvalCases(): AgentEvalCase[] {
     shareCase('share_action_plan', 'please send the action plan'),
     shareCase('share_interview_file', '帮我把访谈纪要发给陈晨'),
     shareCase('share_latest_file', 'send latest file to Chen'),
-    coordinateCase('reschedule_review', '把周二合稿检查改到周三 23:00，请和陈晨的 Agent 协调。'),
+    coordinateCase('reschedule_review', '把周二合稿检查改到周三 23:00，请和陈晨的个人助手协调。'),
     coordinateCase('coordinate_with_chen', '请和陈晨确认明天几点合稿。'),
     coordinateCase('move_meeting', 'Move the meeting to Wednesday and negotiate with Chen.'),
     coordinateCase('schedule_change', '调整一下日程，确认大家是否同意。'),
