@@ -156,16 +156,27 @@ function buildStorageCheck(input: ProductReadinessInput['storage']): ProductRead
 }
 
 function buildStorageMessage(input: ProductReadinessInput['storage']): string {
+  const label = storageModeLabel(input.mode);
   if (input.readable && input.writable) {
-    return 'Local JSON storage is readable and writable.';
+    return `${label} storage is readable and writable.`;
   }
   if (!input.readable && !input.writable) {
-    return 'Local JSON storage is not readable or writable.';
+    return `${label} storage is not readable or writable.`;
   }
   if (!input.readable) {
-    return 'Local JSON storage is not readable.';
+    return `${label} storage is not readable.`;
   }
-  return 'Local JSON storage is not writable.';
+  return `${label} storage is not writable.`;
+}
+
+function storageModeLabel(mode: string): string {
+  if (mode === 'postgres') {
+    return 'Postgres';
+  }
+  if (mode === 'json-local') {
+    return 'Local JSON';
+  }
+  return mode || 'State';
 }
 
 function buildEventLogCheck(input: ProductReadinessInput['eventLog']): ProductReadiness['checks']['eventLog'] {

@@ -16,6 +16,7 @@ const server = await createAppServer({
   dbPath,
   port,
   stateStore: stateStoreConfig.stateStore,
+  storageMode: stateStoreConfig.mode === 'postgres' ? 'postgres' : 'json-local',
   agentEventLogMode: stateStoreConfig.agentEventLogMode,
   autopilotWorker: {
     enabled: parseBooleanEnv(process.env.AGENT_IM_AUTOPILOT_WORKER, true),
