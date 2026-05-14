@@ -68,6 +68,7 @@ interface ServerOptions {
   host?: string;
   matrixBootstrapPath?: string | null;
   stateStore?: StateStore;
+  storageMode?: string;
   agentEventStore?: AgentEventStore;
   agentEventLogMode?: string;
   aiProvider?: AiProvider | null;
@@ -153,6 +154,7 @@ const defaultAutopilotWorkerIntervalMs = 60_000;
 export async function createAppServer(options: ServerOptions): Promise<RunningServer> {
   const host = options.host ?? '127.0.0.1';
   const db = options.stateStore ?? new JsonStateStore(options.dbPath);
+  const storageMode = options.storageMode ?? 'json-local';
   await db.init();
   const defaultAgentEventLogPath = join(dirname(resolve(options.dbPath)), 'agent-events.jsonl');
   const requestedJsonlEventLog = options.agentEventLogMode === 'jsonl-local';
@@ -461,7 +463,7 @@ export async function createAppServer(options: ServerOptions): Promise<RunningSe
               tokenConfigured: Boolean(authConfig.apiToken),
               allowedOrigins: corsConfig.allowedOrigins
             },
-            storage: { mode: 'json-local', ...storageHealth },
+            storage: { mode: storageMode, ...storageHealth },
             eventLog: { mode: agentEventLogMode, ...eventLogHealth },
             worker: {
               autopilotEnabled: autopilotWorkerStatus.enabled,

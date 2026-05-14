@@ -1828,6 +1828,37 @@ describe('real local agent IM server', () => {
     expect(body.checks.storage).toMatchObject({ ok: false, status: 'blocked', mode: 'json-local' });
   });
 
+  it('reports the configured Postgres storage mode in readiness', async () => {
+    const app = await createAppServer({
+      dbPath: 'memory',
+      port: 0,
+      matrixBootstrapPath: null,
+      aiProvider: createUsageAiProvider({
+        requestCount: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalTokens: 6,
+        promptCacheHitTokens: 1,
+        promptCacheMissTokens: 3,
+        promptCacheHitRate: 0.25
+      }),
+      stateStore: createMemoryStateStore(createDemoState()),
+      storageMode: 'postgres'
+    });
+    servers.push(app);
+
+    const response = await fetch(`${app.url}/api/readiness`);
+    const body = await response.json();
+
+    expect(response.ok).toBe(true);
+    expect(body.checks.storage).toMatchObject({
+      ok: true,
+      status: 'ready',
+      mode: 'postgres',
+      message: 'Postgres storage is readable and writable.'
+    });
+  });
+
   it('reports storage readiness blocked when the state store can read but is not writable', async () => {
     const previousPublicMode = process.env.AGENT_IM_PUBLIC_MODE;
     const previousAllowedOrigins = process.env.AGENT_IM_ALLOWED_ORIGINS;
